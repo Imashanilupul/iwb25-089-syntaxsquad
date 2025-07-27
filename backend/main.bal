@@ -1,5 +1,13 @@
-import ballerina/io;
+import ballerina/http;
 
-public function main() {
-    io:println("Hello, World!");
+configurable int port = 8080;
+
+listener http:Listener helloWorldListener = new (port);
+
+service /api on  helloWorldListener {
+    resource function get health() returns string {
+        return "✅ Backend is running!";
+    }
+
+    
 }
