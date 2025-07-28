@@ -1,0 +1,40 @@
+{
+  "name": "civic-blockchain-platform-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo for the Civic Blockchain Platform with separated client-server architecture",
+  "workspaces": ["client", "server", "shared"],
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
+    "dev:client": "cd client && pnpm dev",
+    "dev:server": "cd server && pnpm dev",
+    "dev:shared": "cd shared && pnpm dev",
+    "build": "pnpm build:shared && pnpm build:server && pnpm build:client",
+    "build:client": "cd client && pnpm build",
+    "build:server": "cd server && pnpm build",
+    "build:shared": "cd shared && pnpm build",
+    "start": "concurrently \"pnpm start:server\" \"pnpm start:client\"",
+    "start:client": "cd client && pnpm start",
+    "start:server": "cd server && pnpm start",
+    "lint": "pnpm lint:client && pnpm lint:server && pnpm lint:shared",
+    "lint:client": "cd client && pnpm lint",
+    "lint:server": "cd server && pnpm lint",
+    "lint:shared": "cd shared && pnpm lint",
+    "test": "pnpm test:client && pnpm test:server",
+    "test:client": "cd client && pnpm test",
+    "test:server": "cd server && pnpm test",
+    "clean": "pnpm clean:client && pnpm clean:server && pnpm clean:shared",
+    "clean:client": "cd client && rm -rf .next node_modules/.cache",
+    "clean:server": "cd server && rm -rf dist node_modules/.cache",
+    "clean:shared": "cd shared && rm -rf dist node_modules/.cache",
+    "install:all": "pnpm install && cd client && pnpm install && cd ../server && pnpm install && cd ../shared && pnpm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.0.0"
+}
