@@ -156,71 +156,50 @@ export function PolicyHub() {
           <p className="text-slate-600">Public consultation on Sri Lankan government policies</p>
         </div>
         <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input placeholder="Search policies..." className="pl-10 w-64" />
-          </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Discussion
-          </Button>
         </div>
       </div>
-
       <Tabs defaultValue="discussions" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="discussions">Policy Discussions</TabsTrigger>
-          <TabsTrigger value="analytics">Sentiment Analytics</TabsTrigger>
-          <TabsTrigger value="engagement">Engagement Metrics</TabsTrigger>
-        </TabsList>
+ 
 
         <TabsContent value="discussions" className="space-y-6">
           {/* Policy Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Policies</CardTitle>
-                <MessageSquare className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">24</div>
-                <p className="text-xs text-slate-500">Under discussion</p>
-              </CardContent>
-            </Card>
+          <div className="w-full flex justify-center">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full max-w-5xl px-4">
+    <Card className="border-0 shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Active Policies</CardTitle>
+        <MessageSquare className="h-4 w-4 text-blue-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">24</div>
+        <p className="text-xs text-slate-500">Under discussion</p>
+      </CardContent>
+    </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Comments</CardTitle>
-                <Users className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">15.2K</div>
-                <p className="text-xs text-slate-500">This month</p>
-              </CardContent>
-            </Card>
+    <Card className="border-0 shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Total Comments</CardTitle>
+        <Users className="h-4 w-4 text-green-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">15.2K</div>
+        <p className="text-xs text-slate-500">This month</p>
+      </CardContent>
+    </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg. Sentiment</CardTitle>
-                <TrendingUp className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">72%</div>
-                <p className="text-xs text-slate-500">Positive feedback</p>
-              </CardContent>
-            </Card>
+    <Card className="border-0 shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Avg. Sentiment</CardTitle>
+        <TrendingUp className="h-4 w-4 text-purple-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">72%</div>
+        <p className="text-xs text-slate-500">Positive feedback</p>
+      </CardContent>
+    </Card>
+  </div>
+</div>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Languages</CardTitle>
-                <Globe className="h-4 w-4 text-orange-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">8</div>
-                <p className="text-xs text-slate-500">Supported languages</p>
-              </CardContent>
-            </Card>
-          </div>
 
           {/* Policy List */}
           <div className="space-y-4">
@@ -262,10 +241,6 @@ export function PolicyHub() {
                     <div className="flex items-center gap-2">
                       <ThumbsDown className="h-4 w-4 text-red-600" />
                       <span className="text-sm">{policy.dislikes}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4 text-slate-500" />
-                      <span className="text-sm">{policy.views.toLocaleString()} views</span>
                     </div>
                   </div>
 
@@ -359,93 +334,6 @@ export function PolicyHub() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Weekly Sentiment Trends</CardTitle>
-                <CardDescription>Public opinion analysis across all policies</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    positive: { label: "Positive", color: "#22c55e" },
-                    negative: { label: "Negative", color: "#ef4444" },
-                    neutral: { label: "Neutral", color: "#6b7280" },
-                  }}
-                  className="h-64"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={sentimentData}>
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="positive" fill="#22c55e" />
-                      <Bar dataKey="negative" fill="#ef4444" />
-                      <Bar dataKey="neutral" fill="#6b7280" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>AI Moderation Stats</CardTitle>
-                <CardDescription>Automated content moderation metrics</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-900">98.7%</div>
-                    <div className="text-sm text-green-700">Clean Comments</div>
-                  </div>
-                  <div className="p-3 bg-red-50 rounded-lg">
-                    <div className="text-2xl font-bold text-red-900">1.3%</div>
-                    <div className="text-sm text-red-700">Flagged Content</div>
-                  </div>
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-900">156</div>
-                    <div className="text-sm text-blue-700">Auto-Moderated</div>
-                  </div>
-                  <div className="p-3 bg-yellow-50 rounded-lg">
-                    <div className="text-2xl font-bold text-yellow-900">23</div>
-                    <div className="text-sm text-yellow-700">Human Review</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="engagement" className="space-y-6">
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Daily Engagement Patterns</CardTitle>
-              <CardDescription>Comment and view activity throughout the day</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer
-                config={{
-                  comments: { label: "Comments", color: "#3b82f6" },
-                  views: { label: "Views", color: "#10b981" },
-                }}
-                className="h-64"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={engagementData}>
-                    <XAxis dataKey="hour" />
-                    <YAxis />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line type="monotone" dataKey="comments" stroke="#3b82f6" strokeWidth={2} />
-                    <Line type="monotone" dataKey="views" stroke="#10b981" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>

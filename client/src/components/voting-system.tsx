@@ -307,32 +307,27 @@ export function VotingSystem() {
               <CardDescription>Zero-knowledge proof verification and immutable vote recording</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-semibold text-green-800">Votes Verified</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900">45,892</p>
-                  <p className="text-sm text-green-700">100% verification rate</p>
-                </div>
+              <div className="flex justify-center items-center w-full px-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-screen-lg w-full">
 
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Lock className="h-5 w-5 text-blue-600" />
-                    <span className="font-semibold text-blue-800">Anonymous Votes</span>
+                  <div className="p-6 bg-green-50 rounded-2xl shadow-md flex flex-col justify-between">
+                    <div className="flex items-center gap-3 mb-4">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                      <span className="text-lg font-semibold text-green-800">Votes Verified</span>
+                    </div>
+                    <p className="text-3xl font-bold text-green-900">45,892</p>
+                    <p className="text-sm text-green-700 mt-1">100% verification rate</p>
                   </div>
-                  <p className="text-2xl font-bold text-blue-900">45,892</p>
-                  <p className="text-sm text-blue-700">Zero identity exposure</p>
-                </div>
 
-                <div className="p-4 bg-purple-50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Eye className="h-5 w-5 text-purple-600" />
-                    <span className="font-semibold text-purple-800">Public Audits</span>
+                  <div className="p-6 bg-blue-50 rounded-2xl shadow-md flex flex-col justify-between">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Lock className="h-6 w-6 text-blue-600" />
+                      <span className="text-lg font-semibold text-blue-800">Anonymous Votes</span>
+                    </div>
+                    <p className="text-3xl font-bold text-blue-900">45,892</p>
+                    <p className="text-sm text-blue-700 mt-1">Zero identity exposure</p>
                   </div>
-                  <p className="text-2xl font-bold text-purple-900">1,247</p>
-                  <p className="text-sm text-purple-700">Independent verifications</p>
+                  <div className="hidden lg:block"></div>
                 </div>
               </div>
 

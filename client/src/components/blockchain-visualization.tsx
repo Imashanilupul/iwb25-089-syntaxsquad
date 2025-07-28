@@ -87,27 +87,7 @@ export function BlockchainVisualization() {
         <Progress value={networkStats.networkHealth} className="h-2" />
       </div>
 
-      {/* Recent Blocks */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-purple-600" />
-          <span className="text-sm font-medium">Recent Blocks</span>
-        </div>
-        <div className="space-y-2">
-          {recentBlocks.map((block) => (
-            <div key={block.height} className="flex items-center justify-between p-2 bg-slate-50 rounded text-xs">
-              <div className="space-y-1">
-                <div className="font-mono">#{block.height}</div>
-                <div className="text-slate-500">{block.hash}</div>
-              </div>
-              <div className="text-right space-y-1">
-                <div>{block.transactions} txs</div>
-                <div className="text-slate-500">{block.timestamp}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+  
 
       {/* Consensus Info */}
       <div className="flex items-center justify-between text-xs text-slate-600">
