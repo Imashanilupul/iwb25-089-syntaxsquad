@@ -20,6 +20,8 @@ contract Petitions {
     event PetitionSigned(uint256 indexed petitionId, address indexed signer);
     event PetitionCompleted(uint256 indexed petitionId);
 
+
+    //User can only make petition once a week
     modifier onlyOncePerWeek() {
         require(
             block.timestamp >= lastCreatedAt[msg.sender] + 1 weeks,
@@ -28,6 +30,8 @@ contract Petitions {
         _;
     }
 
+
+    //Create function
     function createPetition(string calldata titleCid,string calldata desCid, uint256 signaturesRequired) external onlyOncePerWeek returns (uint256) {
         require(signaturesRequired > 0, "Signatures required must be greater than zero");
         petitionCount++;
@@ -47,6 +51,8 @@ contract Petitions {
         return petitionId;
     }
 
+
+    //sign petition function
     function signPetition(uint256 petitionId) external {
         Petition storage p = petitions[petitionId];
         require(!p.completed, "Petition already completed");
@@ -64,6 +70,8 @@ contract Petitions {
         }
     }
 
+
+    //function to get petition details
     function getPetition(uint256 petitionId) external view returns (
         string memory titleCid,
         string memory desCid,
@@ -77,6 +85,8 @@ contract Petitions {
         return (p.titleCid,p.desCid, p.signaturesRequired, p.signaturesCount, p.creator, p.completed);
     }
 
+
+    //Check if a user has signed a petition
     function hasSigned(uint256 petitionId, address user) external view returns (bool) {
         Petition storage p = petitions[petitionId];
         require(p.creator != address(0), "Petition does not exist");

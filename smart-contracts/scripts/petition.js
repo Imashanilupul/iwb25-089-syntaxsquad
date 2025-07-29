@@ -5,7 +5,7 @@ async function main() {
   const Petitions = await ethers.getContractFactory("Petitions");
   const petitions = await Petitions.attach(contractAddress);
 
-  // Fix: Add user4 to destructuring
+  //Add user to destructuring
   const [owner, user1, user2, user3, user4, user5, user6, user7, user8, user9, user10, user11, user12] = await ethers.getSigners();
 
   try {
@@ -17,10 +17,9 @@ async function main() {
     );
     const receipt1 = await tx1.wait();
 
-    // Try multiple ways to extract events
     let petitionId;
     
-    // Method 1: Check receipt.events
+    // Method 1: Check petition events
     if (receipt1.events && receipt1.events.length > 0) {
       for (const event of receipt1.events) {
         if (event.event === "PetitionCreated") {
@@ -30,7 +29,6 @@ async function main() {
       }
     }
     
-    // Method 2: Parse logs if events don't work
     if (!petitionId && receipt1.logs) {
       const iface = new ethers.Interface([
         "event PetitionCreated(uint256 indexed petitionId, address indexed creator, string titleCid, string desCid, uint256 signaturesRequired)"
@@ -44,7 +42,6 @@ async function main() {
             break;
           }
         } catch (e) {
-          // Skip unparseable logs
         }
       }
     }

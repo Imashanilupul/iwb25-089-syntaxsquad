@@ -1,5 +1,5 @@
 const hre = require("hardhat");
-
+//Deploy contract to local blockchain
 async function main() {
   const Petitions = await hre.ethers.getContractFactory("Petitions");
   const petitions = await Petitions.deploy();
