@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const contractAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+  const contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
   const Petitions = await ethers.getContractFactory("Petitions");
   const petitions = await Petitions.attach(contractAddress);
 
@@ -10,9 +10,9 @@ async function main() {
 
   try {
     // 1. Create petition
-    const tx1 = await petitions.connect(user8).createPetition(
-      "QmTitleCID",
-      "QmDescriptionCID",
+    const tx1 = await petitions.connect(user1).createPetition(
+      "Petition To Get Lawsuit against SLT",
+      "Less goooooo",
       2
     );
     const receipt1 = await tx1.wait();
@@ -32,7 +32,7 @@ async function main() {
     
     // Method 2: Parse logs if events don't work
     if (!petitionId && receipt1.logs) {
-      const iface = new ethers.utils.Interface([
+      const iface = new ethers.Interface([
         "event PetitionCreated(uint256 indexed petitionId, address indexed creator, string titleCid, string desCid, uint256 signaturesRequired)"
       ]);
       

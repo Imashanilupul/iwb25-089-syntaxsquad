@@ -65,7 +65,8 @@ contract Petitions {
     }
 
     function getPetition(uint256 petitionId) external view returns (
-        string memory cid,
+        string memory titleCid,
+        string memory desCid,
         uint256 signaturesRequired,
         uint256 signaturesCount,
         address creator,
@@ -73,7 +74,7 @@ contract Petitions {
     ) {
         Petition storage p = petitions[petitionId];
         require(p.creator != address(0), "Petition does not exist");
-        return (p.titleCid, p.signaturesRequired, p.signaturesCount, p.creator, p.completed);
+        return (p.titleCid,p.desCid, p.signaturesRequired, p.signaturesCount, p.creator, p.completed);
     }
 
     function hasSigned(uint256 petitionId, address user) external view returns (bool) {
