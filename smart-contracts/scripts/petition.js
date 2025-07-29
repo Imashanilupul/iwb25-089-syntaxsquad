@@ -1,0 +1,85 @@
+const { ethers } = require("hardhat");
+
+async function main() {
+  const contractAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+  const Petitions = await ethers.getContractFactory("Petitions");
+  const petitions = await Petitions.attach(contractAddress);
+
+  // Fix: Add user4 to destructuring
+  const [owner, user1, user2, user3, user4, user5, user6, user7, user8, user9, user10, user11, user12] = await ethers.getSigners();
+
+  try {
+    // 1. Create petition
+    const tx1 = await petitions.connect(user8).createPetition(
+      "QmTitleCID",
+      "QmDescriptionCID",
+      2
+    );
+    const receipt1 = await tx1.wait();
+
+    // Try multiple ways to extract events
+    let petitionId;
+    
+    // Method 1: Check receipt.events
+    if (receipt1.events && receipt1.events.length > 0) {
+      for (const event of receipt1.events) {
+        if (event.event === "PetitionCreated") {
+          petitionId = event.args.petitionId;
+          break;
+        }
+      }
+    }
+    
+    // Method 2: Parse logs if events don't work
+    if (!petitionId && receipt1.logs) {
+      const iface = new ethers.utils.Interface([
+        "event PetitionCreated(uint256 indexed petitionId, address indexed creator, string titleCid, string desCid, uint256 signaturesRequired)"
+      ]);
+      
+      for (const log of receipt1.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed.name === "PetitionCreated") {
+            petitionId = parsed.args.petitionId;
+            break;
+          }
+        } catch (e) {
+          // Skip unparseable logs
+        }
+      }
+    }
+
+    // Method 3: Get from contract state
+    if (!petitionId) {
+      petitionId = await petitions.petitionCount();
+    }
+
+    console.log(`Petition created with ID: ${petitionId}`);
+
+    // 2. Sign by user2
+    const tx2 = await petitions.connect(user2).signPetition(petitionId);
+    await tx2.wait();
+    console.log(`User2 signed petition ${petitionId}`);
+
+    // 3. Sign by owner
+    const tx3 = await petitions.connect(owner).signPetition(petitionId);
+    await tx3.wait();
+    console.log(`Owner signed petition ${petitionId}`);
+
+    // 4. Fetch petition details
+    const petition = await petitions.getPetition(petitionId);
+    console.log("Petition details:", petition);
+
+    // 5. Check if user2 has signed
+    const hasSigned = await petitions.hasSigned(petitionId, user2.address);
+    console.log(`User2 has signed: ${hasSigned}`);
+
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
