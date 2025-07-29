@@ -10,6 +10,7 @@ import { VotingSystem } from "@/components/voting-system"
 import { PolicyHub } from "@/components/policy-hub"
 import { WhistleblowingSystem } from "@/components/whistleblowing-system"
 import { BlockchainVisualization } from "@/components/blockchain-visualization"
+import SignUpPage from '@/components/signup';
 
 export default function CivicPlatform() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -237,6 +238,11 @@ export default function CivicPlatform() {
                     Local Government
                   </a>
                 </li>
+                <li>
+                  <a href="/signup" className="hover:text-blue-600">
+                    sign up
+                  </a>
+                </li>
               </ul>
             </div>
             <div>
@@ -259,3 +265,9 @@ export default function CivicPlatform() {
     </div>
   )
 }
+
+export function Signup() {
+  return <SignUpPage />;
+}
+
+
