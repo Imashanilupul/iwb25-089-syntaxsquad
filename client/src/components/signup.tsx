@@ -18,7 +18,6 @@ export default function SignUpPage() {
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0"></div>
       </div>
 
       {/* Right side - Sign up form */}
