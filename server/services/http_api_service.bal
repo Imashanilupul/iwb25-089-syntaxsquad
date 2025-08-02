@@ -94,6 +94,8 @@ public service class ApiService {
     }
 
     # Generic data retrieval endpoints using HTTP
+    #
+    # + return - User data from database
     resource function get users() returns json|error {
         return self.executeHttpQuery("/rest/v1/users");
     }

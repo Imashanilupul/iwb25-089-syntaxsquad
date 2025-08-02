@@ -27,23 +27,37 @@ public function setupTables(postgresql:Client dbClient) returns error? {
 # Check if core tables exist in the database
 #
 # + dbClient - Database client connection
-# + return - True if tables exist, false otherwise, or error
+# + return - True if all core tables exist, false otherwise, or error
 public function tablesExist(postgresql:Client dbClient) returns boolean|error {
-    stream<record {|boolean exists;|}, sql:Error?> resultStream = dbClient->query(`
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'users'
-        )
-    `);
+    string[] requiredTables = ["users", "categories", "projects", "transactions", 
+                               "proposals", "policies", "policy_comments", 
+                               "reports", "petitions", "petition_activities"];
     
-    record {|record {|boolean exists;|} value;|}? result = check resultStream.next();
-    check resultStream.close();
+    foreach string tableName in requiredTables {
+        stream<record {|boolean exists;|}, sql:Error?> resultStream = dbClient->query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = ${tableName}
+            )
+        `);
+        
+        record {|record {|boolean exists;|} value;|}? result = check resultStream.next();
+        check resultStream.close();
+        
+        boolean tableExists = result?.value?.exists ?: false;
+        if (!tableExists) {
+            return false; // Return false if any required table is missing
+        }
+    }
     
-    return result?.value?.exists ?: false;
+    return true; // All tables exist
 }
 
 # Create users table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createUsersTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS users (
@@ -60,14 +74,17 @@ function createUsersTable(postgresql:Client dbClient) returns error? {
     log:printInfo("Users table ready");
 }
 
-# Create categories table  
+# Create categories table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createCategoriesTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS categories (
             category_id SERIAL PRIMARY KEY,
             category_name VARCHAR(255) NOT NULL UNIQUE,
-            allocated_budget DECIMAL(15,2) NOT NULL,
-            spent_budget DECIMAL(15,2) DEFAULT 0,
+            allocated_budget DECIMAL(15,2) NOT NULL CHECK (allocated_budget >= 0),
+            spent_budget DECIMAL(15,2) DEFAULT 0 CHECK (spent_budget >= 0 AND spent_budget <= allocated_budget),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -76,6 +93,9 @@ function createCategoriesTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create projects table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createProjectsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS projects (
@@ -97,14 +117,18 @@ function createProjectsTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create transactions table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createTransactionsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS transactions (
             transaction_id SERIAL PRIMARY KEY,
             category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
             project_id INTEGER REFERENCES projects(project_id) ON DELETE SET NULL,
-            amount DECIMAL(15,2) NOT NULL,
-            transaction_type VARCHAR(50) NOT NULL DEFAULT 'EXPENSE',
+            amount DECIMAL(15,2) NOT NULL CHECK (amount > 0),
+            transaction_type VARCHAR(50) NOT NULL DEFAULT 'EXPENSE' 
+                CHECK (transaction_type IN ('EXPENSE', 'ALLOCATION', 'REFUND')),
             description TEXT,
             transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -114,6 +138,9 @@ function createTransactionsTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create proposals table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createProposalsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS proposals (
@@ -122,9 +149,9 @@ function createProposalsTable(postgresql:Client dbClient) returns error? {
             short_description TEXT NOT NULL,
             description_in_details TEXT NOT NULL,
             active_status BOOLEAN DEFAULT true,
-            expired_date TIMESTAMP NOT NULL,
-            yes_votes INTEGER DEFAULT 0,
-            no_votes INTEGER DEFAULT 0,
+            expired_date TIMESTAMP NOT NULL CHECK (expired_date > CURRENT_TIMESTAMP),
+            yes_votes INTEGER DEFAULT 0 CHECK (yes_votes >= 0),
+            no_votes INTEGER DEFAULT 0 CHECK (no_votes >= 0),
             category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
             created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -135,6 +162,9 @@ function createProposalsTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create policies table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createPoliciesTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS policies (
@@ -153,6 +183,9 @@ function createPoliciesTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create policy comments table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createPolicyCommentsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS policy_comments (
@@ -171,26 +204,34 @@ function createPolicyCommentsTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create reports table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createReportsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS reports (
             report_id SERIAL PRIMARY KEY,
             report_title VARCHAR(255) NOT NULL,
             description TEXT,
-            priority VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
+            priority VARCHAR(50) NOT NULL DEFAULT 'MEDIUM' 
+                CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
             assigned_to VARCHAR(255),
             evidence_hash VARCHAR(255) NOT NULL,
             resolved_status BOOLEAN DEFAULT false,
             user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_time TIMESTAMP
+            resolved_time TIMESTAMP,
+            CHECK (resolved_time IS NULL OR resolved_time >= created_time)
         )
     `);
     log:printInfo("Reports table ready");
 }
 
 # Create petitions table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createPetitionsTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS petitions (
@@ -210,6 +251,9 @@ function createPetitionsTable(postgresql:Client dbClient) returns error? {
 }
 
 # Create petition activities table
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
 function createPetitionActivitiesTable(postgresql:Client dbClient) returns error? {
     _ = check dbClient->execute(`
         CREATE TABLE IF NOT EXISTS petition_activities (
