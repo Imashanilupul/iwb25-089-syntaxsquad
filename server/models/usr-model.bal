@@ -175,19 +175,147 @@ public type CreateReportRequest record {
 };
 
 // API Response types
-public type ApiResponse<T> record {
+public type UserApiResponse record {
     boolean success;
     string message;
-    T? data;
-    string? error;
+    User? data;
+    string? 'error;
 };
 
-public type PaginatedResponse<T> record {
+public type UserArrayApiResponse record {
     boolean success;
     string message;
-    T[] data;
+    User[] data;
+    string? 'error;
+};
+
+public type PetitionApiResponse record {
+    boolean success;
+    string message;
+    Petition? data;
+    string? 'error;
+};
+
+public type PetitionArrayApiResponse record {
+    boolean success;
+    string message;
+    Petition[] data;
+    string? 'error;
+};
+
+public type CategoryApiResponse record {
+    boolean success;
+    string message;
+    Category? data;
+    string? 'error;
+};
+
+public type CategoryArrayApiResponse record {
+    boolean success;
+    string message;
+    Category[] data;
+    string? 'error;
+};
+
+public type ProjectApiResponse record {
+    boolean success;
+    string message;
+    Project? data;
+    string? 'error;
+};
+
+public type ProjectArrayApiResponse record {
+    boolean success;
+    string message;
+    Project[] data;
+    string? 'error;
+};
+
+public type ProposalApiResponse record {
+    boolean success;
+    string message;
+    Proposal? data;
+    string? 'error;
+};
+
+public type ProposalArrayApiResponse record {
+    boolean success;
+    string message;
+    Proposal[] data;
+    string? 'error;
+};
+
+public type PolicyApiResponse record {
+    boolean success;
+    string message;
+    Policy? data;
+    string? 'error;
+};
+
+public type PolicyArrayApiResponse record {
+    boolean success;
+    string message;
+    Policy[] data;
+    string? 'error;
+};
+
+public type ReportApiResponse record {
+    boolean success;
+    string message;
+    Report? data;
+    string? 'error;
+};
+
+public type ReportArrayApiResponse record {
+    boolean success;
+    string message;
+    Report[] data;
+    string? 'error;
+};
+
+public type StringApiResponse record {
+    boolean success;
+    string message;
+    string? data;
+    string? 'error;
+};
+
+public type UserPaginatedResponse record {
+    boolean success;
+    string message;
+    User[] data;
     int total;
     int page;
-    int limit;
-    string? error;
+    int 'limit;
+    string? 'error;
+};
+
+public type PetitionPaginatedResponse record {
+    boolean success;
+    string message;
+    Petition[] data;
+    int total;
+    int page;
+    int 'limit;
+    string? 'error;
+};
+
+public type CategoryPaginatedResponse record {
+    boolean success;
+    string message;
+    Category[] data;
+    int total;
+    int page;
+    int 'limit;
+    string? 'error;
+};
+
+public type ProjectPaginatedResponse record {
+    boolean success;
+    string message;
+    Project[] data;
+    int total;
+    int page;
+    int 'limit;
+    string? 'error;
 };

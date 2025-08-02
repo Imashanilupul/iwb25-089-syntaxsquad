@@ -1,6 +1,3 @@
-// Database schema management for Transparent Governance Platform
-// Handles table creation and database setup
-
 import ballerina/sql;
 import ballerinax/postgresql;
 import ballerina/log;
