@@ -4,15 +4,16 @@ This folder contains the database-related files organized in a clean, maintainab
 
 ## Files Overview
 
-### `schema.sql`
-- **Purpose**: Raw SQL schema file for manual database setup
-- **Usage**: Run this in Supabase SQL Editor or any PostgreSQL client
-- **Contains**: All table definitions, indexes, and sample data
+# Database Layer - Transparent Governance Platform
+
+This folder contains the database-related files organized in a clean, maintainable structure.
+
+## Files Overview
 
 ### `schema.bal`
 - **Purpose**: Ballerina functions for programmatic table creation
 - **Usage**: Import and call `setupTables(dbClient)` to create all tables
-- **Contains**: Individual table creation functions with proper dependencies
+- **Contains**: Individual table creation functions with proper dependencies and comprehensive schema
 
 ### `db-client.bal`
 - **Purpose**: Database connection management
@@ -21,21 +22,19 @@ This folder contains the database-related files organized in a clean, maintainab
 
 ## Database Setup Options
 
-### Option 1: Manual Setup (Recommended for Production)
-```sql
--- Copy the contents of schema.sql and run in Supabase SQL Editor
--- This is the preferred method for production databases
-```
-
-### Option 2: Programmatic Setup (Development)
+### Option 1: Programmatic Setup (Recommended)
 ```ballerina
-import . from "./db/db-client.bal";
+// Use the Ballerina schema functions for automatic setup
 import . from "./db/schema.bal";
 
-public function main() returns error? {
-    postgresql:Client client = check getDbClient();
-    check setupTables(client);
-}
+postgresql:Client client = check getDbClient();
+check setupTables(client);
+```
+
+### Option 2: Manual Setup (Alternative)
+```sql
+-- Extract the SQL from schema.bal functions
+-- Run manually in Supabase SQL Editor
 ```
 
 ### Option 3: HTTP-based (Current Implementation)
@@ -56,9 +55,8 @@ dbPort = 5432
 
 ## File Dependencies
 
-1. **schema.sql** → Standalone (no dependencies)
+1. **schema.bal** → Complete schema with all functions (no dependencies)
 2. **db-client.bal** → Uses `Config.toml` for configuration
-3. **schema.bal** → Requires `db-client.bal` for database connections
 
 ## Usage in Main Application
 

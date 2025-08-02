@@ -219,10 +219,10 @@ function getDatabaseSetupInstructions() returns json {
             "1. Go to https://supabase.com/dashboard",
             "2. Navigate to your project: hhnxsixgjcdhvzuwbmzf",
             "3. Go to SQL Editor",
-            "4. Run the SQL schema from db/schema.sql",
+            "4. Use the Ballerina schema functions from db/schema.bal",
             "5. Tables will be created automatically"
         ],
-        "schema_file": "db/schema.sql",
+        "schema_file": "db/schema.bal",
         "timestamp": currentTime[0]
     };
 }

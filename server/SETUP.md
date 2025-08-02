@@ -53,10 +53,10 @@ The application will automatically:
 If you prefer to set up tables manually:
 
 1. **Connect to your PostgreSQL database**
-2. **Run the schema file**:
-   ```sql
-   -- Copy and paste the contents of db/schema.sql
-   -- This will create all necessary tables and indexes
+2. **Use the Ballerina schema functions**:
+   ```ballerina
+   // Import and use the functions from db/schema.bal
+   // Call setupTables(dbClient) to create all necessary tables and indexes
    ```
 
 ## Project Structure
@@ -69,8 +69,7 @@ server-bal/
 ├── Dependencies.toml       # Dependency management
 ├── db/
 │   ├── db-client.bal       # Database connection and client
-│   ├── db-setup.bal        # Database setup and initialization
-│   └── schema.sql          # Database schema definition
+│   ├── schema.bal          # Database schema definition and setup functions
 ├── models/
 │   └── usr-model.bal       # Data models and types
 ├── services/
@@ -202,7 +201,7 @@ The application provides detailed logging:
 3. Add controllers in `controllers/main-controller.bal`
 
 ### Database Changes
-1. Update `db/schema.sql`
+1. Update `db/schema.bal`
 2. Update models in `models/usr-model.bal`
 3. Update services as needed
 

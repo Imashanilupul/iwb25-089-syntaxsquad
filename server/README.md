@@ -46,7 +46,7 @@ This is the backend service for the Transparent Governance Platform built with B
 
 ## Database Setup
 
-The application uses PostgreSQL with pure Ballerina SQL connectivity. The database schema is defined in `db/schema.sql` and automatically created on first run.
+The application uses PostgreSQL with pure Ballerina SQL connectivity. The database schema is defined in `db/schema.bal` and automatically created on first run.
 
 ### Tables:
 - `users` - User accounts
@@ -174,8 +174,7 @@ server-bal/
 ├── Dependencies.toml       # Dependency management
 ├── db/
 │   ├── db-client.bal       # Database connection and client
-│   ├── db-setup.bal        # Database setup and initialization
-│   └── schema.sql          # Database schema definition
+│   └── schema.bal          # Database schema definition and setup functions
 ├── models/
 │   └── usr-model.bal       # Data models and types
 ├── services/
