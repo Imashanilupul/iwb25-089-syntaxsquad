@@ -350,6 +350,7 @@ dependencies = [
 ]
 modules = [
 	{org = "user", packageName = "server_bal", moduleName = "server_bal"},
-	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"}
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"},
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.policies"}
 ]
 
