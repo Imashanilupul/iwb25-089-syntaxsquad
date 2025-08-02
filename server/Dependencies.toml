@@ -349,6 +349,7 @@ dependencies = [
 	{org = "ballerinai", name = "observe"}
 ]
 modules = [
-	{org = "user", packageName = "server_bal", moduleName = "server_bal"}
+	{org = "user", packageName = "server_bal", moduleName = "server_bal"},
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"}
 ]
 
