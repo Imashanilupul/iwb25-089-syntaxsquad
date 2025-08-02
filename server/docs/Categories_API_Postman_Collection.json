@@ -1,0 +1,494 @@
+{
+	"info": {
+		"_postman_id": "categories-api-collection",
+		"name": "Categories API - Transparent Governance Platform",
+		"description": "API collection for testing Categories CRUD operations",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Categories",
+			"item": [
+				{
+					"name": "Get All Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Category by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseURL}}/categories/{{categoryId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories",
+								"{{categoryId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Healthcare Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Healthcare\",\n    \"allocatedBudget\": 250000000.00,\n    \"spentBudget\": 87500000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Education Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Education\",\n    \"allocatedBudget\": 180000000.00,\n    \"spentBudget\": 45000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Infrastructure Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Infrastructure\",\n    \"allocatedBudget\": 450000000.00,\n    \"spentBudget\": 125000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Defense Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Defense\",\n    \"allocatedBudget\": 320000000.00,\n    \"spentBudget\": 98000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Agriculture Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Agriculture\",\n    \"allocatedBudget\": 120000000.00,\n    \"spentBudget\": 35000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Technology Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Technology & Innovation\",\n    \"allocatedBudget\": 85000000.00,\n    \"spentBudget\": 12000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Environment Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Environment & Climate\",\n    \"allocatedBudget\": 95000000.00,\n    \"spentBudget\": 22000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Social Welfare Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Social Welfare\",\n    \"allocatedBudget\": 200000000.00,\n    \"spentBudget\": 85000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Transportation Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Transportation\",\n    \"allocatedBudget\": 300000000.00,\n    \"spentBudget\": 165000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Energy Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Energy & Power\",\n    \"allocatedBudget\": 280000000.00,\n    \"spentBudget\": 110000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"spentBudget\": 95000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories/{{categoryId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories",
+								"{{categoryId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Category - Multiple Fields",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Healthcare & Medical Services\",\n    \"allocatedBudget\": 275000000.00,\n    \"spentBudget\": 95000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories/{{categoryId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories",
+								"{{categoryId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Category",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseURL}}/categories/{{categoryId}}",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories",
+								"{{categoryId}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Validation Tests",
+			"item": [
+				{
+					"name": "Test Empty Category Name",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"\",\n    \"allocatedBudget\": 100000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Test Negative Budget",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Test Category\",\n    \"allocatedBudget\": -50000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Test Missing Required Fields",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"categoryName\": \"Test Category\"\n}"
+						},
+						"url": {
+							"raw": "{{baseURL}}/categories",
+							"host": [
+								"{{baseURL}}"
+							],
+							"path": [
+								"categories"
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseURL",
+			"value": "http://localhost:8080/api",
+			"type": "string"
+		},
+		{
+			"key": "categoryId",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}

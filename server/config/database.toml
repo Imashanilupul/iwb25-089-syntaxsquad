@@ -1,0 +1,14 @@
+# Database Configuration for Supabase
+[database]
+url = "https://hhnxsixgjcdhvzuwbmzf.supabase.co"
+direct_url = "postgresql://postgres.hhnxsixgjcdhvzuwbmzf:Anjana12345.@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
+pool_url = "postgresql://postgres.hhnxsixgjcdhvzuwbmzf:Anjana12345.@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+
+[auth]
+anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI2MDI0ODUsImV4cCI6MjAzODE3ODQ4NX0.wlwUeFUhTyGOjSl-1xrxFnpOWLYKnfEk5_A4HdSBN9c"
+service_role_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyMjYwMjQ4NSwiZXhwIjoyMDM4MTc4NDg1fQ.m7uHZHJ6yMgb_Dv6k2Fz_sQKlTz_HEW0uOmnJRqBIH4"
+
+[api]
+rest_endpoint = "/rest/v1"
+auth_endpoint = "/auth/v1"
+storage_endpoint = "/storage/v1"
