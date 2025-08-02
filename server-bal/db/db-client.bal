@@ -1,4 +1,4 @@
-import ballerina/sql;
+import ballerinax/postgresql;
 import ballerina/log;
 
 // Database configuration
@@ -12,16 +12,16 @@ configurable string dbPassword = "Anjana12345.";
 configurable int maxOpenConnections = 10;
 configurable int maxConnectionLifeTime = 3600;
 
-// Database client
-public client sql:Client dbClient = check new (
+// Database client using PostgreSQL driver
+public postgresql:Client dbClient = check new (
     host = dbHost,
     port = dbPort,
-    user = dbUser,
+    username = dbUser,
     password = dbPassword,
     database = dbName,
     options = {
-        maxOpenConnections: maxOpenConnections,
-        maxConnectionLifeTime: maxConnectionLifeTime
+        connectTimeout: 20,
+        socketTimeout: 30
     }
 );
 
@@ -30,10 +30,21 @@ public function initDatabase() returns error? {
     log:printInfo("Initializing database connection...");
     
     // Test the connection
-    sql:ExecutionResult result = check dbClient->execute(`SELECT 1 as test`);
+    _ = check dbClient->execute(`SELECT 1 as test`);
     log:printInfo("Database connection successful");
     
     return;
+}
+
+// Database health check function
+public function checkDatabaseHealth() returns record {|boolean connected; string message;|} {
+    do {
+        _ = check dbClient->execute(`SELECT 1 as health_check`);
+        return {connected: true, message: "Database connection is healthy"};
+    } on fail error e {
+        log:printError("Database health check failed", 'error = e);
+        return {connected: false, message: "Database connection failed: " + e.message()};
+    }
 }
 
 // Database cleanup function

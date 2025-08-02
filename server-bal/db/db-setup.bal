@@ -1,23 +1,23 @@
 import ballerina/sql;
+import ballerinax/postgresql;
 import ballerina/log;
-import . from "./db-client.bal";
+import ballerina/regex;
 
-// Database setup function to create tables
-public function setupDatabase() returns error? {
+// Import the database client
+public function setupDatabase(postgresql:Client dbClient) returns error? {
     log:printInfo("Setting up database tables...");
     
-    // Read the schema file
-    string schemaSQL = check readSchemaFile();
+    // Get the schema SQL
+    string schemaSQL = getSchemaSQL();
     
     // Split the SQL statements and execute them
-    string[] statements = schemaSQL.split(";");
+    string[] statements = regex:split(schemaSQL, ";");
     
     foreach string statement in statements {
         string trimmedStatement = statement.trim();
-        if (trimmedStatement.length() > 0) {
-            log:printInfo("Executing: " + trimmedStatement.substring(0, 50) + "...");
-            sql:ExecutionResult result = check dbClient->execute(trimmedStatement);
-            log:printInfo("Statement executed successfully");
+        if (trimmedStatement.length() > 0 && !trimmedStatement.startsWith("--")) {
+            log:printInfo("Executing SQL statement...");
+            _ = check dbClient->execute(sql:queryConvertParameterizedQuery(trimmedStatement));
         }
     }
     
@@ -25,11 +25,9 @@ public function setupDatabase() returns error? {
     return;
 }
 
-// Function to read the schema file
-function readSchemaFile() returns string {
-    // For now, we'll return the schema as a string
-    // In a production environment, you might want to read from a file
-    return `
+// Function to get the schema SQL
+function getSchemaSQL() returns string {
+    return "
         -- Users table
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -134,31 +132,29 @@ function readSchemaFile() returns string {
             count INTEGER NOT NULL,
             petition_id INTEGER REFERENCES petitions(id)
         );
-    `;
+    ";
 }
 
 // Function to check if tables exist
-public function checkTablesExist() returns boolean {
-    sql:ParameterizedCallQuery sqlQuery = {
-        sql: `SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'users'
-        )`,
-        parameters: []
-    };
+public function checkTablesExist(postgresql:Client dbClient) returns boolean|error {
+    string query = "SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+    )";
     
-    stream<record {}, sql:Error?> resultStream = dbClient->query(sqlQuery);
+    stream<record {|boolean exists;|}, sql:Error?> resultStream = dbClient->query(query);
     record {|boolean exists;|}? result = check resultStream.next();
+    check resultStream.close();
     
     return result?.exists ?: false;
 }
 
 // Function to drop all tables (for testing/reset)
-public function dropAllTables() returns error? {
+public function dropAllTables(postgresql:Client dbClient) returns error? {
     log:printInfo("Dropping all tables...");
     
-    string[] tables = [
+    string[] tableNames = [
         "petition_activities",
         "petitions", 
         "reports",
@@ -171,10 +167,10 @@ public function dropAllTables() returns error? {
         "users"
     ];
     
-    foreach string table in tables {
-        string dropSQL = `DROP TABLE IF EXISTS ${table} CASCADE`;
-        sql:ExecutionResult result = check dbClient->execute(dropSQL);
-        log:printInfo("Dropped table: " + table);
+    foreach string tableName in tableNames {
+        string dropSQL = "DROP TABLE IF EXISTS " + tableName + " CASCADE";
+        _ = check dbClient->execute(sql:queryConvertParameterizedQuery(dropSQL));
+        log:printInfo("Dropped table: " + tableName);
     }
     
     log:printInfo("All tables dropped successfully");
