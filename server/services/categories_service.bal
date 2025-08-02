@@ -1,125 +1,28 @@
-import ballerina/http;
+import ballerina/log;
 import ballerina/time;
-import ballerina/lang.'string as strings;
 
-# Categories service for database operations
+# Add the correct import or type definition for DatabaseClient
+# For example, if using a module named db, import it:
+# import db;
 
-# Category record type
-public type Category record {
-    # Category unique identifier
-    int category_id;
-    # Category name
-    string category_name;
-    # Allocated budget amount
-    decimal allocated_budget;
-    # Spent budget amount
-    decimal spent_budget;
-    # Creation timestamp
-    string created_at;
-    # Last update timestamp
-    string updated_at;
+# Or define a minimal DatabaseClient type if it's custom:
+type DatabaseClient object {
+    public function get(string endpoint) returns json|error;
+    public function post(string endpoint, json payload) returns json|error;
+    public function patch(string endpoint, json payload) returns json|error;
+    public function delete(string endpoint) returns json|error;
 };
 
-# Request types
-public type CreateCategoryRequest record {
-    # Category name
-    string categoryName;
-    # Allocated budget amount
-    decimal allocatedBudget;
-    # Spent budget amount (optional, defaults to 0)
-    decimal? spentBudget = 0d;
-};
-
-public type UpdateCategoryRequest record {
-    # Category name (optional)
-    string? categoryName;
-    # Allocated budget amount (optional)
-    decimal? allocatedBudget;
-    # Spent budget amount (optional)
-    decimal? spentBudget;
-};
-
-# Categories Service Class
+# Categories service for handling category operations
 public class CategoriesService {
-    private final string supabaseUrl;
-    private final string apiKey;
-    private final string serviceRoleKey;
-    private final http:Client httpClient;
+    private DatabaseClient dbClient;
 
-    public function init(string supabaseUrl, string apiKey, string serviceRoleKey) returns error? {
-        self.supabaseUrl = supabaseUrl;
-        self.apiKey = apiKey;
-        self.serviceRoleKey = serviceRoleKey;
-        self.httpClient = check new (supabaseUrl);
-    }
-
-    # Create a new category
+    # Initialize categories service
     #
-    # + categoryData - Category creation request data
-    # + return - Created category data or error
-    public function createCategory(CreateCategoryRequest categoryData) returns json|error {
-        // Validate input
-        string trimmedName = strings:trim(categoryData.categoryName);
-        if trimmedName.length() == 0 {
-            return error("Category name cannot be empty");
-        }
-        
-        if categoryData.allocatedBudget < 0d {
-            return error("Allocated budget cannot be negative");
-        }
-        
-        decimal spentBudget = categoryData.spentBudget ?: 0d;
-        if spentBudget < 0d {
-            return error("Spent budget cannot be negative");
-        }
-        
-        if spentBudget > categoryData.allocatedBudget {
-            return error("Spent budget cannot exceed allocated budget");
-        }
-        
-        do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            };
-            
-            // Prepare payload
-            json payload = {
-                "category_name": trimmedName,
-                "allocated_budget": categoryData.allocatedBudget,
-                "spent_budget": spentBudget
-            };
-            
-            // Make POST request to Supabase
-            http:Response response = check self.httpClient->post("/rest/v1/categories", payload, headers);
-            
-            if response.statusCode == 201 {
-                json responseBody = check response.getJsonPayload();
-                if responseBody is json[] && responseBody.length() > 0 {
-                    return {
-                        "success": true,
-                        "message": "Category created successfully",
-                        "data": responseBody[0],
-                        "timestamp": time:utcNow()[0]
-                    };
-                } else {
-                    return error("No category data returned from database");
-                }
-            } else {
-                string errorMsg = "Database error";
-                json|error responseBody = response.getJsonPayload();
-                if responseBody is json {
-                    errorMsg = "Database error: " + responseBody.toString();
-                }
-                return error(errorMsg);
-            }
-            
-        } on fail error e {
-            return error("Failed to create category: " + e.message());
-        }
+    # + dbClient - Database client instance
+    public function init(DatabaseClient dbClient) {
+        self.dbClient = dbClient;
+        log:printInfo("✅ Categories service initialized");
     }
 
     # Get all categories
@@ -127,34 +30,16 @@ public class CategoriesService {
     # + return - Categories list or error
     public function getAllCategories() returns json|error {
         do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json"
+            json result = check self.dbClient.get("/categories?select=*&order=created_at.desc");
+            json[] categories = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Categories retrieved successfully",
+                "data": categories,
+                "count": categories.length(),
+                "timestamp": time:utcNow()[0]
             };
-            
-            // Make GET request to Supabase
-            http:Response response = check self.httpClient->get("/rest/v1/categories?select=*&order=created_at.desc", headers);
-            
-            if response.statusCode == 200 {
-                json responseBody = check response.getJsonPayload();
-                if responseBody is json[] {
-                    return {
-                        "success": true,
-                        "message": "Categories retrieved successfully",
-                        "data": responseBody,
-                        "count": responseBody.length(),
-                        "timestamp": time:utcNow()[0]
-                    };
-                } else {
-                    return error("Invalid response format from database");
-                }
-            } else {
-                json|error responseBody = response.getJsonPayload();
-                string errorMsg = responseBody is json ? "Database error: " + responseBody.toString() : "Database connection error";
-                return error(errorMsg);
-            }
             
         } on fail error e {
             return error("Failed to get categories: " + e.message());
@@ -172,39 +57,19 @@ public class CategoriesService {
         }
         
         do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json"
-            };
+            string endpoint = "/categories?category_id=eq." + categoryId.toString();
+            json result = check self.dbClient.get(endpoint);
+            json[] categories = check result.ensureType();
             
-            // Make GET request to Supabase
-            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-            http:Response response = check self.httpClient->get(endpoint, headers);
-            
-            if response.statusCode == 200 {
-                json responseBody = check response.getJsonPayload();
-                if responseBody is json[] {
-                    if responseBody.length() > 0 {
-                        return {
-                            "success": true,
-                            "message": "Category retrieved successfully",
-                            "data": responseBody[0],
-                            "timestamp": time:utcNow()[0]
-                        };
-                    } else {
-                        return error("Category not found");
-                    }
-                } else {
-                    return error("Invalid response format from database");
-                }
-            } else if response.statusCode == 404 {
-                return error("Category not found");
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category retrieved successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
             } else {
-                json|error responseBody = response.getJsonPayload();
-                string errorMsg = responseBody is json ? "Database error: " + responseBody.toString() : "Database connection error";
-                return error(errorMsg);
+                return error("Category not found");
             }
             
         } on fail error e {
@@ -212,90 +77,130 @@ public class CategoriesService {
         }
     }
 
+    # Create a new category
+    #
+    # + categoryName - Category name
+    # + allocatedBudget - Allocated budget
+    # + spentBudget - Spent budget (optional, defaults to 0)
+    # + return - Created category data or error
+    public function createCategory(string categoryName, decimal allocatedBudget, decimal spentBudget = 0d) returns json|error {
+        do {
+            // Validate input
+            if categoryName.trim().length() == 0 {
+                return error("Category name cannot be empty");
+            }
+            
+            if allocatedBudget < 0d {
+                return error("Allocated budget cannot be negative");
+            }
+            
+            if spentBudget < 0d {
+                return error("Spent budget cannot be negative");
+            }
+            
+            if spentBudget > allocatedBudget {
+                return error("Spent budget cannot exceed allocated budget");
+            }
+            
+            json payload = {
+                "category_name": categoryName,
+                "allocated_budget": allocatedBudget,
+                "spent_budget": spentBudget
+            };
+            
+            json result = check self.dbClient.post("/categories", payload);
+            json[] categories = check result.ensureType();
+            
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category created successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("No category data returned from database");
+            }
+            
+        } on fail error e {
+            return error("Failed to create category: " + e.message());
+        }
+    }
+
     # Update category by ID
     #
     # + categoryId - Category ID to update
-    # + updateData - Update request data
+    # + updateData - Update data as JSON
     # + return - Updated category data or error
-    public function updateCategory(int categoryId, UpdateCategoryRequest updateData) returns json|error {
+    public function updateCategory(int categoryId, json updateData) returns json|error {
         // Validate input
         if categoryId <= 0 {
             return error("Category ID must be a positive integer");
         }
         
-        // Validate update data
-        string? categoryName = updateData.categoryName;
-        if categoryName is string {
-            string trimmedName = strings:trim(categoryName);
-            if trimmedName.length() == 0 {
-                return error("Category name cannot be empty");
-            }
-        }
-        
-        if updateData.allocatedBudget is decimal && updateData.allocatedBudget < 0d {
-            return error("Allocated budget cannot be negative");
-        }
-        
-        if updateData.spentBudget is decimal && updateData.spentBudget < 0d {
-            return error("Spent budget cannot be negative");
-        }
-        
         do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            };
-            
-            // Prepare payload (only include fields that are provided)
             map<json> payloadMap = {};
-            if categoryName is string {
-                payloadMap["category_name"] = strings:trim(categoryName);
-            }
-            if updateData.allocatedBudget is decimal {
-                payloadMap["allocated_budget"] = updateData.allocatedBudget;
-            }
-            if updateData.spentBudget is decimal {
-                payloadMap["spent_budget"] = updateData.spentBudget;
+            
+            // Build update payload from provided data
+            json|error categoryName = updateData.categoryName;
+            if categoryName is json {
+                string|error nameStr = categoryName.ensureType(string);
+                if nameStr is string && nameStr.trim().length() > 0 {
+                    payloadMap["category_name"] = nameStr;
+                } else {
+                    return error("Category name cannot be empty");
+                }
             }
             
-            // Only proceed if there's something to update
+            json|error allocatedBudget = updateData.allocatedBudget;
+            if allocatedBudget is json {
+                decimal|error budget = allocatedBudget.ensureType(decimal);
+                if budget is decimal && budget >= 0d {
+                    payloadMap["allocated_budget"] = budget;
+                } else {
+                    return error("Allocated budget must be non-negative");
+                }
+            }
+            
+            json|error spentBudget = updateData.spentBudget;
+            if spentBudget is json {
+                decimal|error spent = spentBudget.ensureType(decimal);
+                if spent is decimal && spent >= 0d {
+                    payloadMap["spent_budget"] = spent;
+                } else {
+                    return error("Spent budget must be non-negative");
+                }
+            }
+            
+            // Validate that spent doesn't exceed allocated if both are provided
+            if payloadMap.hasKey("allocated_budget") && payloadMap.hasKey("spent_budget") {
+                decimal allocated = check payloadMap["allocated_budget"].ensureType(decimal);
+                decimal spent = check payloadMap["spent_budget"].ensureType(decimal);
+                if spent > allocated {
+                    return error("Spent budget cannot exceed allocated budget");
+                }
+            }
+            
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");
             }
             
-            // Add updated_at timestamp
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
             
-            // Make PATCH request to Supabase
-            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-            http:Response response = check self.httpClient->patch(endpoint, payload, headers);
+            string endpoint = "/categories?category_id=eq." + categoryId.toString();
+            json result = check self.dbClient.patch(endpoint, payload);
+            json[] categories = check result.ensureType();
             
-            if response.statusCode == 200 {
-                json responseBody = check response.getJsonPayload();
-                if responseBody is json[] {
-                    if responseBody.length() > 0 {
-                        return {
-                            "success": true,
-                            "message": "Category updated successfully",
-                            "data": responseBody[0],
-                            "timestamp": time:utcNow()[0]
-                        };
-                    } else {
-                        return error("Category not found");
-                    }
-                } else {
-                    return error("Invalid response format from database");
-                }
-            } else if response.statusCode == 404 {
-                return error("Category not found");
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category updated successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
             } else {
-                json|error responseBody = response.getJsonPayload();
-                string errorMsg = responseBody is json ? "Database error: " + responseBody.toString() : "Database connection error";
-                return error(errorMsg);
+                return error("Category not found");
             }
             
         } on fail error e {
@@ -314,34 +219,59 @@ public class CategoriesService {
         }
         
         do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json"
+            string endpoint = "/categories?category_id=eq." + categoryId.toString();
+            json result = check self.dbClient.delete(endpoint);
+            
+            return {
+                "success": true,
+                "message": "Category deleted successfully",
+                "timestamp": time:utcNow()[0]
             };
-            
-            // Make DELETE request to Supabase
-            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-            http:Response response = check self.httpClient->delete(endpoint, headers);
-            
-            if response.statusCode == 204 {
-                return {
-                    "success": true,
-                    "message": "Category deleted successfully",
-                    "timestamp": time:utcNow()[0]
-                };
-            } else if response.statusCode == 404 {
-                return error("Category not found");
-            } else {
-                json|error responseBody = response.getJsonPayload();
-                string errorMsg = responseBody is json ? "Database error: " + responseBody.toString() : "Database connection error";
-                return error(errorMsg);
-            }
             
         } on fail error e {
             return error("Failed to delete category: " + e.message());
         }
+    }
+
+    # Validate category data
+    #
+    # + categoryData - Category data to validate
+    # + return - Validation result
+    public function validateCategoryData(json categoryData) returns json {
+        string[] errors = [];
+        
+        json|error categoryName = categoryData.categoryName;
+        if categoryName is error || categoryName.toString().trim().length() == 0 {
+            errors.push("Category name is required and cannot be empty");
+        }
+        
+        json|error allocatedBudget = categoryData.allocatedBudget;
+        if allocatedBudget is error {
+            errors.push("Allocated budget is required");
+        } else {
+            decimal|error budget = allocatedBudget.ensureType(decimal);
+            if budget is error || budget < 0d {
+                errors.push("Allocated budget must be a non-negative number");
+            }
+        }
+        
+        json|error spentBudget = categoryData.spentBudget;
+        if spentBudget is json {
+            decimal|error spent = spentBudget.ensureType(decimal);
+            if spent is error || spent < 0d {
+                errors.push("Spent budget must be a non-negative number");
+            } else if allocatedBudget is json {
+                decimal|error budget = allocatedBudget.ensureType(decimal);
+                if budget is decimal && spent is decimal && spent > budget {
+                    errors.push("Spent budget cannot exceed allocated budget");
+                }
+            }
+        }
+        
+        return {
+            "valid": errors.length() == 0,
+            "errors": errors
+        };
     }
 
     # Get categories with budget analysis
@@ -349,74 +279,56 @@ public class CategoriesService {
     # + return - Categories with budget analysis or error
     public function getCategoriesWithBudgetAnalysis() returns json|error {
         do {
-            // Prepare headers
-            map<string> headers = {
-                "apikey": self.serviceRoleKey,
-                "Authorization": "Bearer " + self.serviceRoleKey,
-                "Content-Type": "application/json"
-            };
+            json result = check self.dbClient.get("/categories?select=*&order=allocated_budget.desc");
+            json[] categories = check result.ensureType();
             
-            // Make GET request to Supabase
-            http:Response response = check self.httpClient->get("/rest/v1/categories?select=*&order=allocated_budget.desc", headers);
+            // Calculate budget analysis
+            decimal totalAllocated = 0d;
+            decimal totalSpent = 0d;
+            json[] analysis = [];
             
-            if response.statusCode == 200 {
-                json responseBody = check response.getJsonPayload();
-                if responseBody is json[] {
-                    // Calculate budget analysis
-                    decimal totalAllocated = 0d;
-                    decimal totalSpent = 0d;
-                    json[] analysis = [];
+            foreach json category in categories {
+                if category is map<json> {
+                    decimal allocated = check category["allocated_budget"].ensureType(decimal);
+                    decimal spent = check category["spent_budget"].ensureType(decimal);
+                    decimal remaining = allocated - spent;
+                    decimal utilizationPercentage = allocated > 0d ? (spent / allocated) * 100d : 0d;
                     
-                    foreach json category in responseBody {
-                        if category is map<json> {
-                            decimal allocated = check category["allocated_budget"].ensureType(decimal);
-                            decimal spent = check category["spent_budget"].ensureType(decimal);
-                            decimal remaining = allocated - spent;
-                            decimal utilizationPercentage = allocated > 0d ? (spent / allocated) * 100d : 0d;
-                            
-                            totalAllocated += allocated;
-                            totalSpent += spent;
-                            
-                            json categoryAnalysis = {
-                                "category_id": category["category_id"],
-                                "category_name": category["category_name"],
-                                "allocated_budget": category["allocated_budget"],
-                                "spent_budget": category["spent_budget"],
-                                "created_at": category["created_at"],
-                                "updated_at": category["updated_at"],
-                                "remaining_budget": remaining,
-                                "utilization_percentage": utilizationPercentage,
-                                "status": utilizationPercentage > 90d ? "High Utilization" : 
-                                         utilizationPercentage > 70d ? "Medium Utilization" : "Low Utilization"
-                            };
-                            
-                            analysis.push(categoryAnalysis);
-                        }
-                    }
+                    totalAllocated += allocated;
+                    totalSpent += spent;
                     
-                    decimal overallUtilization = totalAllocated > 0d ? (totalSpent / totalAllocated) * 100d : 0d;
-                    
-                    return {
-                        "success": true,
-                        "message": "Categories with budget analysis retrieved successfully",
-                        "data": analysis,
-                        "summary": {
-                            "total_allocated": totalAllocated,
-                            "total_spent": totalSpent,
-                            "total_remaining": totalAllocated - totalSpent,
-                            "overall_utilization_percentage": overallUtilization
-                        },
-                        "count": analysis.length(),
-                        "timestamp": time:utcNow()[0]
+                    json categoryAnalysis = {
+                        "category_id": category["category_id"],
+                        "category_name": category["category_name"],
+                        "allocated_budget": category["allocated_budget"],
+                        "spent_budget": category["spent_budget"],
+                        "created_at": category["created_at"],
+                        "updated_at": category["updated_at"],
+                        "remaining_budget": remaining,
+                        "utilization_percentage": utilizationPercentage,
+                        "status": utilizationPercentage > 90d ? "High Utilization" : 
+                                 utilizationPercentage > 70d ? "Medium Utilization" : "Low Utilization"
                     };
-                } else {
-                    return error("Invalid response format from database");
+                    
+                    analysis.push(categoryAnalysis);
                 }
-            } else {
-                json|error responseBody = response.getJsonPayload();
-                string errorMsg = responseBody is json ? "Database error: " + responseBody.toString() : "Database connection error";
-                return error(errorMsg);
             }
+            
+            decimal overallUtilization = totalAllocated > 0d ? (totalSpent / totalAllocated) * 100d : 0d;
+            
+            return {
+                "success": true,
+                "message": "Categories with budget analysis retrieved successfully",
+                "data": analysis,
+                "summary": {
+                    "total_allocated": totalAllocated,
+                    "total_spent": totalSpent,
+                    "total_remaining": totalAllocated - totalSpent,
+                    "overall_utilization_percentage": overallUtilization
+                },
+                "count": analysis.length(),
+                "timestamp": time:utcNow()[0]
+            };
             
         } on fail error e {
             return error("Failed to get categories with budget analysis: " + e.message());

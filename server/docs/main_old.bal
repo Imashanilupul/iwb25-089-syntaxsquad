@@ -2,10 +2,11 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
-# Environment variables configuration
-configurable int port = ?;
-configurable string supabaseUrl = ?;
-configurable string supabaseServiceRoleKey = ?;
+# Configurable server settings
+configurable int port = 8080;
+configurable string supabaseUrl = "https://hhnxsixgjcdhvzuwbmzf.supabase.co";
+configurable string supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4OTA2NjIsImV4cCI6MjA2OTQ2NjY2Mn0._k-5nnUnFUGH2GO0rk_d9U0oFAvs3V5SPLvySQZ-YgA";
+configurable string supabaseServiceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4OTA2NjIsImV4cCI6MjA2OTQ2NjY2Mn0._k-5nnUnFUGH2GO0rk_d9U0oFAvs3V5SPLvySQZ-YgA";
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
@@ -37,6 +38,20 @@ service /api on apiListener {
         return checkDatabaseHealth();
     }
     
+    # Database setup endpoint
+    #
+    # + return - Setup instructions
+    resource function post db/setup() returns json {
+        return getDatabaseSetupInstructions();
+    }
+    
+    # Check database tables endpoint
+    #
+    # + return - Table existence status
+    resource function get db/tables() returns json|error {
+        return checkTablesExist();
+    }
+    
     # Server information endpoint
     #
     # + return - Server information
@@ -44,9 +59,8 @@ service /api on apiListener {
         [int, decimal] currentTime = time:utcNow();
         return {
             "server": "Transparent Governance Platform Backend",
-            "version": "2.0.0",
+            "version": "1.0.0",
             "status": "Running",
-            "environment": "Configured from environment variables",
             "database": {
                 "type": "PostgreSQL",
                 "provider": "Supabase",
@@ -56,23 +70,33 @@ service /api on apiListener {
                 "GET /api/health - Basic health check",
                 "GET /api/status - Server status", 
                 "GET /api/db/health - Database health check",
+                "POST /api/db/setup - Database setup instructions",
+                "GET /api/db/tables - Check if tables exist",
                 "GET /api/info - Server information",
+                "GET /api/users - List all users",
                 "GET /api/categories - List all budget categories",
-                "POST /api/categories - Create a new category",
-                "GET /api/categories/{id} - Get category by ID",
-                "PUT /api/categories/{id} - Update category by ID",
-                "DELETE /api/categories/{id} - Delete category by ID"
+                "GET /api/projects - List all projects",
+                "GET /api/proposals - List all proposals",
+                "GET /api/policies - List all policies",
+                "GET /api/reports - List all reports",
+                "GET /api/petitions - List all petitions"
             ],
             "features": [
-                "Environment-based configuration",
-                "Modular architecture",
-                "Category management",
-                "Database health monitoring"
+                "User Management",
+                "Budget Tracking",
+                "Project Management", 
+                "Proposal Voting",
+                "Policy Management",
+                "Whistleblowing System",
+                "Petition System"
             ],
+            "note": "Using HTTP REST API for database operations",
             "timestamp": currentTime[0]
         };
     }
 
+    # Categories endpoints
+    
     # Get all categories
     #
     # + return - Categories list or error
@@ -97,6 +121,7 @@ service /api on apiListener {
     resource function post categories(http:Request request) returns json|error {
         log:printInfo("Create category endpoint called");
         
+        // Get request payload
         json payload = check request.getJsonPayload();
         
         // Validate required fields
@@ -140,7 +165,9 @@ service /api on apiListener {
     resource function put categories/[int categoryId](http:Request request) returns json|error {
         log:printInfo("Update category endpoint called for ID: " + categoryId.toString());
         
+        // Get request payload
         json payload = check request.getJsonPayload();
+        
         return updateCategory(categoryId, payload);
     }
 
@@ -151,6 +178,43 @@ service /api on apiListener {
     resource function delete categories/[int categoryId]() returns json|error {
         log:printInfo("Delete category endpoint called for ID: " + categoryId.toString());
         return deleteCategory(categoryId);
+    }
+
+    # Data retrieval endpoints
+    #
+    # + return - User data or error
+    resource function get users() returns json|error {
+        return executeHttpQuery("/rest/v1/users");
+    }
+
+    # + return - Category data or error  
+    # resource function get categories() returns json|error {
+    #     return executeHttpQuery("/rest/v1/categories");
+    # }
+
+    # + return - Project data or error
+    resource function get projects() returns json|error {
+        return executeHttpQuery("/rest/v1/projects");
+    }
+
+    # + return - Proposal data or error
+    resource function get proposals() returns json|error {
+        return executeHttpQuery("/rest/v1/proposals");
+    }
+
+    # + return - Policy data or error
+    resource function get policies() returns json|error {
+        return executeHttpQuery("/rest/v1/policies");
+    }
+
+    # + return - Report data or error
+    resource function get reports() returns json|error {
+        return executeHttpQuery("/rest/v1/reports");
+    }
+
+    # + return - Petition data or error
+    resource function get petitions() returns json|error {
+        return executeHttpQuery("/rest/v1/petitions");
     }
 }
 
@@ -197,6 +261,116 @@ function checkDatabaseHealth() returns json|error {
         return error("Database health check failed: " + e.message());
     }
 }
+
+# Check if database tables exist via HTTP
+#
+# + return - Table existence status as JSON or error
+function checkTablesExist() returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        
+        // Try to query the users table
+        http:Response response = check supabaseClient->get("/rest/v1/users?limit=1", headers);
+        boolean tablesExist = response.statusCode == 200;
+        [int, decimal] currentTime = time:utcNow();
+        
+        return {
+            "tablesExist": tablesExist,
+            "message": tablesExist ? "Tables are accessible via REST API" : "Tables not found or not accessible",
+            "method": "HTTP REST API",
+            "statusCode": response.statusCode,
+            "timestamp": currentTime[0]
+        };
+    } on fail error e {
+        [int, decimal] currentTime = time:utcNow();
+        return {
+            "tablesExist": false,
+            "message": "Failed to check tables: " + e.message(),
+            "method": "HTTP REST API",
+            "timestamp": currentTime[0]
+        };
+    }
+}
+
+# Database setup instructions
+#
+# + return - Setup instructions as JSON
+function getDatabaseSetupInstructions() returns json {
+    [int, decimal] currentTime = time:utcNow();
+    return {
+        "success": false,
+        "message": "HTTP-based setup requires manual table creation",
+        "instructions": [
+            "1. Go to https://supabase.com/dashboard",
+            "2. Navigate to your project: hhnxsixgjcdhvzuwbmzf",
+            "3. Go to SQL Editor",
+            "4. Use the Ballerina schema functions from db/schema.bal",
+            "5. Tables will be created automatically"
+        ],
+        "schema_file": "db/schema.bal",
+        "timestamp": currentTime[0]
+    };
+}
+
+# Execute HTTP query to Supabase
+#
+# + endpoint - The REST endpoint to query
+# + return - Query result as JSON or error
+function executeHttpQuery(string endpoint) returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        
+        http:Response response = check supabaseClient->get(endpoint, headers);
+        json responseBody = check response.getJsonPayload();
+        
+        return {
+            "success": true,
+            "data": responseBody,
+            "count": responseBody is json[] ? responseBody.length() : 0,
+            "message": "Data retrieved successfully"
+        };
+    } on fail error e {
+        return {
+            "success": false,
+            "message": "Failed to retrieve data: " + e.message(),
+            "error": e.message()
+        };
+    }
+}
+
+# Initialize database connection at startup
+#
+# + return - Error if initialization fails
+function initializeDatabase() returns error? {
+    log:printInfo("🔄 Initializing database connection...");
+    
+    do {
+        map<string> headers = getHeaders();
+        
+        http:Response response = check supabaseClient->get("/rest/v1/", headers);
+        
+        if response.statusCode == 200 {
+            log:printInfo("✅ Supabase REST API connection successful");
+            
+            // Check if tables exist
+            http:Response tableResponse = check supabaseClient->get("/rest/v1/users?limit=1", headers);
+            if tableResponse.statusCode == 200 {
+                log:printInfo("✅ Database tables are accessible");
+            } else {
+                log:printWarn("⚠️  Database tables may not exist. Please run setup via Supabase dashboard.");
+            }
+        } else {
+            log:printWarn("⚠️  Supabase REST API connection failed");
+        }
+    } on fail error e {
+        log:printError("❌ HTTP database connection failed", 'error = e);
+        log:printWarn("⚠️  Server will start but database features may not work");
+    }
+    
+    return;
+}
+
+# Categories service functions
 
 # Get all categories
 #
@@ -392,35 +566,11 @@ function deleteCategory(int categoryId) returns json|error {
     }
 }
 
-# Initialize database connection at startup
-#
-# + return - Error if initialization fails
-function initializeDatabase() returns error? {
-    log:printInfo("🔄 Initializing database connection...");
-    
-    do {
-        map<string> headers = getHeaders();
-        
-        http:Response response = check supabaseClient->get("/rest/v1/", headers);
-        
-        if response.statusCode == 200 {
-            log:printInfo("✅ Supabase REST API connection successful");
-        } else {
-            log:printWarn("⚠️  Supabase REST API connection failed");
-        }
-    } on fail error e {
-        log:printError("❌ HTTP database connection failed", 'error = e);
-        log:printWarn("⚠️  Server will start but database features may not work");
-    }
-    
-    return;
-}
-
 # Application entry point
 #
 # + return - Error if application fails to start
 public function main() returns error? {
-    log:printInfo("🚀 Starting Transparent Governance Platform Backend v2.0...");
+    log:printInfo("🚀 Starting Transparent Governance Platform Backend...");
     
     // Initialize database connection at startup
     check initializeDatabase();
@@ -431,9 +581,8 @@ public function main() returns error? {
     log:printInfo("  ➤ Server status: http://localhost:" + port.toString() + "/api/status");
     log:printInfo("  ➤ Database health: http://localhost:" + port.toString() + "/api/db/health");
     log:printInfo("  ➤ Server info: http://localhost:" + port.toString() + "/api/info");
-    log:printInfo("  ➤ Categories CRUD: http://localhost:" + port.toString() + "/api/categories");
     log:printInfo("🎉 Server is ready to accept requests!");
-    log:printInfo("💡 Note: Now using environment variables for configuration");
+    log:printInfo("💡 Note: Using HTTP REST API for database operations");
     
     return;
 }
