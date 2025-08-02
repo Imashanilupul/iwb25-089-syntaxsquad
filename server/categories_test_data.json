@@ -1,0 +1,102 @@
+[
+  {
+    "categoryName": "Healthcare & Medical Services",
+    "allocatedBudget": 2500000000.00,
+    "spentBudget": 875000000.00
+  },
+  {
+    "categoryName": "Education & Research",
+    "allocatedBudget": 1800000000.00,
+    "spentBudget": 450000000.00
+  },
+  {
+    "categoryName": "Infrastructure Development",
+    "allocatedBudget": 4500000000.00,
+    "spentBudget": 1250000000.00
+  },
+  {
+    "categoryName": "National Defense & Security",
+    "allocatedBudget": 3200000000.00,
+    "spentBudget": 980000000.00
+  },
+  {
+    "categoryName": "Agriculture & Rural Development",
+    "allocatedBudget": 1200000000.00,
+    "spentBudget": 350000000.00
+  },
+  {
+    "categoryName": "Technology & Innovation",
+    "allocatedBudget": 850000000.00,
+    "spentBudget": 120000000.00
+  },
+  {
+    "categoryName": "Environment & Climate Action",
+    "allocatedBudget": 950000000.00,
+    "spentBudget": 220000000.00
+  },
+  {
+    "categoryName": "Social Welfare & Protection",
+    "allocatedBudget": 2000000000.00,
+    "spentBudget": 850000000.00
+  },
+  {
+    "categoryName": "Transportation & Logistics",
+    "allocatedBudget": 3000000000.00,
+    "spentBudget": 1650000000.00
+  },
+  {
+    "categoryName": "Energy & Power Generation",
+    "allocatedBudget": 2800000000.00,
+    "spentBudget": 1100000000.00
+  },
+  {
+    "categoryName": "Tourism & Culture",
+    "allocatedBudget": 650000000.00,
+    "spentBudget": 95000000.00
+  },
+  {
+    "categoryName": "Housing & Urban Development",
+    "allocatedBudget": 1500000000.00,
+    "spentBudget": 425000000.00
+  },
+  {
+    "categoryName": "Justice & Legal Affairs",
+    "allocatedBudget": 450000000.00,
+    "spentBudget": 275000000.00
+  },
+  {
+    "categoryName": "Foreign Affairs & Diplomacy",
+    "allocatedBudget": 380000000.00,
+    "spentBudget": 190000000.00
+  },
+  {
+    "categoryName": "Public Administration",
+    "allocatedBudget": 750000000.00,
+    "spentBudget": 520000000.00
+  },
+  {
+    "categoryName": "Sports & Youth Development",
+    "allocatedBudget": 320000000.00,
+    "spentBudget": 145000000.00
+  },
+  {
+    "categoryName": "Water Resources Management",
+    "allocatedBudget": 1100000000.00,
+    "spentBudget": 485000000.00
+  },
+  {
+    "categoryName": "Telecommunications & IT",
+    "allocatedBudget": 680000000.00,
+    "spentBudget": 125000000.00
+  },
+  {
+    "categoryName": "Emergency Response & Disaster Management",
+    "allocatedBudget": 550000000.00,
+    "spentBudget": 310000000.00
+  },
+  {
+    "categoryName": "Trade & Commerce",
+    "allocatedBudget": 420000000.00,
+    "spentBudget": 185000000.00
+  }
+]

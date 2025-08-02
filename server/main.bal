@@ -5,8 +5,8 @@ import ballerina/time;
 # Configurable server settings
 configurable int port = 8080;
 configurable string supabaseUrl = "https://hhnxsixgjcdhvzuwbmzf.supabase.co";
-configurable string supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI2MDI0ODUsImV4cCI6MjAzODE3ODQ4NX0.wlwUeFUhTyGOjSl-1xrxFnpOWLYKnfEk5_A4HdSBN9c";
-configurable string supabaseServiceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyMjYwMjQ4NSwiZXhwIjoyMDM4MTc4NDg1fQ.m7uHZHJ6yMgb_Dv6k2Fz_sQKlTz_HEW0uOmnJRqBIH4";
+configurable string supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4OTA2NjIsImV4cCI6MjA2OTQ2NjY2Mn0._k-5nnUnFUGH2GO0rk_d9U0oFAvs3V5SPLvySQZ-YgA";
+configurable string supabaseServiceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhobnhzaXhnamNkaHZ6dXdibXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4OTA2NjIsImV4cCI6MjA2OTQ2NjY2Mn0._k-5nnUnFUGH2GO0rk_d9U0oFAvs3V5SPLvySQZ-YgA";
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
@@ -95,6 +95,91 @@ service /api on apiListener {
         };
     }
 
+    # Categories endpoints
+    
+    # Get all categories
+    #
+    # + return - Categories list or error
+    resource function get categories() returns json|error {
+        log:printInfo("Get all categories endpoint called");
+        return getAllCategories();
+    }
+
+    # Get category by ID
+    #
+    # + categoryId - Category ID to retrieve
+    # + return - Category data or error
+    resource function get categories/[int categoryId]() returns json|error {
+        log:printInfo("Get category by ID endpoint called for ID: " + categoryId.toString());
+        return getCategoryById(categoryId);
+    }
+
+    # Create a new category
+    #
+    # + request - HTTP request containing category data
+    # + return - Created category data or error
+    resource function post categories(http:Request request) returns json|error {
+        log:printInfo("Create category endpoint called");
+        
+        // Get request payload
+        json payload = check request.getJsonPayload();
+        
+        // Validate required fields
+        string categoryName = check payload.categoryName.ensureType(string);
+        decimal allocatedBudget = check payload.allocatedBudget.ensureType(decimal);
+        decimal spentBudget = payload.spentBudget is () ? 0d : check payload.spentBudget.ensureType(decimal);
+        
+        // Validate input
+        if categoryName.trim().length() == 0 {
+            return {
+                "success": false,
+                "message": "Category name cannot be empty",
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        if allocatedBudget < 0d {
+            return {
+                "success": false,
+                "message": "Allocated budget cannot be negative",
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        if spentBudget < 0d {
+            return {
+                "success": false,
+                "message": "Spent budget cannot be negative",
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        return createCategory(categoryName, allocatedBudget, spentBudget);
+    }
+
+    # Update category by ID
+    #
+    # + request - HTTP request containing updated category data
+    # + categoryId - Category ID to update
+    # + return - Updated category data or error
+    resource function put categories/[int categoryId](http:Request request) returns json|error {
+        log:printInfo("Update category endpoint called for ID: " + categoryId.toString());
+        
+        // Get request payload
+        json payload = check request.getJsonPayload();
+        
+        return updateCategory(categoryId, payload);
+    }
+
+    # Delete category by ID
+    #
+    # + categoryId - Category ID to delete
+    # + return - Success message or error
+    resource function delete categories/[int categoryId]() returns json|error {
+        log:printInfo("Delete category endpoint called for ID: " + categoryId.toString());
+        return deleteCategory(categoryId);
+    }
+
     # Data retrieval endpoints
     #
     # + return - User data or error
@@ -103,9 +188,9 @@ service /api on apiListener {
     }
 
     # + return - Category data or error  
-    resource function get categories() returns json|error {
-        return executeHttpQuery("/rest/v1/categories");
-    }
+    # resource function get categories() returns json|error {
+    #     return executeHttpQuery("/rest/v1/categories");
+    # }
 
     # + return - Project data or error
     resource function get projects() returns json|error {
@@ -138,7 +223,7 @@ service /api on apiListener {
 # + return - Headers map
 function getHeaders() returns map<string> {
     return {
-        "apikey": supabaseApiKey,
+        "apikey": supabaseServiceRoleKey,
         "Authorization": "Bearer " + supabaseServiceRoleKey,
         "Content-Type": "application/json"
     };
@@ -283,6 +368,202 @@ function initializeDatabase() returns error? {
     }
     
     return;
+}
+
+# Categories service functions
+
+# Get all categories
+#
+# + return - Categories list or error
+function getAllCategories() returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        
+        http:Response response = check supabaseClient->get("/rest/v1/categories?select=*&order=created_at.desc", headers);
+        
+        if response.statusCode == 200 {
+            json responseBody = check response.getJsonPayload();
+            json[] categories = check responseBody.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Categories retrieved successfully",
+                "data": categories,
+                "count": categories.length(),
+                "timestamp": time:utcNow()[0]
+            };
+        } else {
+            json responseBody = check response.getJsonPayload();
+            return error("Database error: " + responseBody.toString());
+        }
+        
+    } on fail error e {
+        return error("Failed to get categories: " + e.message());
+    }
+}
+
+# Get category by ID
+#
+# + categoryId - Category ID to retrieve
+# + return - Category data or error
+function getCategoryById(int categoryId) returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        
+        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+        http:Response response = check supabaseClient->get(endpoint, headers);
+        
+        if response.statusCode == 200 {
+            json responseBody = check response.getJsonPayload();
+            json[] categories = check responseBody.ensureType();
+            
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category retrieved successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Category not found");
+            }
+        } else {
+            json responseBody = check response.getJsonPayload();
+            return error("Database error: " + responseBody.toString());
+        }
+        
+    } on fail error e {
+        return error("Failed to get category: " + e.message());
+    }
+}
+
+# Create a new category
+#
+# + categoryName - Category name
+# + allocatedBudget - Allocated budget
+# + spentBudget - Spent budget
+# + return - Created category data or error
+function createCategory(string categoryName, decimal allocatedBudget, decimal spentBudget) returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        headers["Prefer"] = "return=representation";
+        
+        json payload = {
+            "category_name": categoryName,
+            "allocated_budget": allocatedBudget,
+            "spent_budget": spentBudget
+        };
+        
+        http:Response response = check supabaseClient->post("/rest/v1/categories", payload, headers);
+        
+        if response.statusCode == 201 {
+            json responseBody = check response.getJsonPayload();
+            json[] categories = check responseBody.ensureType();
+            
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category created successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("No category data returned from database");
+            }
+        } else {
+            json responseBody = check response.getJsonPayload();
+            return error("Database error: " + responseBody.toString());
+        }
+        
+    } on fail error e {
+        return error("Failed to create category: " + e.message());
+    }
+}
+
+# Update category by ID
+#
+# + categoryId - Category ID to update
+# + updateData - Update data as JSON
+# + return - Updated category data or error
+function updateCategory(int categoryId, json updateData) returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        headers["Prefer"] = "return=representation";
+        
+        map<json> payloadMap = {};
+        
+        json|error categoryName = updateData.categoryName;
+        if categoryName is json {
+            payloadMap["category_name"] = categoryName;
+        }
+        
+        json|error allocatedBudget = updateData.allocatedBudget;
+        if allocatedBudget is json {
+            payloadMap["allocated_budget"] = allocatedBudget;
+        }
+        
+        json|error spentBudget = updateData.spentBudget;
+        if spentBudget is json {
+            payloadMap["spent_budget"] = spentBudget;
+        }
+        
+        payloadMap["updated_at"] = "now()";
+        json payload = payloadMap;
+        
+        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+        http:Response response = check supabaseClient->patch(endpoint, payload, headers);
+        
+        if response.statusCode == 200 {
+            json responseBody = check response.getJsonPayload();
+            json[] categories = check responseBody.ensureType();
+            
+            if categories.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Category updated successfully",
+                    "data": categories[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Category not found");
+            }
+        } else {
+            json responseBody = check response.getJsonPayload();
+            return error("Database error: " + responseBody.toString());
+        }
+        
+    } on fail error e {
+        return error("Failed to update category: " + e.message());
+    }
+}
+
+# Delete category by ID
+#
+# + categoryId - Category ID to delete
+# + return - Success message or error
+function deleteCategory(int categoryId) returns json|error {
+    do {
+        map<string> headers = getHeaders();
+        
+        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+        http:Response response = check supabaseClient->delete(endpoint, headers);
+        
+        if response.statusCode == 204 {
+            return {
+                "success": true,
+                "message": "Category deleted successfully",
+                "timestamp": time:utcNow()[0]
+            };
+        } else if response.statusCode == 404 {
+            return error("Category not found");
+        } else {
+            json responseBody = check response.getJsonPayload();
+            return error("Database error: " + responseBody.toString());
+        }
+        
+    } on fail error e {
+        return error("Failed to delete category: " + e.message());
+    }
 }
 
 # Application entry point
