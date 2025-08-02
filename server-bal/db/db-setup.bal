@@ -25,50 +25,60 @@ public function setupDatabase(postgresql:Client dbClient) returns error? {
     return;
 }
 
-// Function to get the schema SQL
+// Function to get the comprehensive schema SQL
 function getSchemaSQL() returns string {
     return "
-        -- Users table
+        -- Users table with full governance platform fields
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             user_name VARCHAR(255) NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
             nic VARCHAR(20) UNIQUE NOT NULL,
             mobile_no VARCHAR(15) NOT NULL,
-            evm VARCHAR(255)
+            evm VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Categories table
+        -- Categories table with budget tracking
         CREATE TABLE IF NOT EXISTS categories (
             category_id SERIAL PRIMARY KEY,
-            category_name VARCHAR(255) NOT NULL,
+            category_name VARCHAR(255) NOT NULL UNIQUE,
             allocated_budget DECIMAL(15,2) NOT NULL,
-            spent_budget DECIMAL(15,2) DEFAULT 0
+            spent_budget DECIMAL(15,2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Projects table
+        -- Projects table with complete governance tracking
         CREATE TABLE IF NOT EXISTS projects (
             project_id SERIAL PRIMARY KEY,
             project_name VARCHAR(255) NOT NULL,
-            category_id INTEGER REFERENCES categories(category_id),
+            category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
             allocated_budget DECIMAL(15,2) NOT NULL,
             spent_budget DECIMAL(15,2) DEFAULT 0,
             state VARCHAR(100) NOT NULL,
             province VARCHAR(100) NOT NULL,
             ministry VARCHAR(255) NOT NULL,
-            view_details TEXT
+            view_details TEXT,
+            status VARCHAR(50) DEFAULT 'PLANNED',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Transactions table
+        -- Transactions table with enhanced tracking
         CREATE TABLE IF NOT EXISTS transactions (
             transaction_id SERIAL PRIMARY KEY,
-            category_id INTEGER REFERENCES categories(category_id),
-            time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            spent DECIMAL(15,2) NOT NULL,
-            allocated DECIMAL(15,2) NOT NULL
+            category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
+            project_id INTEGER REFERENCES projects(project_id) ON DELETE SET NULL,
+            amount DECIMAL(15,2) NOT NULL,
+            transaction_type VARCHAR(50) NOT NULL DEFAULT 'EXPENSE',
+            description TEXT,
+            transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Proposals table
+        -- Proposals table with voting system
         CREATE TABLE IF NOT EXISTS proposals (
             id SERIAL PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
@@ -78,60 +88,88 @@ function getSchemaSQL() returns string {
             expired_date TIMESTAMP NOT NULL,
             yes_votes INTEGER DEFAULT 0,
             no_votes INTEGER DEFAULT 0,
-            category_id INTEGER REFERENCES categories(category_id)
+            category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Policies table
+        -- Policies table with status tracking
         CREATE TABLE IF NOT EXISTS policies (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             description TEXT NOT NULL,
             view_full_policy TEXT NOT NULL,
             ministry VARCHAR(255) NOT NULL,
-            created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            status VARCHAR(50) DEFAULT 'DRAFT',
+            effective_date TIMESTAMP,
+            created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Policy Comments table
+        -- Policy Comments table with reply system
         CREATE TABLE IF NOT EXISTS policy_comments (
             comment_id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id),
-            policy_id INTEGER REFERENCES policies(id),
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            policy_id INTEGER REFERENCES policies(id) ON DELETE CASCADE,
             comment TEXT NOT NULL,
             likes INTEGER DEFAULT 0,
-            reply_id INTEGER REFERENCES policy_comments(comment_id),
-            reply_comment TEXT
+            reply_id INTEGER REFERENCES policy_comments(comment_id) ON DELETE CASCADE,
+            reply_comment TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Reports table
+        -- Reports table with whistleblowing features
         CREATE TABLE IF NOT EXISTS reports (
             report_id SERIAL PRIMARY KEY,
             report_title VARCHAR(255) NOT NULL,
-            created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            priority VARCHAR(50) NOT NULL,
-            assigned_to VARCHAR(255) NOT NULL,
+            description TEXT,
+            priority VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
+            assigned_to VARCHAR(255),
             evidence_hash VARCHAR(255) NOT NULL,
             resolved_status BOOLEAN DEFAULT false,
-            user_id INTEGER REFERENCES users(id)
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_time TIMESTAMP
         );
 
-        -- Petitions table
+        -- Petitions table with deadline tracking
         CREATE TABLE IF NOT EXISTS petitions (
             id SERIAL PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
             description TEXT NOT NULL,
             required_signature_count INTEGER NOT NULL,
             signature_count INTEGER DEFAULT 0,
-            creator_id INTEGER REFERENCES users(id)
+            creator_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            status VARCHAR(50) DEFAULT 'ACTIVE',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deadline TIMESTAMP
         );
 
-        -- Petition Activities table
+        -- Petition Activities table with detailed tracking
         CREATE TABLE IF NOT EXISTS petition_activities (
             id SERIAL PRIMARY KEY,
-            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            count INTEGER NOT NULL,
-            petition_id INTEGER REFERENCES petitions(id)
+            petition_id INTEGER REFERENCES petitions(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            activity_type VARCHAR(50) NOT NULL DEFAULT 'SIGNATURE',
+            activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            signature_count INTEGER NOT NULL DEFAULT 1
         );
+
+        -- Create indexes for better performance
+        CREATE INDEX IF NOT EXISTS idx_projects_category_id ON projects(category_id);
+        CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+        CREATE INDEX IF NOT EXISTS idx_transactions_project_id ON transactions(project_id);
+        CREATE INDEX IF NOT EXISTS idx_proposals_category_id ON proposals(category_id);
+        CREATE INDEX IF NOT EXISTS idx_proposals_created_by ON proposals(created_by);
+        CREATE INDEX IF NOT EXISTS idx_policy_comments_user_id ON policy_comments(user_id);
+        CREATE INDEX IF NOT EXISTS idx_policy_comments_policy_id ON policy_comments(policy_id);
+        CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
+        CREATE INDEX IF NOT EXISTS idx_petitions_creator_id ON petitions(creator_id);
+        CREATE INDEX IF NOT EXISTS idx_petition_activities_petition_id ON petition_activities(petition_id);
     ";
 }
 

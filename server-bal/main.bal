@@ -117,7 +117,7 @@ service /api on apiListener {
         [int, decimal] currentTime = time:utcNow();
         return {
             "server": "Transparent Governance Platform Backend",
-            "version": "0.2.0",
+            "version": "0.3.0",
             "status": "Running",
             "database": {
                 "type": "PostgreSQL",
@@ -131,7 +131,14 @@ service /api on apiListener {
                 "GET /api/db/health - Database health check (HTTP)",
                 "POST /api/db/setup - Database setup instructions",
                 "GET /api/db/tables - Check if tables exist (HTTP)",
-                "GET /api/info - Server information"
+                "GET /api/info - Server information",
+                "GET /api/users - List all users",
+                "GET /api/categories - List all budget categories",
+                "GET /api/projects - List all projects",
+                "GET /api/proposals - List all proposals",
+                "GET /api/policies - List all policies",
+                "GET /api/reports - List all reports",
+                "GET /api/petitions - List all petitions"
             ],
             "features": [
                 "User Management",
@@ -145,6 +152,209 @@ service /api on apiListener {
             "note": "Using HTTP REST API for database operations to avoid PostgreSQL driver compatibility issues",
             "timestamp": currentTime[0]
         };
+    }
+
+    # Get all users
+    resource function get users() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/users", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Users retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve users: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all categories
+    resource function get categories() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/categories", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Budget categories retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve categories: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all projects
+    resource function get projects() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/projects", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Projects retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve projects: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all proposals
+    resource function get proposals() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/proposals", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Proposals retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve proposals: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all policies
+    resource function get policies() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/policies", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Policies retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve policies: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all reports
+    resource function get reports() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/reports", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Reports retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve reports: " + e.message(),
+                "error": e.message()
+            };
+        }
+    }
+
+    # Get all petitions
+    resource function get petitions() returns json|error {
+        do {
+            http:Client httpClient = check new (supabaseUrl);
+            
+            map<string> headers = {
+                "apikey": supabaseApiKey,
+                "Authorization": "Bearer " + supabaseServiceRoleKey,
+                "Content-Type": "application/json"
+            };
+            
+            http:Response response = check httpClient->get("/rest/v1/petitions", headers);
+            json responseBody = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "data": responseBody,
+                "count": responseBody is json[] ? responseBody.length() : 0,
+                "message": "Petitions retrieved successfully"
+            };
+        } on fail error e {
+            return {
+                "success": false,
+                "message": "Failed to retrieve petitions: " + e.message(),
+                "error": e.message()
+            };
+        }
     }
 }
 
