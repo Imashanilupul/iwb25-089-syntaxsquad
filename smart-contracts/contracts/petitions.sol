@@ -12,9 +12,11 @@ contract Petitions {
         mapping(address => bool) signers;
     }
 
+
     uint256 public petitionCount;
     mapping(uint256 => Petition) private petitions;
     mapping(address => uint256) public lastCreatedAt;
+
 
     event PetitionCreated(uint256 indexed petitionId, address indexed creator, string titleCid, string desCid, uint256 signaturesRequired);
     event PetitionSigned(uint256 indexed petitionId, address indexed signer);

@@ -192,18 +192,4 @@ service /api/categories on new http:Listener(8080) {
             jsonPayload: result
         };
     }
-}
-
-// Health check endpoint
-service /api/health on new http:Listener(8080) {
-    resource function get .() returns http:Response {
-        return http:Response {
-            statusCode: 200,
-            jsonPayload: {
-                success: true,
-                message: "✅ Backend is running!",
-                timestamp: time:utcNow().toString()
-            }
-        };
-    }
-}
+} 
