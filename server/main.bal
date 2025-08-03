@@ -1,6 +1,7 @@
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;
+import server_bal.categories;
 
 # Environment variables configuration
 configurable int port = ?;
@@ -12,6 +13,8 @@ listener http:Listener apiListener = new (port);
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
+
+categories:CategoriesService categoriesService = new (supabaseClient,port, supabaseUrl, supabaseServiceRoleKey);
 
 # Main API service
 service /api on apiListener {
@@ -86,7 +89,7 @@ service /api on apiListener {
     # + return - Categories list or error
     resource function get categories() returns json|error {
         log:printInfo("Get all categories endpoint called");
-        return getAllCategories();
+        return categoriesService.getAllCategories();
     }
 
     # Get category by ID
@@ -95,7 +98,7 @@ service /api on apiListener {
     # + return - Category data or error
     resource function get categories/[int categoryId]() returns json|error {
         log:printInfo("Get category by ID endpoint called for ID: " + categoryId.toString());
-        return getCategoryById(categoryId);
+        return categoriesService.getCategoryById(categoryId);
     }
 
     # Create a new category
@@ -137,7 +140,7 @@ service /api on apiListener {
             };
         }
         
-        return createCategory(categoryName, allocatedBudget, spentBudget);
+        return categoriesService.createCategory(categoryName, allocatedBudget, spentBudget);
     }
 
     # Update category by ID
@@ -149,7 +152,7 @@ service /api on apiListener {
         log:printInfo("Update category endpoint called for ID: " + categoryId.toString());
         
         json payload = check request.getJsonPayload();
-        return updateCategory(categoryId, payload);
+        return categoriesService.updateCategory(categoryId, payload);
     }
 
     # Delete category by ID
@@ -158,7 +161,7 @@ service /api on apiListener {
     # + return - Success message or error
     resource function delete categories/[int categoryId]() returns json|error {
         log:printInfo("Delete category endpoint called for ID: " + categoryId.toString());
-        return deleteCategory(categoryId);
+        return categoriesService.deleteCategory(categoryId);
     }
 
     # Get all policies
@@ -284,199 +287,7 @@ function checkDatabaseHealth() returns json|error {
     }
 }
 
-# Get all categories
-#
-# + return - Categories list or error
-function getAllCategories() returns json|error {
-    do {
-        map<string> headers = getHeaders();
-        
-        http:Response response = check supabaseClient->get("/rest/v1/categories?select=*&order=created_at.desc", headers);
-        
-        if response.statusCode == 200 {
-            json responseBody = check response.getJsonPayload();
-            json[] categories = check responseBody.ensureType();
-            
-            return {
-                "success": true,
-                "message": "Categories retrieved successfully",
-                "data": categories,
-                "count": categories.length(),
-                "timestamp": time:utcNow()[0]
-            };
-        } else {
-            json responseBody = check response.getJsonPayload();
-            return error("Database error: " + responseBody.toString());
-        }
-        
-    } on fail error e {
-        return error("Failed to get categories: " + e.message());
-    }
-}
 
-# Get category by ID
-#
-# + categoryId - Category ID to retrieve
-# + return - Category data or error
-function getCategoryById(int categoryId) returns json|error {
-    do {
-        map<string> headers = getHeaders();
-        
-        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-        http:Response response = check supabaseClient->get(endpoint, headers);
-        
-        if response.statusCode == 200 {
-            json responseBody = check response.getJsonPayload();
-            json[] categories = check responseBody.ensureType();
-            
-            if categories.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Category retrieved successfully",
-                    "data": categories[0],
-                    "timestamp": time:utcNow()[0]
-                };
-            } else {
-                return error("Category not found");
-            }
-        } else {
-            json responseBody = check response.getJsonPayload();
-            return error("Database error: " + responseBody.toString());
-        }
-        
-    } on fail error e {
-        return error("Failed to get category: " + e.message());
-    }
-}
-
-# Create a new category
-#
-# + categoryName - Category name
-# + allocatedBudget - Allocated budget
-# + spentBudget - Spent budget
-# + return - Created category data or error
-function createCategory(string categoryName, decimal allocatedBudget, decimal spentBudget) returns json|error {
-    do {
-        map<string> headers = getHeaders();
-        headers["Prefer"] = "return=representation";
-        
-        json payload = {
-            "category_name": categoryName,
-            "allocated_budget": allocatedBudget,
-            "spent_budget": spentBudget
-        };
-        
-        http:Response response = check supabaseClient->post("/rest/v1/categories", payload, headers);
-        
-        if response.statusCode == 201 {
-            json responseBody = check response.getJsonPayload();
-            json[] categories = check responseBody.ensureType();
-            
-            if categories.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Category created successfully",
-                    "data": categories[0],
-                    "timestamp": time:utcNow()[0]
-                };
-            } else {
-                return error("No category data returned from database");
-            }
-        } else {
-            json responseBody = check response.getJsonPayload();
-            return error("Database error: " + responseBody.toString());
-        }
-        
-    } on fail error e {
-        return error("Failed to create category: " + e.message());
-    }
-}
-
-# Update category by ID
-#
-# + categoryId - Category ID to update
-# + updateData - Update data as JSON
-# + return - Updated category data or error
-function updateCategory(int categoryId, json updateData) returns json|error {
-    do {
-        map<string> headers = getHeaders();
-        headers["Prefer"] = "return=representation";
-        
-        map<json> payloadMap = {};
-        
-        json|error categoryName = updateData.categoryName;
-        if categoryName is json {
-            payloadMap["category_name"] = categoryName;
-        }
-        
-        json|error allocatedBudget = updateData.allocatedBudget;
-        if allocatedBudget is json {
-            payloadMap["allocated_budget"] = allocatedBudget;
-        }
-        
-        json|error spentBudget = updateData.spentBudget;
-        if spentBudget is json {
-            payloadMap["spent_budget"] = spentBudget;
-        }
-        
-        payloadMap["updated_at"] = "now()";
-        json payload = payloadMap;
-        
-        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-        http:Response response = check supabaseClient->patch(endpoint, payload, headers);
-        
-        if response.statusCode == 200 {
-            json responseBody = check response.getJsonPayload();
-            json[] categories = check responseBody.ensureType();
-            
-            if categories.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Category updated successfully",
-                    "data": categories[0],
-                    "timestamp": time:utcNow()[0]
-                };
-            } else {
-                return error("Category not found");
-            }
-        } else {
-            json responseBody = check response.getJsonPayload();
-            return error("Database error: " + responseBody.toString());
-        }
-        
-    } on fail error e {
-        return error("Failed to update category: " + e.message());
-    }
-}
-
-# Delete category by ID
-#
-# + categoryId - Category ID to delete
-# + return - Success message or error
-function deleteCategory(int categoryId) returns json|error {
-    do {
-        map<string> headers = getHeaders();
-        
-        string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-        http:Response response = check supabaseClient->delete(endpoint, headers);
-        
-        if response.statusCode == 204 {
-            return {
-                "success": true,
-                "message": "Category deleted successfully",
-                "timestamp": time:utcNow()[0]
-            };
-        } else if response.statusCode == 404 {
-            return error("Category not found");
-        } else {
-            json responseBody = check response.getJsonPayload();
-            return error("Database error: " + responseBody.toString());
-        }
-        
-    } on fail error e {
-        return error("Failed to delete category: " + e.message());
-    }
-}
 
 # Initialize database connection at startup
 #
