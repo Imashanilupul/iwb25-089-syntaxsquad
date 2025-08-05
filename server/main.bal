@@ -6,11 +6,15 @@ import server_bal.policy;
 
 # Environment variables configuration
 configurable int port = ?;
+configurable int petitionPort = ?; 
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
+
+# web3 service URL
+http:Client web3Service = check new("http://localhost:3001");
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
@@ -244,6 +248,43 @@ service /api on apiListener {
         return policiesService.getPoliciesByMinistry(ministry);
     }
 }
+
+service /petitions on new http:Listener(petitionPort) {
+
+    resource function post create(http:Caller caller, http:Request req) returns error? {
+        json payload = check req.getJsonPayload();
+        json response = check web3Service->post("/create-petition", payload);
+        check caller->respond(response);
+    }
+
+    resource function post sign(http:Caller caller, http:Request req) returns error? {
+        json payload = check req.getJsonPayload();
+        json response = check web3Service->post("/sign-petition", payload);
+        check caller->respond(response);
+    }
+
+    // Fix: Use path parameter syntax
+    resource function get [string id](http:Caller caller, http:Request req) returns error? {
+        json response = check web3Service->get("/petition/" + id);
+        check caller->respond(response);
+    }
+
+    // Fix: Use path parameter syntax for multiple parameters
+    resource function get [string id]/[string address](http:Caller caller, http:Request req) returns error? {
+        json response = check web3Service->get("/has-signed/" + id + "/" + address);
+        check caller->respond(response);
+    }
+
+    resource function get health() returns string {
+        return "Ballerina service is running!";
+    }
+}
+
+
+
+
+
+
 
 # Get headers for HTTP requests
 #
