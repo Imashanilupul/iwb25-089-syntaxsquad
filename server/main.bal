@@ -249,7 +249,10 @@ service /api on apiListener {
     }
 }
 
-service /petitions on new http:Listener(petitionPort) {
+listener http:Listener newListener = new (petitionPort);
+
+
+service /petitions on newListener {
 
     resource function post create(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
@@ -278,8 +281,28 @@ service /petitions on new http:Listener(petitionPort) {
     resource function get health() returns string {
         return "Ballerina service is running!";
     }
-}
 
+    
+}
+service /auth on newListener {
+    resource function post authorize(http:Caller caller, http:Request req) returns error? {
+        json payload = check req.getJsonPayload();
+        json response = check web3Service->post("/auth/authorize", payload);
+        check caller->respond(response);
+    }
+    resource function post revoke(http:Caller caller, http:Request req) returns error? {
+        json payload = check req.getJsonPayload();
+        json response = check web3Service->post("/auth/revoke", payload);
+        check caller->respond(response);
+    }
+    resource function get isauthorized/[string address](http:Caller caller, http:Request req) returns error? {
+        json response = check web3Service->get("/auth/is-authorized/" + address);
+        check caller->respond(response);
+    }
+    resource function get health() returns string {
+        return "Auth service is running!";
+    }
+}
 
 
 
