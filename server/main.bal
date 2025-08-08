@@ -1,12 +1,14 @@
-import ballerina/http;
-import ballerina/log;
-import ballerina/time;
 import server_bal.categories;
 import server_bal.policy;
 
+import ballerina/http;
+import ballerina/jwt;
+import ballerina/log;
+import ballerina/time;
+
 # Environment variables configuration
 configurable int port = ?;
-configurable int petitionPort = ?; 
+configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
 
@@ -14,38 +16,38 @@ configurable string supabaseServiceRoleKey = ?;
 listener http:Listener apiListener = new (port);
 
 # web3 service URL
-http:Client web3Service = check new("http://localhost:3001");
+http:Client web3Service = check new ("http://localhost:3001");
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
 
-categories:CategoriesService categoriesService = new (supabaseClient,port, supabaseUrl, supabaseServiceRoleKey);
+categories:CategoriesService categoriesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 policy:PoliciesService policiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 # Main API service
 service /api on apiListener {
-    
+
     # Health check endpoint
     #
     # + return - Health status message
     resource function get health() returns string {
         return "✅ Backend is running!";
     }
-    
+
     # Server status endpoint
     #
     # + return - Server status message
     resource function get status() returns string {
         return "Server is healthy and HTTP-based database integration is ready";
     }
-    
+
     # Database health check endpoint
     #
     # + return - Database health status
     resource function get db/health() returns json|error {
         return checkDatabaseHealth();
     }
-    
+
     # Server information endpoint
     #
     # + return - Server information
@@ -63,7 +65,7 @@ service /api on apiListener {
             },
             "endpoints": [
                 "GET /api/health - Basic health check",
-                "GET /api/status - Server status", 
+                "GET /api/status - Server status",
                 "GET /api/db/health - Database health check",
                 "GET /api/info - Server information",
                 "GET /api/categories - List all budget categories",
@@ -113,14 +115,14 @@ service /api on apiListener {
     # + return - Created category data or error
     resource function post categories(http:Request request) returns json|error {
         log:printInfo("Create category endpoint called");
-        
+
         json payload = check request.getJsonPayload();
-        
+
         // Validate required fields
         string categoryName = check payload.categoryName.ensureType(string);
         decimal allocatedBudget = check payload.allocatedBudget.ensureType(decimal);
         decimal spentBudget = payload.spentBudget is () ? 0d : check payload.spentBudget.ensureType(decimal);
-        
+
         // Validate input
         if categoryName.trim().length() == 0 {
             return {
@@ -129,7 +131,7 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         if allocatedBudget < 0d {
             return {
                 "success": false,
@@ -137,7 +139,7 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         if spentBudget < 0d {
             return {
                 "success": false,
@@ -145,7 +147,7 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         return categoriesService.createCategory(categoryName, allocatedBudget, spentBudget);
     }
 
@@ -156,7 +158,7 @@ service /api on apiListener {
     # + return - Updated category data or error
     resource function put categories/[int categoryId](http:Request request) returns json|error {
         log:printInfo("Update category endpoint called for ID: " + categoryId.toString());
-        
+
         json payload = check request.getJsonPayload();
         return categoriesService.updateCategory(categoryId, payload);
     }
@@ -193,19 +195,19 @@ service /api on apiListener {
     # + return - Created policy data or error
     resource function post policies(http:Request request) returns json|error {
         log:printInfo("Create policy endpoint called");
-        
+
         json payload = check request.getJsonPayload();
-        
+
         // Extract required fields
         string name = check payload.name;
         string description = check payload.description;
         string viewFullPolicy = check payload.view_full_policy;
         string ministry = check payload.ministry;
-        
+
         // Extract optional fields
         string status = payload.status is string ? check payload.status : "DRAFT";
         string? effectiveDate = payload.effective_date is string ? check payload.effective_date : ();
-        
+
         return policiesService.createPolicy(name, description, viewFullPolicy, ministry, status, effectiveDate);
     }
 
@@ -216,7 +218,7 @@ service /api on apiListener {
     # + return - Updated policy data or error
     resource function put policies/[int policyId](http:Request request) returns json|error {
         log:printInfo("Update policy endpoint called for ID: " + policyId.toString());
-        
+
         json payload = check request.getJsonPayload();
         return policiesService.updatePolicy(policyId, payload);
     }
@@ -251,7 +253,6 @@ service /api on apiListener {
 
 listener http:Listener newListener = new (petitionPort);
 
-
 service /petitions on newListener {
 
     resource function post create(http:Caller caller, http:Request req) returns error? {
@@ -282,32 +283,54 @@ service /petitions on newListener {
         return "Ballerina service is running!";
     }
 
-    
 }
+
 service /auth on newListener {
     resource function post authorize(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
         json response = check web3Service->post("/auth/authorize", payload);
         check caller->respond(response);
     }
+
     resource function post revoke(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
         json response = check web3Service->post("/auth/revoke", payload);
         check caller->respond(response);
     }
+
     resource function get isauthorized/[string address](http:Caller caller, http:Request req) returns error? {
-        json response = check web3Service->get("/auth/is-authorized/" + address);
-        check caller->respond(response);
+    json response = check web3Service->get("/auth/is-authorized/" + address);
+    map<anydata> respMap = check response.cloneWithType(map<anydata>);
+    boolean isVerified = respMap["isAuthorized"] is boolean ? <boolean>respMap["isAuthorized"] : false;
+
+    if isVerified {
+        // JWT payload
+        map<anydata> claims = {
+            iss: "TransparentGovernancePlatform",
+            sub: address,
+            aud: "TransparentGovernancePlatform",
+            exp: time:utcNow().seconds + 3600 // 1 hour expiry
+        };
+        // Encode JWT
+        string token = check jwt:encode(claims, "your-secret-key", jwt:HS256);
+        check caller->respond({
+            address: address,
+            verified: true,
+            token: token
+        });
+    } else {
+        check caller->respond({
+            address: address,
+            verified: false,
+            token: ()
+        });
     }
+}
+
     resource function get health() returns string {
         return "Auth service is running!";
     }
 }
-
-
-
-
-
 
 # Get headers for HTTP requests
 #
@@ -326,15 +349,15 @@ function getHeaders() returns map<string> {
 function checkDatabaseHealth() returns json|error {
     do {
         map<string> headers = getHeaders();
-        
+
         [int, decimal] startTime = time:utcNow();
         http:Response response = check supabaseClient->get("/rest/v1/", headers);
         [int, decimal] endTime = time:utcNow();
         int latency = endTime[0] - startTime[0];
-        
+
         boolean connected = response.statusCode == 200;
         [int, decimal] currentTime = time:utcNow();
-        
+
         return {
             "database": {
                 "connected": connected,
@@ -353,19 +376,17 @@ function checkDatabaseHealth() returns json|error {
     }
 }
 
-
-
 # Initialize database connection at startup
 #
 # + return - Error if initialization fails
 function initializeDatabase() returns error? {
     log:printInfo("🔄 Initializing database connection...");
-    
+
     do {
         map<string> headers = getHeaders();
-        
+
         http:Response response = check supabaseClient->get("/rest/v1/", headers);
-        
+
         if response.statusCode == 200 {
             log:printInfo("✅ Supabase REST API connection successful");
         } else {
@@ -375,7 +396,7 @@ function initializeDatabase() returns error? {
         log:printError("❌ HTTP database connection failed", 'error = e);
         log:printWarn("⚠️  Server will start but database features may not work");
     }
-    
+
     return;
 }
 
@@ -384,10 +405,10 @@ function initializeDatabase() returns error? {
 # + return - Error if application fails to start
 public function main() returns error? {
     log:printInfo("🚀 Starting Transparent Governance Platform Backend v2.0...");
-    
+
     // Initialize database connection at startup
     check initializeDatabase();
-    
+
     log:printInfo("🌐 Server started on port " + port.toString());
     log:printInfo("📋 Available endpoints:");
     log:printInfo("  ➤ Health check: http://localhost:" + port.toString() + "/api/health");
@@ -398,6 +419,6 @@ public function main() returns error? {
     log:printInfo("  ➤ Policies CRUD: http://localhost:" + port.toString() + "/api/policies");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
-    
+
     return;
 }

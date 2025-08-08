@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import "../styles/globals.css"
 import ContextProvider from "@/components/walletConnect/context"
+import { AuthProvider } from "@/context/AuthContext"
 
 export const metadata: Metadata = {
   title: "Sri Lanka Transparent Governance Platform",
@@ -16,11 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ContextProvider>
-        {children}
-
-        </ContextProvider>
-
+        <AuthProvider>
+          <ContextProvider>{children}</ContextProvider>
+        </AuthProvider>
       </body>
     </html>
   )

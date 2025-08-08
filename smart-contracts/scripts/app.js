@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 
 // Mount routers
-app.use("/petition", petitionRouter);
+// app.use("/petition", petitionRouter);
 app.use("/auth", authRouter);
 
 const PORT = 3001;

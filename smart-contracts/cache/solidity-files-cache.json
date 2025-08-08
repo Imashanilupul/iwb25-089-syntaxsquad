@@ -6,7 +6,7 @@
       "contentHash": "cef9cc1b7f874ca9456b550b7aef161a",
       "sourceName": "contracts/auth/auth.sol",
       "solcConfig": {
-        "version": "0.8.28",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -42,7 +42,7 @@
       "contentHash": "5a16a1ed617272f39811c854c67ed9dd",
       "sourceName": "contracts/petition/petitions.sol",
       "solcConfig": {
-        "version": "0.8.28",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
