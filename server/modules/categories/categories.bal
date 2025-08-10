@@ -239,7 +239,7 @@ public class CategoriesService {
 
         do {
             string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.supabaseClient->delete(endpoint);
+            http:Response _ = check self.supabaseClient->delete(endpoint);
 
             return {
                 "success": true,
@@ -281,7 +281,7 @@ public class CategoriesService {
                 errors.push("Spent budget must be a non-negative number");
             } else if allocatedBudget is json {
                 decimal|error budget = allocatedBudget.ensureType(decimal);
-                if budget is decimal && spent is decimal && spent > budget {
+                if budget is decimal && spent > budget {
                     errors.push("Spent budget cannot exceed allocated budget");
                 }
             }

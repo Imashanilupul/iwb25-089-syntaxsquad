@@ -276,7 +276,7 @@ public class PoliciesService {
         
         do {
             string endpoint = "/policies?id=eq." + policyId.toString();
-            json result = check self.supabaseClient->delete(endpoint);
+            http:Response _ = check self.supabaseClient->delete(endpoint);
             
             return {
                 "success": true,
