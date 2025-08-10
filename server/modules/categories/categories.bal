@@ -1,28 +1,38 @@
+import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
-# Add the correct import or type definition for DatabaseClient
-# For example, if using a module named db, import it:
-# import db;
-
-# Or define a minimal DatabaseClient type if it's custom:
-type DatabaseClient object {
-    public function get(string endpoint) returns json|error;
-    public function post(string endpoint, json payload) returns json|error;
-    public function patch(string endpoint, json payload) returns json|error;
-    public function delete(string endpoint) returns json|error;
-};
 
 # Categories service for handling category operations
 public class CategoriesService {
-    private DatabaseClient dbClient;
+    private http:Client supabaseClient;
+    private int port;
+    private string supabaseUrl;
+    private string supabaseServiceRoleKey;
 
     # Initialize categories service
     #
-    # + dbClient - Database client instance
-    public function init(DatabaseClient dbClient) {
-        self.dbClient = dbClient;
+    # + supabaseClient - Database client instance
+    # + port - Port number for the service
+    # + supabaseUrl - Supabase URL
+    # + supabaseServiceRoleKey - Supabase service role key
+    public function init(http:Client supabaseClient, int port, string supabaseUrl, string supabaseServiceRoleKey) {
+        self.supabaseClient = supabaseClient;
+        self.port = port;
+        self.supabaseUrl = supabaseUrl; 
+        self.supabaseServiceRoleKey = supabaseServiceRoleKey;
         log:printInfo("✅ Categories service initialized");
+    }
+
+    # Get headers for HTTP requests
+    #
+    # + return - Headers map
+    public function getHeaders() returns map<string> {
+        return {
+            "apikey": self.supabaseServiceRoleKey,
+            "Authorization": "Bearer " + self.supabaseServiceRoleKey,
+            "Content-Type": "application/json"
+        };
     }
 
     # Get all categories
@@ -30,17 +40,26 @@ public class CategoriesService {
     # + return - Categories list or error
     public function getAllCategories() returns json|error {
         do {
-            json result = check self.dbClient.get("/categories?select=*&order=created_at.desc");
-            json[] categories = check result.ensureType();
-            
-            return {
-                "success": true,
-                "message": "Categories retrieved successfully",
-                "data": categories,
-                "count": categories.length(),
-                "timestamp": time:utcNow()[0]
-            };
-            
+            map<string> headers = self.getHeaders();
+
+            http:Response response = check self.supabaseClient->get("/rest/v1/categories?select=*&order=created_at.desc", headers);
+
+            if response.statusCode == 200 {
+                json responseBody = check response.getJsonPayload();
+                json[] categories = check responseBody.ensureType();
+
+                return {
+                    "success": true,
+                    "message": "Categories retrieved successfully",
+                    "data": categories,
+                    "count": categories.length(),
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                json responseBody = check response.getJsonPayload();
+                return error("Database error: " + responseBody.toString());
+            }
+
         } on fail error e {
             return error("Failed to get categories: " + e.message());
         }
@@ -55,12 +74,12 @@ public class CategoriesService {
         if categoryId <= 0 {
             return error("Category ID must be a positive integer");
         }
-        
+
         do {
             string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] categories = check result.ensureType();
-            
+
             if categories.length() > 0 {
                 return {
                     "success": true,
@@ -71,7 +90,7 @@ public class CategoriesService {
             } else {
                 return error("Category not found");
             }
-            
+
         } on fail error e {
             return error("Failed to get category: " + e.message());
         }
@@ -89,28 +108,28 @@ public class CategoriesService {
             if categoryName.trim().length() == 0 {
                 return error("Category name cannot be empty");
             }
-            
+
             if allocatedBudget < 0d {
                 return error("Allocated budget cannot be negative");
             }
-            
+
             if spentBudget < 0d {
                 return error("Spent budget cannot be negative");
             }
-            
+
             if spentBudget > allocatedBudget {
                 return error("Spent budget cannot exceed allocated budget");
             }
-            
+
             json payload = {
                 "category_name": categoryName,
                 "allocated_budget": allocatedBudget,
                 "spent_budget": spentBudget
             };
-            
-            json result = check self.dbClient.post("/categories", payload);
+
+            json result = check self.supabaseClient->post("/categories", payload);
             json[] categories = check result.ensureType();
-            
+
             if categories.length() > 0 {
                 return {
                     "success": true,
@@ -121,7 +140,7 @@ public class CategoriesService {
             } else {
                 return error("No category data returned from database");
             }
-            
+
         } on fail error e {
             return error("Failed to create category: " + e.message());
         }
@@ -137,10 +156,10 @@ public class CategoriesService {
         if categoryId <= 0 {
             return error("Category ID must be a positive integer");
         }
-        
+
         do {
             map<json> payloadMap = {};
-            
+
             // Build update payload from provided data
             json|error categoryName = updateData.categoryName;
             if categoryName is json {
@@ -151,7 +170,7 @@ public class CategoriesService {
                     return error("Category name cannot be empty");
                 }
             }
-            
+
             json|error allocatedBudget = updateData.allocatedBudget;
             if allocatedBudget is json {
                 decimal|error budget = allocatedBudget.ensureType(decimal);
@@ -161,7 +180,7 @@ public class CategoriesService {
                     return error("Allocated budget must be non-negative");
                 }
             }
-            
+
             json|error spentBudget = updateData.spentBudget;
             if spentBudget is json {
                 decimal|error spent = spentBudget.ensureType(decimal);
@@ -171,7 +190,7 @@ public class CategoriesService {
                     return error("Spent budget must be non-negative");
                 }
             }
-            
+
             // Validate that spent doesn't exceed allocated if both are provided
             if payloadMap.hasKey("allocated_budget") && payloadMap.hasKey("spent_budget") {
                 decimal allocated = check payloadMap["allocated_budget"].ensureType(decimal);
@@ -180,18 +199,18 @@ public class CategoriesService {
                     return error("Spent budget cannot exceed allocated budget");
                 }
             }
-            
+
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");
             }
-            
+
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
-            
+
             string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.dbClient.patch(endpoint, payload);
+            json result = check self.supabaseClient->patch(endpoint, payload);
             json[] categories = check result.ensureType();
-            
+
             if categories.length() > 0 {
                 return {
                     "success": true,
@@ -202,7 +221,7 @@ public class CategoriesService {
             } else {
                 return error("Category not found");
             }
-            
+
         } on fail error e {
             return error("Failed to update category: " + e.message());
         }
@@ -217,17 +236,17 @@ public class CategoriesService {
         if categoryId <= 0 {
             return error("Category ID must be a positive integer");
         }
-        
+
         do {
             string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.dbClient.delete(endpoint);
-            
+            json result = check self.supabaseClient->delete(endpoint);
+
             return {
                 "success": true,
                 "message": "Category deleted successfully",
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to delete category: " + e.message());
         }
@@ -239,12 +258,12 @@ public class CategoriesService {
     # + return - Validation result
     public function validateCategoryData(json categoryData) returns json {
         string[] errors = [];
-        
+
         json|error categoryName = categoryData.categoryName;
         if categoryName is error || categoryName.toString().trim().length() == 0 {
             errors.push("Category name is required and cannot be empty");
         }
-        
+
         json|error allocatedBudget = categoryData.allocatedBudget;
         if allocatedBudget is error {
             errors.push("Allocated budget is required");
@@ -254,7 +273,7 @@ public class CategoriesService {
                 errors.push("Allocated budget must be a non-negative number");
             }
         }
-        
+
         json|error spentBudget = categoryData.spentBudget;
         if spentBudget is json {
             decimal|error spent = spentBudget.ensureType(decimal);
@@ -267,7 +286,7 @@ public class CategoriesService {
                 }
             }
         }
-        
+
         return {
             "valid": errors.length() == 0,
             "errors": errors
@@ -279,24 +298,24 @@ public class CategoriesService {
     # + return - Categories with budget analysis or error
     public function getCategoriesWithBudgetAnalysis() returns json|error {
         do {
-            json result = check self.dbClient.get("/categories?select=*&order=allocated_budget.desc");
+            json result = check self.supabaseClient->get("/categories?select=*&order=allocated_budget.desc");
             json[] categories = check result.ensureType();
-            
+
             // Calculate budget analysis
             decimal totalAllocated = 0d;
             decimal totalSpent = 0d;
             json[] analysis = [];
-            
+
             foreach json category in categories {
                 if category is map<json> {
                     decimal allocated = check category["allocated_budget"].ensureType(decimal);
                     decimal spent = check category["spent_budget"].ensureType(decimal);
                     decimal remaining = allocated - spent;
                     decimal utilizationPercentage = allocated > 0d ? (spent / allocated) * 100d : 0d;
-                    
+
                     totalAllocated += allocated;
                     totalSpent += spent;
-                    
+
                     json categoryAnalysis = {
                         "category_id": category["category_id"],
                         "category_name": category["category_name"],
@@ -306,16 +325,16 @@ public class CategoriesService {
                         "updated_at": category["updated_at"],
                         "remaining_budget": remaining,
                         "utilization_percentage": utilizationPercentage,
-                        "status": utilizationPercentage > 90d ? "High Utilization" : 
-                                 utilizationPercentage > 70d ? "Medium Utilization" : "Low Utilization"
+                        "status": utilizationPercentage > 90d ? "High Utilization" :
+                                utilizationPercentage > 70d ? "Medium Utilization" : "Low Utilization"
                     };
-                    
+
                     analysis.push(categoryAnalysis);
                 }
             }
-            
+
             decimal overallUtilization = totalAllocated > 0d ? (totalSpent / totalAllocated) * 100d : 0d;
-            
+
             return {
                 "success": true,
                 "message": "Categories with budget analysis retrieved successfully",
@@ -329,7 +348,7 @@ public class CategoriesService {
                 "count": analysis.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get categories with budget analysis: " + e.message());
         }

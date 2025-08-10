@@ -1,3 +1,4 @@
+import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
@@ -5,23 +6,26 @@ import ballerina/time;
 # For example, if using a module named db, import it:
 # import db;
 
-# Or define a minimal DatabaseClient type if it's custom:
-public type DatabaseClient object {
-    public function get(string endpoint) returns json|error;
-    public function post(string endpoint, json payload) returns json|error;
-    public function patch(string endpoint, json payload) returns json|error;
-    public function delete(string endpoint) returns json|error;
-};
+
 
 # Policies service for handling policy operations
 public class PoliciesService {
-    private DatabaseClient dbClient;
+    private http:Client supabaseClient;
+    private int port;
+    private string supabaseUrl;
+    private string supabaseServiceRoleKey;
 
     # Initialize policies service
     #
-    # + dbClient - Database client instance
-    function init(DatabaseClient dbClient) {
-        self.dbClient = dbClient;
+    # + supabaseClient - Database client instance
+    # + port - Port number for the service
+    # + supabaseUrl - Supabase URL
+    # + supabaseServiceRoleKey - Supabase service role key
+    public function init(http:Client supabaseClient, int port, string supabaseUrl, string supabaseServiceRoleKey) {
+        self.supabaseClient = supabaseClient;
+        self.port = port;
+        self.supabaseUrl = supabaseUrl; 
+        self.supabaseServiceRoleKey = supabaseServiceRoleKey;
         log:printInfo("✅ Policies service initialized");
     }
 
@@ -30,7 +34,7 @@ public class PoliciesService {
     # + return - Policies list or error
     public function getAllPolicies() returns json|error {
         do {
-            json result = check self.dbClient.get("/policies?select=*&order=created_time.desc");
+            json result = check self.supabaseClient->get("/policies?select=*&order=created_time.desc");
             json[] policies = check result.ensureType();
             
             return {
@@ -58,7 +62,7 @@ public class PoliciesService {
         
         do {
             string endpoint = "/policies?id=eq." + policyId.toString();
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -131,7 +135,7 @@ public class PoliciesService {
                 payload = check payload.mergeJson({"effective_date": effectiveDate});
             }
             
-            json result = check self.dbClient.post("/policies", payload);
+            json result = check self.supabaseClient->post("/policies", payload);
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -241,7 +245,7 @@ public class PoliciesService {
             json payload = payloadMap;
             
             string endpoint = "/policies?id=eq." + policyId.toString();
-            json result = check self.dbClient.patch(endpoint, payload);
+            json result = check self.supabaseClient->patch(endpoint, payload);
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -272,7 +276,7 @@ public class PoliciesService {
         
         do {
             string endpoint = "/policies?id=eq." + policyId.toString();
-            _ = check self.dbClient.delete(endpoint);
+            json result = check self.supabaseClient->delete(endpoint);
             
             return {
                 "success": true,
@@ -305,7 +309,7 @@ public class PoliciesService {
         
         do {
             string endpoint = "/policies?status=eq." + status + "&select=*&order=created_time.desc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
@@ -334,7 +338,7 @@ public class PoliciesService {
         
         do {
             string endpoint = "/policies?ministry=eq." + ministry + "&select=*&order=created_time.desc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
@@ -407,7 +411,7 @@ public class PoliciesService {
     # + return - Policy statistics or error
     public function getPolicyStatistics() returns json|error {
         do {
-            json result = check self.dbClient.get("/policies?select=*");
+            json result = check self.supabaseClient->get("/policies?select=*");
             json[] policies = check result.ensureType();
             
             // Initialize counters
@@ -469,7 +473,7 @@ public class PoliciesService {
             // Search in both name and description fields
             string searchTerm = "%" + keyword + "%";
             string endpoint = "/policies?or=(name.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
@@ -492,7 +496,7 @@ public class PoliciesService {
     public function getActivePolicies() returns json|error {
         do {
             string endpoint = "/policies?status=eq.ACTIVE&select=*&order=created_time.desc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
@@ -514,7 +518,7 @@ public class PoliciesService {
     public function getDraftPolicies() returns json|error {
         do {
             string endpoint = "/policies?status=eq.DRAFT&select=*&order=created_time.desc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
@@ -536,7 +540,7 @@ public class PoliciesService {
     public function getFutureEffectivePolicies() returns json|error {
         do {
             string endpoint = "/policies?effective_date=gt.now()&select=*&order=effective_date.asc";
-            json result = check self.dbClient.get(endpoint);
+            json result = check self.supabaseClient->get(endpoint);
             json[] policies = check result.ensureType();
             
             return {
