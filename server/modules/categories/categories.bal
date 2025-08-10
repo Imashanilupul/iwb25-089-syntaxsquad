@@ -296,7 +296,7 @@ public class CategoriesService {
         do {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
-            http:Response response = check self.supabaseClient->delete(endpoint, headers);
+            http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
             
             if response.statusCode == 200 || response.statusCode == 204 {
                 return {
