@@ -29,15 +29,22 @@ public class PoliciesService {
         log:printInfo("✅ Policies service initialized");
     }
 
-    # Get headers for HTTP requests
+    # Get headers for HTTP requests with optional prefer header
     #
+    # + includePrefer - Whether to include Prefer header for POST/PUT operations
     # + return - Headers map
-    public function getHeaders() returns map<string> {
-        return {
+    public function getHeaders(boolean includePrefer = false) returns map<string> {
+        map<string> headers = {
             "apikey": self.supabaseServiceRoleKey,
             "Authorization": "Bearer " + self.supabaseServiceRoleKey,
             "Content-Type": "application/json"
         };
+        
+        if includePrefer {
+            headers["Prefer"] = "return=representation";
+        }
+        
+        return headers;
     }
 
     # Get all policies
@@ -161,29 +168,42 @@ public class PoliciesService {
             if effectiveDate is string {
                 payload = check payload.mergeJson({"effective_date": effectiveDate});
             }
-            
-            map<string> headers = self.getHeaders();
+
+            map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/policies", payload, headers);
             
-            if response.statusCode != 201 {
-                return error("Failed to create policy: " + response.statusCode.toString());
-            }
-            
-            json result = check response.getJsonPayload();
-            json[] policies = check result.ensureType();
-            
-            if policies.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Policy created successfully",
-                    "data": policies[0],
-                    "timestamp": time:utcNow()[0]
-                };
+            if response.statusCode == 201 {
+                // Check if response has content
+                json|error result = response.getJsonPayload();
+                if result is error {
+                    // If no content returned, that's also success for Supabase
+                    return {
+                        "success": true,
+                        "message": "Policy created successfully",
+                        "data": payload, // Return the original payload since no data returned
+                        "timestamp": time:utcNow()[0]
+                    };
+                } else {
+                    json[] policies = check result.ensureType();
+                    if policies.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Policy created successfully",
+                            "data": policies[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return {
+                            "success": true,
+                            "message": "Policy created successfully",
+                            "data": payload,
+                            "timestamp": time:utcNow()[0]
+                        };
+                    }
+                }
             } else {
-                return error("No policy data returned from database");
-            }
-            
-        } on fail error e {
+                return error("Failed to create policy: " + response.statusCode.toString());
+            }        } on fail error e {
             return error("Failed to create policy: " + e.message());
         }
     }
@@ -278,7 +298,7 @@ public class PoliciesService {
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
             
-            map<string> headers = self.getHeaders();
+            map<string> headers = self.getHeaders(true); // Include Prefer header
             string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
