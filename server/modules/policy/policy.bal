@@ -203,7 +203,9 @@ public class PoliciesService {
                 }
             } else {
                 return error("Failed to create policy: " + response.statusCode.toString());
-            }        } on fail error e {
+            }
+
+        } on fail error e {
             return error("Failed to create policy: " + e.message());
         }
     }

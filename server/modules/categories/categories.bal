@@ -294,15 +294,27 @@ public class CategoriesService {
         }
 
         do {
-            string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            http:Response _ = check self.supabaseClient->delete(endpoint);
-
-            return {
-                "success": true,
-                "message": "Category deleted successfully",
-                "timestamp": time:utcNow()[0]
-            };
-
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+            http:Response response = check self.supabaseClient->delete(endpoint, headers);
+            
+            if response.statusCode == 200 || response.statusCode == 204 {
+                return {
+                    "success": true,
+                    "message": "Category deleted successfully",
+                    "categoryId": categoryId,
+                    "timestamp": time:utcNow()[0]
+                };
+            } else if response.statusCode == 404 {
+                return error("Category with ID " + categoryId.toString() + " not found");
+            } else {
+                string responseBody = "";
+                json|error result = response.getJsonPayload();
+                if result is json {
+                    responseBody = result.toString();
+                }
+                return error("Failed to delete category: HTTP " + response.statusCode.toString() + " - " + responseBody);
+            }
         } on fail error e {
             return error("Failed to delete category: " + e.message());
         }
