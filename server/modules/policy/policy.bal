@@ -29,12 +29,31 @@ public class PoliciesService {
         log:printInfo("✅ Policies service initialized");
     }
 
+    # Get headers for HTTP requests
+    #
+    # + return - Headers map
+    public function getHeaders() returns map<string> {
+        return {
+            "apikey": self.supabaseServiceRoleKey,
+            "Authorization": "Bearer " + self.supabaseServiceRoleKey,
+            "Content-Type": "application/json"
+        };
+    }
+
     # Get all policies
     #
     # + return - Policies list or error
     public function getAllPolicies() returns json|error {
         do {
-            json result = check self.supabaseClient->get("/policies?select=*&order=created_time.desc");
+            map<string> headers = self.getHeaders();
+
+            http:Response response = check self.supabaseClient->get("/rest/v1/policies?select=*&order=created_time.desc", headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get policies: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -61,8 +80,16 @@ public class PoliciesService {
         }
         
         do {
-            string endpoint = "/policies?id=eq." + policyId.toString();
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
+            
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get policy: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -135,7 +162,14 @@ public class PoliciesService {
                 payload = check payload.mergeJson({"effective_date": effectiveDate});
             }
             
-            json result = check self.supabaseClient->post("/policies", payload);
+            map<string> headers = self.getHeaders();
+            http:Response response = check self.supabaseClient->post("/rest/v1/policies", payload, headers);
+            
+            if response.statusCode != 201 {
+                return error("Failed to create policy: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -244,8 +278,15 @@ public class PoliciesService {
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
             
-            string endpoint = "/policies?id=eq." + policyId.toString();
-            json result = check self.supabaseClient->patch(endpoint, payload);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to update policy: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             if policies.length() > 0 {
@@ -275,8 +316,13 @@ public class PoliciesService {
         }
         
         do {
-            string endpoint = "/policies?id=eq." + policyId.toString();
-            http:Response _ = check self.supabaseClient->delete(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
+            http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
+            
+            if response.statusCode != 200 && response.statusCode != 204 {
+                return error("Failed to delete policy: " + response.statusCode.toString());
+            }
             
             return {
                 "success": true,
@@ -308,8 +354,15 @@ public class PoliciesService {
         }
         
         do {
-            string endpoint = "/policies?status=eq." + status + "&select=*&order=created_time.desc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?status=eq." + status + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get policies by status: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -337,8 +390,15 @@ public class PoliciesService {
         }
         
         do {
-            string endpoint = "/policies?ministry=eq." + ministry + "&select=*&order=created_time.desc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?ministry=eq." + ministry + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get policies by ministry: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -411,7 +471,14 @@ public class PoliciesService {
     # + return - Policy statistics or error
     public function getPolicyStatistics() returns json|error {
         do {
-            json result = check self.supabaseClient->get("/policies?select=*");
+            map<string> headers = self.getHeaders();
+            http:Response response = check self.supabaseClient->get("/rest/v1/policies?select=*", headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get policy statistics: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             // Initialize counters
@@ -472,8 +539,15 @@ public class PoliciesService {
         do {
             // Search in both name and description fields
             string searchTerm = "%" + keyword + "%";
-            string endpoint = "/policies?or=(name.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?or=(name.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to search policies: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -495,8 +569,15 @@ public class PoliciesService {
     # + return - Active policies list or error
     public function getActivePolicies() returns json|error {
         do {
-            string endpoint = "/policies?status=eq.ACTIVE&select=*&order=created_time.desc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?status=eq.ACTIVE&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get active policies: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -517,8 +598,15 @@ public class PoliciesService {
     # + return - Draft policies list or error
     public function getDraftPolicies() returns json|error {
         do {
-            string endpoint = "/policies?status=eq.DRAFT&select=*&order=created_time.desc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?status=eq.DRAFT&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get draft policies: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
@@ -539,8 +627,15 @@ public class PoliciesService {
     # + return - Future effective policies list or error
     public function getFutureEffectivePolicies() returns json|error {
         do {
-            string endpoint = "/policies?effective_date=gt.now()&select=*&order=effective_date.asc";
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?effective_date=gt.now()&select=*&order=effective_date.asc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get future effective policies: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
             
             return {
