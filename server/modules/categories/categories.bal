@@ -24,15 +24,22 @@ public class CategoriesService {
         log:printInfo("✅ Categories service initialized");
     }
 
-    # Get headers for HTTP requests
+    # Get headers for HTTP requests with optional prefer header
     #
+    # + includePrefer - Whether to include Prefer header for POST/PUT operations
     # + return - Headers map
-    public function getHeaders() returns map<string> {
-        return {
+    public function getHeaders(boolean includePrefer = false) returns map<string> {
+        map<string> headers = {
             "apikey": self.supabaseServiceRoleKey,
             "Authorization": "Bearer " + self.supabaseServiceRoleKey,
             "Content-Type": "application/json"
         };
+        
+        if includePrefer {
+            headers["Prefer"] = "return=representation";
+        }
+        
+        return headers;
     }
 
     # Get all categories
@@ -76,8 +83,15 @@ public class CategoriesService {
         }
 
         do {
-            string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.supabaseClient->get(endpoint);
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get category: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
             json[] categories = check result.ensureType();
 
             if categories.length() > 0 {
@@ -127,18 +141,40 @@ public class CategoriesService {
                 "spent_budget": spentBudget
             };
 
-            json result = check self.supabaseClient->post("/categories", payload);
-            json[] categories = check result.ensureType();
-
-            if categories.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Category created successfully",
-                    "data": categories[0],
-                    "timestamp": time:utcNow()[0]
-                };
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            http:Response response = check self.supabaseClient->post("/rest/v1/categories", payload, headers);
+            
+            if response.statusCode == 201 {
+                // Check if response has content
+                json|error result = response.getJsonPayload();
+                if result is error {
+                    // If no content returned, that's also success for Supabase
+                    return {
+                        "success": true,
+                        "message": "Category created successfully",
+                        "data": payload, // Return the original payload since no data returned
+                        "timestamp": time:utcNow()[0]
+                    };
+                } else {
+                    json[] categories = check result.ensureType();
+                    if categories.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Category created successfully",
+                            "data": categories[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return {
+                            "success": true,
+                            "message": "Category created successfully",
+                            "data": payload,
+                            "timestamp": time:utcNow()[0]
+                        };
+                    }
+                }
             } else {
-                return error("No category data returned from database");
+                return error("Failed to create category: " + response.statusCode.toString());
             }
 
         } on fail error e {
@@ -207,19 +243,39 @@ public class CategoriesService {
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
 
-            string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.supabaseClient->patch(endpoint, payload);
-            json[] categories = check result.ensureType();
-
-            if categories.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Category updated successfully",
-                    "data": categories[0],
-                    "timestamp": time:utcNow()[0]
-                };
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode == 200 {
+                json|error result = response.getJsonPayload();
+                if result is error {
+                    return {
+                        "success": true,
+                        "message": "Category updated successfully",
+                        "data": payload,
+                        "timestamp": time:utcNow()[0]
+                    };
+                } else {
+                    json[] categories = check result.ensureType();
+                    if categories.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Category updated successfully",
+                            "data": categories[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return {
+                            "success": true,
+                            "message": "Category updated successfully",
+                            "data": payload,
+                            "timestamp": time:utcNow()[0]
+                        };
+                    }
+                }
             } else {
-                return error("Category not found");
+                return error("Failed to update category: " + response.statusCode.toString());
             }
 
         } on fail error e {
@@ -238,15 +294,27 @@ public class CategoriesService {
         }
 
         do {
-            string endpoint = "/categories?category_id=eq." + categoryId.toString();
-            json result = check self.supabaseClient->delete(endpoint);
-
-            return {
-                "success": true,
-                "message": "Category deleted successfully",
-                "timestamp": time:utcNow()[0]
-            };
-
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+            http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
+            
+            if response.statusCode == 200 || response.statusCode == 204 {
+                return {
+                    "success": true,
+                    "message": "Category deleted successfully",
+                    "categoryId": categoryId,
+                    "timestamp": time:utcNow()[0]
+                };
+            } else if response.statusCode == 404 {
+                return error("Category with ID " + categoryId.toString() + " not found");
+            } else {
+                string responseBody = "";
+                json|error result = response.getJsonPayload();
+                if result is json {
+                    responseBody = result.toString();
+                }
+                return error("Failed to delete category: HTTP " + response.statusCode.toString() + " - " + responseBody);
+            }
         } on fail error e {
             return error("Failed to delete category: " + e.message());
         }
@@ -281,7 +349,7 @@ public class CategoriesService {
                 errors.push("Spent budget must be a non-negative number");
             } else if allocatedBudget is json {
                 decimal|error budget = allocatedBudget.ensureType(decimal);
-                if budget is decimal && spent is decimal && spent > budget {
+                if budget is decimal && spent > budget {
                     errors.push("Spent budget cannot exceed allocated budget");
                 }
             }
