@@ -355,13 +355,13 @@ dependencies = [
 modules = [
 	{org = "user", packageName = "server_bal", moduleName = "server_bal"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"},
-	{org = "user", packageName = "server_bal", moduleName = "server_bal.db"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.jwt"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.policy"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.projects"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.proposals"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.reports"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.test_api_key"},
-	{org = "user", packageName = "server_bal", moduleName = "server_bal.transactions"}
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.transactions"},
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.users"}
 ]
 

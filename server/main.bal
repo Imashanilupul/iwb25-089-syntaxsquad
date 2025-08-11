@@ -4,6 +4,7 @@ import server_bal.projects;
 import server_bal.transactions;
 import server_bal.proposals;
 import server_bal.reports;
+import server_bal.users;
 
 import ballerina/http;
 import ballerina/log;
@@ -30,6 +31,7 @@ projects:ProjectsService projectsService = new (supabaseClient, port, supabaseUr
 transactions:TransactionsService transactionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 proposals:ProposalsService proposalsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 reports:ReportsService reportsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+users:UsersService usersService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 
 # Main API service
@@ -110,7 +112,17 @@ service /api on apiListener {
                 "GET /api/transactions/type/{type} - Get transactions by type",
                 "GET /api/transactions/search/{keyword} - Search transactions",
                 "GET /api/transactions/statistics - Get transaction statistics",
-                "GET /api/transactions/recent - Get recent transactions"
+                "GET /api/transactions/recent - Get recent transactions",
+                "GET /api/users - List all users",
+                "POST /api/users - Create a new user",
+                "GET /api/users/{id} - Get user by ID",
+                "PUT /api/users/{id} - Update user by ID",
+                "DELETE /api/users/{id} - Delete user by ID",
+                "GET /api/users/email/{email} - Get user by email",
+                "GET /api/users/nic/{nic} - Get user by NIC",
+                "GET /api/users/search/{keyword} - Search users by keyword",
+                "GET /api/users/statistics - Get user statistics",
+                "GET /api/users/recent - Get recent users"
             ],
             "features": [
                 "Environment-based configuration",
@@ -119,6 +131,7 @@ service /api on apiListener {
                 "Policy management",
                 "Project management",
                 "Transaction management",
+                "User management",
                 "Database health monitoring"
             ],
             "timestamp": currentTime[0]
@@ -651,6 +664,108 @@ service /api on apiListener {
         log:printInfo("Vote on proposal endpoint called for ID: " + proposalId.toString() + " with vote: " + voteType);
         return proposalsService.voteOnProposal(proposalId, voteType);
     }
+
+    # Get all users
+    #
+    # + return - Users list or error
+    resource function get users() returns json|error {
+        log:printInfo("Get all users endpoint called");
+        return usersService.getAllUsers();
+    }
+
+    # Get user by ID
+    #
+    # + userId - User ID to retrieve
+    # + return - User data or error
+    resource function get users/[int userId]() returns json|error {
+        log:printInfo("Get user by ID endpoint called for ID: " + userId.toString());
+        return usersService.getUserById(userId);
+    }
+
+    # Create a new user
+    #
+    # + request - HTTP request containing user data
+    # + return - Created user data or error
+    resource function post users(http:Request request) returns json|error {
+        log:printInfo("Create user endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string userName = check payload.user_name;
+        string email = check payload.email;
+        string nic = check payload.nic;
+        string mobileNo = check payload.mobile_no;
+
+        // Extract optional fields
+        string? evm = payload.evm is string ? check payload.evm : ();
+
+        return usersService.createUser(userName, email, nic, mobileNo, evm);
+    }
+
+    # Update user by ID
+    #
+    # + request - HTTP request containing updated user data
+    # + userId - User ID to update
+    # + return - Updated user data or error
+    resource function put users/[int userId](http:Request request) returns json|error {
+        log:printInfo("Update user endpoint called for ID: " + userId.toString());
+
+        json payload = check request.getJsonPayload();
+        return usersService.updateUser(userId, payload);
+    }
+
+    # Delete user by ID
+    #
+    # + userId - User ID to delete
+    # + return - Success message or error
+    resource function delete users/[int userId]() returns json|error {
+        log:printInfo("Delete user endpoint called for ID: " + userId.toString());
+        return usersService.deleteUser(userId);
+    }
+
+    # Get user by email
+    #
+    # + email - Email to search for
+    # + return - User data or error
+    resource function get users/email/[string email]() returns json|error {
+        log:printInfo("Get user by email endpoint called for email: " + email);
+        return usersService.getUserByEmail(email);
+    }
+
+    # Get user by NIC
+    #
+    # + nic - NIC to search for
+    # + return - User data or error
+    resource function get users/nic/[string nic]() returns json|error {
+        log:printInfo("Get user by NIC endpoint called for NIC: " + nic);
+        return usersService.getUserByNic(nic);
+    }
+
+    # Search users by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching users list or error
+    resource function get users/search/[string keyword]() returns json|error {
+        log:printInfo("Search users endpoint called for keyword: " + keyword);
+        return usersService.searchUsers(keyword);
+    }
+
+    # Get user statistics
+    #
+    # + return - User statistics or error
+    resource function get users/statistics() returns json|error {
+        log:printInfo("Get user statistics endpoint called");
+        return usersService.getUserStatistics();
+    }
+
+    # Get recent users
+    #
+    # + return - Recent users list or error
+    resource function get users/recent() returns json|error {
+        log:printInfo("Get recent users endpoint called");
+        return usersService.getRecentUsers();
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -817,6 +932,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Projects CRUD: http://localhost:" + port.toString() + "/api/projects");
     log:printInfo("  ➤ Transactions CRUD: http://localhost:" + port.toString() + "/api/transactions");
     log:printInfo("  ➤ Proposals CRUD: http://localhost:" + port.toString() + "/api/proposals");
+    log:printInfo("  ➤ Users CRUD: http://localhost:" + port.toString() + "/api/users");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
