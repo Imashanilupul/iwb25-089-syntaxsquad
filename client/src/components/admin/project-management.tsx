@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,61 +19,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Edit, Trash2, Building, MapPin } from "lucide-react"
-
-interface Project {
-  id: number
-  projectName: string
-  categoryId: number
-  categoryName: string
-  allocatedBudget: number
-  spentBudget: number
-  state: string
-  province: string
-  ministry: string
-  viewDetails?: string
-}
+import { Plus, Edit, Trash2, Building, MapPin, Loader2 } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { projectService, type Project, type ProjectFormData } from "@/services/project"
+import { categoryService, type Category } from "@/services/category"
 
 export function ProjectManagement() {
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: 1,
-      projectName: "Kandy-Colombo Expressway Extension",
-      categoryId: 3,
-      categoryName: "Infrastructure",
-      allocatedBudget: 120000000000,
-      spentBudget: 80400000000,
-      state: "In Progress",
-      province: "Central Province",
-      ministry: "Ministry of Transport",
-      viewDetails: "Highway extension project connecting major cities",
-    },
-    {
-      id: 2,
-      projectName: "Mahaweli Water Supply Project",
-      categoryId: 3,
-      categoryName: "Infrastructure",
-      allocatedBudget: 85000000000,
-      spentBudget: 76500000000,
-      state: "Near Completion",
-      province: "North Central Province",
-      ministry: "Ministry of Water Supply",
-      viewDetails: "Water supply infrastructure development",
-    },
-    {
-      id: 3,
-      projectName: "District General Hospital Modernization",
-      categoryId: 2,
-      categoryName: "Health",
-      allocatedBudget: 21000000000,
-      spentBudget: 9450000000,
-      state: "In Progress",
-      province: "All Provinces",
-      ministry: "Ministry of Health",
-      viewDetails: "Modernization of district hospitals nationwide",
-    },
-  ])
-
+  const [projects, setProjects] = useState<Project[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     projectName: "",
     categoryId: "",
@@ -83,18 +37,11 @@ export function ProjectManagement() {
     province: "",
     ministry: "",
     viewDetails: "",
+    status: "",
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-
-  const categories = [
-    { id: 1, name: "Education" },
-    { id: 2, name: "Health" },
-    { id: 3, name: "Infrastructure" },
-    { id: 4, name: "Defense" },
-    { id: 5, name: "Agriculture" },
-  ]
 
   const provinces = [
     "Western Province",
@@ -121,7 +68,57 @@ export function ProjectManagement() {
     "Ministry of Water Supply",
   ]
 
-  const projectStates = ["Planning", "In Progress", "Near Completion", "Completed", "On Hold", "Cancelled"]
+  const projectStatuses = [
+    { value: "PLANNED", label: "Planning" },
+    { value: "IN_PROGRESS", label: "In Progress" },
+    { value: "COMPLETED", label: "Completed" },
+    { value: "ON_HOLD", label: "On Hold" },
+    { value: "CANCELLED", label: "Cancelled" },
+  ]
+
+  // Load data on component mount
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [projectsResponse, categoriesResponse] = await Promise.all([
+        projectService.getAllProjects(),
+        categoryService.getAllCategories(),
+      ])
+
+      if (projectsResponse.success) {
+        setProjects(projectsResponse.data)
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load projects",
+          variant: "destructive",
+        })
+      }
+
+      if (categoriesResponse.success) {
+        setCategories(categoriesResponse.data)
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load data. Please check your connection.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000000000) {
@@ -134,30 +131,54 @@ export function ProjectManagement() {
     return `Rs. ${amount.toLocaleString()}`
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const categoryName = categories.find((cat) => cat.id === Number.parseInt(formData.categoryId))?.name || ""
+    try {
+      const projectData: ProjectFormData = {
+        projectName: formData.projectName,
+        categoryId: formData.categoryId ? parseInt(formData.categoryId) : undefined,
+        allocatedBudget: parseFloat(formData.allocatedBudget),
+        spentBudget: formData.spentBudget ? parseFloat(formData.spentBudget) : 0,
+        state: formData.state,
+        province: formData.province,
+        ministry: formData.ministry,
+        viewDetails: formData.viewDetails,
+        status: formData.status || "PLANNED",
+      }
 
-    const newProject: Project = {
-      id: editingId || Date.now(),
-      projectName: formData.projectName,
-      categoryId: Number.parseInt(formData.categoryId),
-      categoryName,
-      allocatedBudget: Number.parseFloat(formData.allocatedBudget),
-      spentBudget: Number.parseFloat(formData.spentBudget || "0"),
-      state: formData.state,
-      province: formData.province,
-      ministry: formData.ministry,
-      viewDetails: formData.viewDetails,
+      let response
+      if (editingId) {
+        response = await projectService.updateProject(editingId, projectData)
+      } else {
+        response = await projectService.createProject(projectData)
+      }
+
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: editingId ? "Project updated successfully" : "Project created successfully",
+        })
+        await loadData() // Reload data
+        resetForm()
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Operation failed",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving project:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save project. Please try again.",
+        variant: "destructive",
+      })
     }
+  }
 
-    if (editingId) {
-      setProjects(projects.map((proj) => (proj.id === editingId ? newProject : proj)))
-    } else {
-      setProjects([...projects, newProject])
-    }
-
+  const resetForm = () => {
     setFormData({
       projectName: "",
       categoryId: "",
@@ -167,6 +188,7 @@ export function ProjectManagement() {
       province: "",
       ministry: "",
       viewDetails: "",
+      status: "",
     })
     setEditingId(null)
     setIsDialogOpen(false)
@@ -174,38 +196,85 @@ export function ProjectManagement() {
 
   const handleEdit = (project: Project) => {
     setFormData({
-      projectName: project.projectName,
-      categoryId: project.categoryId.toString(),
-      allocatedBudget: project.allocatedBudget.toString(),
-      spentBudget: project.spentBudget.toString(),
+      projectName: project.project_name,
+      categoryId: project.category_id?.toString() || "",
+      allocatedBudget: project.allocated_budget.toString(),
+      spentBudget: project.spent_budget.toString(),
       state: project.state,
       province: project.province,
       ministry: project.ministry,
-      viewDetails: project.viewDetails || "",
+      viewDetails: project.view_details || "",
+      status: project.status,
     })
-    setEditingId(project.id)
+    setEditingId(project.project_id)
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setProjects(projects.filter((proj) => proj.id !== id))
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this project?")) {
+      return
+    }
+
+    try {
+      const response = await projectService.deleteProject(id)
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Project deleted successfully",
+        })
+        await loadData() // Reload data
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete project",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting project:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete project. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const getStateColor = (state: string) => {
-    switch (state) {
-      case "Completed":
+  const getStateColor = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
         return "bg-green-100 text-green-800"
-      case "In Progress":
+      case "IN_PROGRESS":
         return "bg-blue-100 text-blue-800"
-      case "Near Completion":
+      case "PLANNED":
         return "bg-yellow-100 text-yellow-800"
-      case "On Hold":
+      case "ON_HOLD":
         return "bg-orange-100 text-orange-800"
-      case "Cancelled":
+      case "CANCELLED":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  const getStatusLabel = (status: string) => {
+    const statusItem = projectStatuses.find((s) => s.value === status)
+    return statusItem ? statusItem.label : status
+  }
+
+  const getCategoryName = (categoryId?: number) => {
+    if (!categoryId) return "No Category"
+    const category = categories.find((cat) => cat.category_id === categoryId)
+    return category ? category.category_name : "Unknown Category"
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading projects...</span>
+      </div>
+    )
   }
 
   return (
@@ -229,6 +298,7 @@ export function ProjectManagement() {
                   province: "",
                   ministry: "",
                   viewDetails: "",
+                  status: "",
                 })
                 setEditingId(null)
               }}
@@ -267,8 +337,8 @@ export function ProjectManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id.toString()}>
-                          {category.name}
+                        <SelectItem key={category.category_id} value={category.category_id.toString()}>
+                          {category.category_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -302,15 +372,15 @@ export function ProjectManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="state">Project State</Label>
-                  <Select value={formData.state} onValueChange={(value) => setFormData({ ...formData, state: value })}>
+                  <Label htmlFor="status">Project Status</Label>
+                  <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select state" />
+                      <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectStates.map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {state}
+                      {projectStatuses.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -336,23 +406,35 @@ export function ProjectManagement() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="ministry">Responsible Ministry</Label>
-                <Select
-                  value={formData.ministry}
-                  onValueChange={(value) => setFormData({ ...formData, ministry: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select ministry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ministries.map((ministry) => (
-                      <SelectItem key={ministry} value={ministry}>
-                        {ministry}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="state">State/District</Label>
+                  <Input
+                    id="state"
+                    placeholder="e.g., Kandy"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ministry">Responsible Ministry</Label>
+                  <Select
+                    value={formData.ministry}
+                    onValueChange={(value) => setFormData({ ...formData, ministry: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select ministry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ministries.map((ministry) => (
+                        <SelectItem key={ministry} value={ministry}>
+                          {ministry}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -398,7 +480,7 @@ export function ProjectManagement() {
             <Building className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{projects.filter((p) => p.state === "In Progress").length}</div>
+            <div className="text-2xl font-bold">{projects.filter((p) => p.status === "IN_PROGRESS").length}</div>
             <p className="text-xs text-slate-500">Currently active</p>
           </CardContent>
         </Card>
@@ -410,7 +492,7 @@ export function ProjectManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(projects.reduce((sum, proj) => sum + proj.allocatedBudget, 0))}
+              {formatCurrency(projects.reduce((sum, proj) => sum + proj.allocated_budget, 0))}
             </div>
             <p className="text-xs text-slate-500">Allocated across all projects</p>
           </CardContent>
@@ -449,16 +531,16 @@ export function ProjectManagement() {
             </TableHeader>
             <TableBody>
               {projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">{project.projectName}</TableCell>
+                <TableRow key={project.project_id}>
+                  <TableCell className="font-medium">{project.project_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{project.categoryName}</Badge>
+                    <Badge variant="outline">{getCategoryName(project.category_id)}</Badge>
                   </TableCell>
-                  <TableCell>{formatCurrency(project.allocatedBudget)}</TableCell>
-                  <TableCell>{formatCurrency(project.spentBudget)}</TableCell>
+                  <TableCell>{formatCurrency(project.allocated_budget)}</TableCell>
+                  <TableCell>{formatCurrency(project.spent_budget)}</TableCell>
                   <TableCell>
-                    <Badge className={getStateColor(project.state)} variant="secondary">
-                      {project.state}
+                    <Badge className={getStateColor(project.status)} variant="secondary">
+                      {getStatusLabel(project.status)}
                     </Badge>
                   </TableCell>
                   <TableCell>{project.province}</TableCell>
@@ -467,7 +549,7 @@ export function ProjectManagement() {
                       <Button variant="outline" size="sm" onClick={() => handleEdit(project)}>
                         <Edit className="h-3 w-3" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(project.id)}>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(project.project_id)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
