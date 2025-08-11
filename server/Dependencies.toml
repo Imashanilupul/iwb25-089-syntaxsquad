@@ -353,6 +353,7 @@ modules = [
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.jwt"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.policy"},
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.projects"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.test_api_key"}
 ]
 
