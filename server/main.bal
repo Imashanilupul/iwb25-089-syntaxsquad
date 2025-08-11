@@ -2,6 +2,7 @@ import server_bal.categories;
 import server_bal.policy;
 import server_bal.projects;
 import server_bal.transactions;
+import server_bal.proposals;
 
 import ballerina/http;
 import ballerina/log;
@@ -26,6 +27,7 @@ categories:CategoriesService categoriesService = new (supabaseClient, port, supa
 policy:PoliciesService policiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 projects:ProjectsService projectsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 transactions:TransactionsService transactionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+proposals:ProposalsService proposalsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 # Main API service
 service /api on apiListener {
@@ -513,6 +515,139 @@ service /api on apiListener {
         log:printInfo("Get recent transactions endpoint called");
         return transactionsService.getRecentTransactions();
     }
+
+    # Get all proposals
+    #
+    # + return - Proposals list or error
+    resource function get proposals() returns json|error {
+        log:printInfo("Get all proposals endpoint called");
+        return proposalsService.getAllProposals();
+    }
+
+    # Get proposal by ID
+    #
+    # + proposalId - Proposal ID to retrieve
+    # + return - Proposal data or error
+    resource function get proposals/[int proposalId]() returns json|error {
+        log:printInfo("Get proposal by ID endpoint called for ID: " + proposalId.toString());
+        return proposalsService.getProposalById(proposalId);
+    }
+
+    # Create a new proposal
+    #
+    # + request - HTTP request containing proposal data
+    # + return - Created proposal data or error
+    resource function post proposals(http:Request request) returns json|error {
+        log:printInfo("Create proposal endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string title = check payload.title;
+        string shortDescription = check payload.shortDescription;
+        string descriptionInDetails = check payload.descriptionInDetails;
+        string expiredDate = check payload.expiredDate;
+
+        // Extract optional fields
+        int? categoryId = payload.categoryId is int ? check payload.categoryId : ();
+        int? createdBy = payload.createdBy is int ? check payload.createdBy : ();
+        boolean activeStatus = payload.activeStatus is boolean ? check payload.activeStatus : true;
+        int yesVotes = payload.yesVotes is int ? check payload.yesVotes : 0;
+        int noVotes = payload.noVotes is int ? check payload.noVotes : 0;
+
+        return proposalsService.createProposal(title, shortDescription, descriptionInDetails, expiredDate, categoryId, createdBy, activeStatus, yesVotes, noVotes);
+    }
+
+    # Update proposal by ID
+    #
+    # + request - HTTP request containing updated proposal data
+    # + proposalId - Proposal ID to update
+    # + return - Updated proposal data or error
+    resource function put proposals/[int proposalId](http:Request request) returns json|error {
+        log:printInfo("Update proposal endpoint called for ID: " + proposalId.toString());
+
+        json payload = check request.getJsonPayload();
+        return proposalsService.updateProposal(proposalId, payload);
+    }
+
+    # Delete proposal by ID
+    #
+    # + proposalId - Proposal ID to delete
+    # + return - Success message or error
+    resource function delete proposals/[int proposalId]() returns json|error {
+        log:printInfo("Delete proposal endpoint called for ID: " + proposalId.toString());
+        return proposalsService.deleteProposal(proposalId);
+    }
+
+    # Get proposals by category
+    #
+    # + categoryId - Category ID to filter by
+    # + return - Filtered proposals list or error
+    resource function get proposals/category/[int categoryId]() returns json|error {
+        log:printInfo("Get proposals by category endpoint called for category ID: " + categoryId.toString());
+        return proposalsService.getProposalsByCategory(categoryId);
+    }
+
+    # Get proposals by status
+    #
+    # + activeStatus - Active status to filter by (true/false)
+    # + return - Filtered proposals list or error
+    resource function get proposals/status/[boolean activeStatus]() returns json|error {
+        log:printInfo("Get proposals by status endpoint called for status: " + activeStatus.toString());
+        return proposalsService.getProposalsByStatus(activeStatus);
+    }
+
+    # Get proposals by creator
+    #
+    # + createdBy - Creator user ID to filter by
+    # + return - Filtered proposals list or error
+    resource function get proposals/creator/[int createdBy]() returns json|error {
+        log:printInfo("Get proposals by creator endpoint called for creator ID: " + createdBy.toString());
+        return proposalsService.getProposalsByCreator(createdBy);
+    }
+
+    # Search proposals by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching proposals list or error
+    resource function get proposals/search/[string keyword]() returns json|error {
+        log:printInfo("Search proposals endpoint called for keyword: " + keyword);
+        return proposalsService.searchProposals(keyword);
+    }
+
+    # Get proposal statistics
+    #
+    # + return - Proposal statistics or error
+    resource function get proposals/statistics() returns json|error {
+        log:printInfo("Get proposal statistics endpoint called");
+        return proposalsService.getProposalStatistics();
+    }
+
+    # Get active proposals
+    #
+    # + return - Active proposals list or error
+    resource function get proposals/active() returns json|error {
+        log:printInfo("Get active proposals endpoint called");
+        return proposalsService.getActiveProposals();
+    }
+
+    # Get expired proposals
+    #
+    # + return - Expired proposals list or error
+    resource function get proposals/expired() returns json|error {
+        log:printInfo("Get expired proposals endpoint called");
+        return proposalsService.getExpiredProposals();
+    }
+
+    # Vote on a proposal
+    #
+    # + proposalId - Proposal ID to vote on
+    # + voteType - Vote type (yes/no)
+    # + return - Updated proposal data or error
+    resource function post proposals/[int proposalId]/vote/[string voteType]() returns json|error {
+        log:printInfo("Vote on proposal endpoint called for ID: " + proposalId.toString() + " with vote: " + voteType);
+        return proposalsService.voteOnProposal(proposalId, voteType);
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -678,6 +813,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Policies CRUD: http://localhost:" + port.toString() + "/api/policies");
     log:printInfo("  ➤ Projects CRUD: http://localhost:" + port.toString() + "/api/projects");
     log:printInfo("  ➤ Transactions CRUD: http://localhost:" + port.toString() + "/api/transactions");
+    log:printInfo("  ➤ Proposals CRUD: http://localhost:" + port.toString() + "/api/proposals");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
