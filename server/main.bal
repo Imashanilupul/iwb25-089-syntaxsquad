@@ -326,6 +326,39 @@ service /api on apiListener {
         return policiesService.getPoliciesByMinistry(ministry);
     }
 
+    # Search policies by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching policies list or error
+    resource function get policies/search/[string keyword]() returns json|error {
+        log:printInfo("Search policies endpoint called for keyword: " + keyword);
+        return policiesService.searchPolicies(keyword);
+    }
+
+    # Get policy statistics
+    #
+    # + return - Policy statistics or error
+    resource function get policies/statistics() returns json|error {
+        log:printInfo("Get policy statistics endpoint called");
+        return policiesService.getPolicyStatistics();
+    }
+
+    # Get active policies
+    #
+    # + return - Active policies list or error
+    resource function get policies/active() returns json|error {
+        log:printInfo("Get active policies endpoint called");
+        return policiesService.getActivePolicies();
+    }
+
+    # Get draft policies
+    #
+    # + return - Draft policies list or error
+    resource function get policies/draft() returns json|error {
+        log:printInfo("Get draft policies endpoint called");
+        return policiesService.getDraftPolicies();
+    }
+
     # Get all projects
     #
     # + return - Projects list or error
