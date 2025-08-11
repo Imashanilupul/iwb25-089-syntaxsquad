@@ -7,6 +7,7 @@ import server_bal.reports;
 import server_bal.users;
 import server_bal.petitions;
 import server_bal.petition_activities;
+import server_bal.policy_comments;
 
 import ballerina/http;
 import ballerina/log;
@@ -36,6 +37,7 @@ reports:ReportsService reportsService = new (supabaseClient, port, supabaseUrl, 
 users:UsersService usersService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 petitions:PetitionsService petitionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 petition_activities:PetitionActivitiesService petitionActivitiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+policy_comments:PolicyCommentsService policyCommentsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 
 # Main API service
@@ -126,7 +128,20 @@ service /api on apiListener {
                 "GET /api/users/nic/{nic} - Get user by NIC",
                 "GET /api/users/search/{keyword} - Search users by keyword",
                 "GET /api/users/statistics - Get user statistics",
-                "GET /api/users/recent - Get recent users"
+                "GET /api/users/recent - Get recent users",
+                "GET /api/policycomments - List all policy comments",
+                "POST /api/policycomments - Create a new policy comment",
+                "GET /api/policycomments/{id} - Get policy comment by ID",
+                "PUT /api/policycomments/{id} - Update policy comment by ID",
+                "DELETE /api/policycomments/{id} - Delete policy comment by ID",
+                "GET /api/policycomments/user/{userId} - Get comments by user ID",
+                "GET /api/policycomments/policy/{policyId} - Get comments by policy ID",
+                "GET /api/policycomments/{id}/replies - Get replies to a comment",
+                "GET /api/policycomments/search/{keyword} - Search comments by keyword",
+                "GET /api/policycomments/statistics - Get comment statistics",
+                "GET /api/policycomments/recent - Get recent comments",
+                "POST /api/policycomments/{id}/like - Like a comment",
+                "GET /api/policycomments/top/{limit} - Get top liked comments"
             ],
             "features": [
                 "Environment-based configuration",
@@ -136,6 +151,9 @@ service /api on apiListener {
                 "Project management",
                 "Transaction management",
                 "User management",
+                "Petition management",
+                "Petition activities tracking",
+                "Policy comments and engagement",
                 "Database health monitoring"
             ],
             "timestamp": currentTime[0]
@@ -1112,6 +1130,135 @@ service /api on apiListener {
         log:printInfo("Get petition activity statistics endpoint called");
         return petitionActivitiesService.getActivityStatistics();
     }
+
+    # Get all policy comments
+    #
+    # + return - Policy comments list or error
+    resource function get policycomments() returns json|error {
+        log:printInfo("Get all policy comments endpoint called");
+        return policyCommentsService.getAllPolicyComments();
+    }
+
+    # Get policy comment by ID
+    #
+    # + commentId - Comment ID to retrieve
+    # + return - Comment data or error
+    resource function get policycomments/[int commentId]() returns json|error {
+        log:printInfo("Get policy comment by ID endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.getPolicyCommentById(commentId);
+    }
+
+    # Create a new policy comment
+    #
+    # + request - HTTP request containing comment data
+    # + return - Created comment data or error
+    resource function post policycomments(http:Request request) returns json|error {
+        log:printInfo("Create policy comment endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string comment = check payload.comment;
+        int userId = check payload.user_id;
+        int policyId = check payload.policy_id;
+
+        // Extract optional fields
+        int? replyId = payload.reply_id is int ? check payload.reply_id : ();
+        string? replyComment = payload.reply_comment is string ? check payload.reply_comment : ();
+
+        return policyCommentsService.createPolicyComment(comment, userId, policyId, replyId, replyComment);
+    }
+
+    # Update policy comment by ID
+    #
+    # + request - HTTP request containing updated comment data
+    # + commentId - Comment ID to update
+    # + return - Updated comment data or error
+    resource function put policycomments/[int commentId](http:Request request) returns json|error {
+        log:printInfo("Update policy comment endpoint called for ID: " + commentId.toString());
+
+        json payload = check request.getJsonPayload();
+        return policyCommentsService.updatePolicyComment(commentId, payload);
+    }
+
+    # Delete policy comment by ID
+    #
+    # + commentId - Comment ID to delete
+    # + return - Success message or error
+    resource function delete policycomments/[int commentId]() returns json|error {
+        log:printInfo("Delete policy comment endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.deletePolicyComment(commentId);
+    }
+
+    # Get comments by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered comments list or error
+    resource function get policycomments/user/[int userId]() returns json|error {
+        log:printInfo("Get comments by user ID endpoint called for user ID: " + userId.toString());
+        return policyCommentsService.getCommentsByUserId(userId);
+    }
+
+    # Get comments by policy ID
+    #
+    # + policyId - Policy ID to filter by
+    # + return - Filtered comments list or error
+    resource function get policycomments/policy/[int policyId]() returns json|error {
+        log:printInfo("Get comments by policy ID endpoint called for policy ID: " + policyId.toString());
+        return policyCommentsService.getCommentsByPolicyId(policyId);
+    }
+
+    # Get replies to a specific comment
+    #
+    # + commentId - Comment ID to get replies for
+    # + return - Replies list or error
+    resource function get policycomments/[int commentId]/replies() returns json|error {
+        log:printInfo("Get replies by comment ID endpoint called for comment ID: " + commentId.toString());
+        return policyCommentsService.getRepliesByCommentId(commentId);
+    }
+
+    # Search comments by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching comments list or error
+    resource function get policycomments/search/[string keyword]() returns json|error {
+        log:printInfo("Search policy comments endpoint called for keyword: " + keyword);
+        return policyCommentsService.searchComments(keyword);
+    }
+
+    # Get comment statistics
+    #
+    # + return - Comment statistics or error
+    resource function get policycomments/statistics() returns json|error {
+        log:printInfo("Get policy comment statistics endpoint called");
+        return policyCommentsService.getCommentStatistics();
+    }
+
+    # Get recent comments
+    #
+    # + return - Recent comments list or error
+    resource function get policycomments/recent() returns json|error {
+        log:printInfo("Get recent policy comments endpoint called");
+        return policyCommentsService.getRecentComments();
+    }
+
+    # Like a comment
+    #
+    # + commentId - Comment ID to like
+    # + return - Updated comment data or error
+    resource function post policycomments/[int commentId]/like() returns json|error {
+        log:printInfo("Like comment endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.likeComment(commentId);
+    }
+
+    # Get top liked comments
+    #
+    # + limit - Number of top comments to retrieve (default 10)
+    # + return - Top liked comments list or error
+    resource function get policycomments/top/[int 'limit]() returns json|error {
+        log:printInfo("Get top liked comments endpoint called with limit: " + 'limit.toString());
+        return policyCommentsService.getTopLikedComments('limit);
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -1282,6 +1429,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Reports CRUD: http://localhost:" + port.toString() + "/api/reports");
     log:printInfo("  ➤ Petitions CRUD: http://localhost:" + port.toString() + "/api/petitions");
     log:printInfo("  ➤ Petition Activities CRUD: http://localhost:" + port.toString() + "/api/petitionactivities");
+    log:printInfo("  ➤ Policy Comments CRUD: http://localhost:" + port.toString() + "/api/policycomments");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
