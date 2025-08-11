@@ -1,3 +1,6 @@
+#import ballerina/auth;
+
+
 # Returns the string `Hello` with the input string name.
 #
 # + name - name as a string or nil

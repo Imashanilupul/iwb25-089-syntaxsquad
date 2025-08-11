@@ -3,6 +3,7 @@ import server_bal.policy;
 import server_bal.projects;
 import server_bal.transactions;
 import server_bal.proposals;
+import server_bal.reports;
 
 import ballerina/http;
 import ballerina/log;
@@ -28,6 +29,8 @@ policy:PoliciesService policiesService = new (supabaseClient, port, supabaseUrl,
 projects:ProjectsService projectsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 transactions:TransactionsService transactionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 proposals:ProposalsService proposalsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+reports:ReportsService reportsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+
 
 # Main API service
 service /api on apiListener {
