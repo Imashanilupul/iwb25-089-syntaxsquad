@@ -40,7 +40,15 @@ petition_activities:PetitionActivitiesService petitionActivitiesService = new (s
 policy_comments:PolicyCommentsService policyCommentsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 
-# Main API service
+# Main API service with CORS configuration
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: ["http://localhost:3000"],
+        allowCredentials: true,
+        allowHeaders: ["Content-Type", "Authorization"],
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    }
+}
 service /api on apiListener {
 
     # Health check endpoint

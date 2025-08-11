@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,32 +17,54 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Edit, Trash2, DollarSign } from "lucide-react"
-
-interface Category {
-  id: number
-  categoryName: string
-  allocatedBudget: number
-  spentBudget: number
-}
+import { Plus, Edit, Trash2, DollarSign, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import categoryService, { type Category, type CategoryFormData } from "@/services/category"
 
 export function CategoryManagement() {
-  const [categories, setCategories] = useState<Category[]>([
-    { id: 1, categoryName: "Education", allocatedBudget: 850000000000, spentBudget: 567000000000 },
-    { id: 2, categoryName: "Health", allocatedBudget: 650000000000, spentBudget: 423000000000 },
-    { id: 3, categoryName: "Infrastructure", allocatedBudget: 1200000000000, spentBudget: 890000000000 },
-    { id: 4, categoryName: "Defense", allocatedBudget: 450000000000, spentBudget: 398000000000 },
-    { id: 5, categoryName: "Agriculture", allocatedBudget: 300000000000, spentBudget: 178000000000 },
-  ])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const { toast } = useToast()
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CategoryFormData>({
     categoryName: "",
-    allocatedBudget: "",
-    spentBudget: "",
+    allocatedBudget: 0,
+    spentBudget: 0,
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Load categories on component mount
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  const loadCategories = async () => {
+    try {
+      setLoading(true)
+      const response = await categoryService.getAllCategories()
+      if (response.success) {
+        setCategories(response.data)
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to load categories",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading categories:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load categories. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000000000) {
@@ -55,39 +77,143 @@ export function CategoryManagement() {
     return `Rs. ${amount.toLocaleString()}`
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const resetForm = () => {
+    setFormData({
+      categoryName: "",
+      allocatedBudget: 0,
+      spentBudget: 0,
+    })
+    setEditingId(null)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const newCategory: Category = {
-      id: editingId || Date.now(),
-      categoryName: formData.categoryName,
-      allocatedBudget: Number.parseFloat(formData.allocatedBudget),
-      spentBudget: Number.parseFloat(formData.spentBudget || "0"),
+    if (!formData.categoryName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Category name is required",
+        variant: "destructive",
+      })
+      return
     }
 
-    if (editingId) {
-      setCategories(categories.map((cat) => (cat.id === editingId ? newCategory : cat)))
-    } else {
-      setCategories([...categories, newCategory])
+    if (formData.allocatedBudget < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Allocated budget cannot be negative",
+        variant: "destructive",
+      })
+      return
     }
 
-    setFormData({ categoryName: "", allocatedBudget: "", spentBudget: "" })
-    setEditingId(null)
-    setIsDialogOpen(false)
+    if ((formData.spentBudget || 0) < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Spent budget cannot be negative",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if ((formData.spentBudget || 0) > formData.allocatedBudget) {
+      toast({
+        title: "Validation Error",
+        description: "Spent budget cannot exceed allocated budget",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSubmitting(true)
+
+      if (editingId) {
+        // Update existing category
+        const response = await categoryService.updateCategory(editingId, formData)
+        if (response.success) {
+          toast({
+            title: "Success",
+            description: "Category updated successfully",
+          })
+          await loadCategories() // Reload the list
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to update category",
+            variant: "destructive",
+          })
+        }
+      } else {
+        // Create new category
+        const response = await categoryService.createCategory(formData)
+        if (response.success) {
+          toast({
+            title: "Success",
+            description: "Category created successfully",
+          })
+          await loadCategories() // Reload the list
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to create category",
+            variant: "destructive",
+          })
+        }
+      }
+
+      resetForm()
+      setIsDialogOpen(false)
+    } catch (error) {
+      console.error("Error submitting category:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleEdit = (category: Category) => {
     setFormData({
-      categoryName: category.categoryName,
-      allocatedBudget: category.allocatedBudget.toString(),
-      spentBudget: category.spentBudget.toString(),
+      categoryName: category.category_name,
+      allocatedBudget: category.allocated_budget,
+      spentBudget: category.spent_budget,
     })
-    setEditingId(category.id)
+    setEditingId(category.category_id)
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setCategories(categories.filter((cat) => cat.id !== id))
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) {
+      return
+    }
+
+    try {
+      const response = await categoryService.deleteCategory(id)
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Category deleted successfully",
+        })
+        await loadCategories() // Reload the list
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete category",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting category:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete category. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const getUtilizationColor = (spent: number, allocated: number) => {
@@ -109,9 +235,9 @@ export function CategoryManagement() {
           <DialogTrigger asChild>
             <Button
               onClick={() => {
-                setFormData({ categoryName: "", allocatedBudget: "", spentBudget: "" })
-                setEditingId(null)
+                resetForm()
               }}
+              disabled={loading}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Category
@@ -133,6 +259,7 @@ export function CategoryManagement() {
                   value={formData.categoryName}
                   onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
                   required
+                  disabled={submitting}
                 />
               </div>
               <div className="space-y-2">
@@ -142,8 +269,9 @@ export function CategoryManagement() {
                   type="number"
                   placeholder="e.g., 850000000000"
                   value={formData.allocatedBudget}
-                  onChange={(e) => setFormData({ ...formData, allocatedBudget: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, allocatedBudget: Number(e.target.value) })}
                   required
+                  disabled={submitting}
                 />
               </div>
               <div className="space-y-2">
@@ -152,15 +280,28 @@ export function CategoryManagement() {
                   id="spentBudget"
                   type="number"
                   placeholder="e.g., 567000000000"
-                  value={formData.spentBudget}
-                  onChange={(e) => setFormData({ ...formData, spentBudget: e.target.value })}
+                  value={formData.spentBudget || 0}
+                  onChange={(e) => setFormData({ ...formData, spentBudget: Number(e.target.value) })}
+                  disabled={submitting}
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                  {editingId ? "Update Category" : "Add Category"}
+                <Button type="submit" className="flex-1" disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {editingId ? "Updating..." : "Creating..."}
+                    </>
+                  ) : (
+                    editingId ? "Update Category" : "Add Category"
+                  )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={submitting}
+                >
                   Cancel
                 </Button>
               </div>
@@ -177,7 +318,7 @@ export function CategoryManagement() {
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.length}</div>
+            <div className="text-2xl font-bold">{loading ? "..." : categories.length}</div>
             <p className="text-xs text-slate-500">Active budget categories</p>
           </CardContent>
         </Card>
@@ -189,7 +330,7 @@ export function CategoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(categories.reduce((sum, cat) => sum + cat.allocatedBudget, 0))}
+              {loading ? "..." : formatCurrency(categories.reduce((sum, cat) => sum + cat.allocated_budget, 0))}
             </div>
             <p className="text-xs text-slate-500">Across all categories</p>
           </CardContent>
@@ -202,12 +343,12 @@ export function CategoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(categories.reduce((sum, cat) => sum + cat.spentBudget, 0))}
+              {loading ? "..." : formatCurrency(categories.reduce((sum, cat) => sum + cat.spent_budget, 0))}
             </div>
             <p className="text-xs text-slate-500">
-              {Math.round(
-                (categories.reduce((sum, cat) => sum + cat.spentBudget, 0) /
-                  categories.reduce((sum, cat) => sum + cat.allocatedBudget, 0)) *
+              {loading ? "..." : Math.round(
+                (categories.reduce((sum, cat) => sum + cat.spent_budget, 0) /
+                  Math.max(categories.reduce((sum, cat) => sum + cat.allocated_budget, 0), 1)) *
                   100,
               )}
               % utilization
@@ -223,51 +364,62 @@ export function CategoryManagement() {
           <CardDescription>All budget categories with allocation and spending details</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Category Name</TableHead>
-                <TableHead>Allocated Budget</TableHead>
-                <TableHead>Spent Budget</TableHead>
-                <TableHead>Utilization</TableHead>
-                <TableHead>Remaining</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {categories.map((category) => {
-                const utilization = (category.spentBudget / category.allocatedBudget) * 100
-                const remaining = category.allocatedBudget - category.spentBudget
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+              <span className="ml-2 text-slate-500">Loading categories...</span>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">
+              No categories found. Create your first category to get started.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Category Name</TableHead>
+                  <TableHead>Allocated Budget</TableHead>
+                  <TableHead>Spent Budget</TableHead>
+                  <TableHead>Utilization</TableHead>
+                  <TableHead>Remaining</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categories.map((category) => {
+                  const utilization = (category.spent_budget / category.allocated_budget) * 100
+                  const remaining = category.allocated_budget - category.spent_budget
 
-                return (
-                  <TableRow key={category.id}>
-                    <TableCell className="font-medium">{category.categoryName}</TableCell>
-                    <TableCell>{formatCurrency(category.allocatedBudget)}</TableCell>
-                    <TableCell>{formatCurrency(category.spentBudget)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={getUtilizationColor(category.spentBudget, category.allocatedBudget)}
-                      >
-                        {utilization.toFixed(1)}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatCurrency(remaining)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(category)}>
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(category.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                  return (
+                    <TableRow key={category.category_id}>
+                      <TableCell className="font-medium">{category.category_name}</TableCell>
+                      <TableCell>{formatCurrency(category.allocated_budget)}</TableCell>
+                      <TableCell>{formatCurrency(category.spent_budget)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={getUtilizationColor(category.spent_budget, category.allocated_budget)}
+                        >
+                          {utilization.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatCurrency(remaining)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(category)}>
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleDelete(category.category_id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
