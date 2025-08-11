@@ -5,6 +5,8 @@ import server_bal.transactions;
 import server_bal.proposals;
 import server_bal.reports;
 import server_bal.users;
+import server_bal.petitions;
+import server_bal.petition_activities;
 
 import ballerina/http;
 import ballerina/log;
@@ -32,6 +34,8 @@ transactions:TransactionsService transactionsService = new (supabaseClient, port
 proposals:ProposalsService proposalsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 reports:ReportsService reportsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 users:UsersService usersService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+petitions:PetitionsService petitionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+petition_activities:PetitionActivitiesService petitionActivitiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 
 # Main API service
@@ -896,6 +900,218 @@ service /api on apiListener {
         log:printInfo("Resolve report endpoint called for ID: " + reportId.toString());
         return reportsService.resolveReport(reportId);
     }
+
+    # Get all petitions
+    #
+    # + return - Petitions list or error
+    resource function get petitions() returns json|error {
+        log:printInfo("Get all petitions endpoint called");
+        return petitionsService.getAllPetitions();
+    }
+
+    # Get petition by ID
+    #
+    # + petitionId - Petition ID to retrieve
+    # + return - Petition data or error
+    resource function get petitions/[int petitionId]() returns json|error {
+        log:printInfo("Get petition by ID endpoint called for ID: " + petitionId.toString());
+        return petitionsService.getPetitionById(petitionId);
+    }
+
+    # Create a new petition
+    #
+    # + request - HTTP request containing petition data
+    # + return - Created petition data or error
+    resource function post petitions(http:Request request) returns json|error {
+        log:printInfo("Create petition endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string title = check payload.title;
+        string description = check payload.description;
+        int requiredSignatureCount = check payload.required_signature_count;
+
+        // Extract optional fields
+        int? creatorId = payload.creator_id is int ? check payload.creator_id : ();
+        string? deadline = payload.deadline is string ? check payload.deadline : ();
+
+        return petitionsService.createPetition(title, description, requiredSignatureCount, creatorId, deadline);
+    }
+
+    # Update petition by ID
+    #
+    # + request - HTTP request containing updated petition data
+    # + petitionId - Petition ID to update
+    # + return - Updated petition data or error
+    resource function put petitions/[int petitionId](http:Request request) returns json|error {
+        log:printInfo("Update petition endpoint called for ID: " + petitionId.toString());
+
+        json payload = check request.getJsonPayload();
+        return petitionsService.updatePetition(petitionId, payload);
+    }
+
+    # Delete petition by ID
+    #
+    # + petitionId - Petition ID to delete
+    # + return - Success message or error
+    resource function delete petitions/[int petitionId]() returns json|error {
+        log:printInfo("Delete petition endpoint called for ID: " + petitionId.toString());
+        return petitionsService.deletePetition(petitionId);
+    }
+
+    # Get petitions by creator
+    #
+    # + creatorId - Creator ID to filter by
+    # + return - Filtered petitions list or error
+    resource function get petitions/creator/[int creatorId]() returns json|error {
+        log:printInfo("Get petitions by creator endpoint called for creator ID: " + creatorId.toString());
+        return petitionsService.getPetitionsByCreator(creatorId);
+    }
+
+    # Get petitions by status
+    #
+    # + status - Status to filter by
+    # + return - Filtered petitions list or error
+    resource function get petitions/status/[string status]() returns json|error {
+        log:printInfo("Get petitions by status endpoint called for status: " + status);
+        return petitionsService.getPetitionsByStatus(status);
+    }
+
+    # Search petitions by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching petitions list or error
+    resource function get petitions/search/[string keyword]() returns json|error {
+        log:printInfo("Search petitions endpoint called for keyword: " + keyword);
+        return petitionsService.searchPetitions(keyword);
+    }
+
+    # Get petition statistics
+    #
+    # + return - Petition statistics or error
+    resource function get petitions/statistics() returns json|error {
+        log:printInfo("Get petition statistics endpoint called");
+        return petitionsService.getPetitionStatistics();
+    }
+
+    # Get active petitions
+    #
+    # + return - Active petitions list or error
+    resource function get petitions/active() returns json|error {
+        log:printInfo("Get active petitions endpoint called");
+        return petitionsService.getActivePetitions();
+    }
+
+    # Sign a petition
+    #
+    # + petitionId - Petition ID to sign
+    # + return - Updated petition data or error
+    resource function post petitions/[int petitionId]/sign() returns json|error {
+        log:printInfo("Sign petition endpoint called for ID: " + petitionId.toString());
+        return petitionsService.signPetition(petitionId);
+    }
+
+    # Get all petition activities
+    #
+    # + return - Petition activities list or error
+    resource function get petitionactivities() returns json|error {
+        log:printInfo("Get all petition activities endpoint called");
+        return petitionActivitiesService.getAllPetitionActivities();
+    }
+
+    # Get petition activity by ID
+    #
+    # + activityId - Activity ID to retrieve
+    # + return - Activity data or error
+    resource function get petitionactivities/[int activityId]() returns json|error {
+        log:printInfo("Get petition activity by ID endpoint called for ID: " + activityId.toString());
+        return petitionActivitiesService.getPetitionActivityById(activityId);
+    }
+
+    # Create a new petition activity
+    #
+    # + request - HTTP request containing activity data
+    # + return - Created activity data or error
+    resource function post petitionactivities(http:Request request) returns json|error {
+        log:printInfo("Create petition activity endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        int petitionId = check payload.petition_id;
+
+        // Extract optional fields
+        string activityType = payload.activity_type is string ? check payload.activity_type : "SIGNATURE";
+        int signatureCount = payload.signature_count is int ? check payload.signature_count : 1;
+        int? userId = payload.user_id is int ? check payload.user_id : ();
+
+        return petitionActivitiesService.createPetitionActivity(petitionId, activityType, signatureCount, userId);
+    }
+
+    # Update petition activity by ID
+    #
+    # + request - HTTP request containing updated activity data
+    # + activityId - Activity ID to update
+    # + return - Updated activity data or error
+    resource function put petitionactivities/[int activityId](http:Request request) returns json|error {
+        log:printInfo("Update petition activity endpoint called for ID: " + activityId.toString());
+
+        json payload = check request.getJsonPayload();
+        return petitionActivitiesService.updatePetitionActivity(activityId, payload);
+    }
+
+    # Delete petition activity by ID
+    #
+    # + activityId - Activity ID to delete
+    # + return - Success message or error
+    resource function delete petitionactivities/[int activityId]() returns json|error {
+        log:printInfo("Delete petition activity endpoint called for ID: " + activityId.toString());
+        return petitionActivitiesService.deletePetitionActivity(activityId);
+    }
+
+    # Get activities by petition ID
+    #
+    # + petitionId - Petition ID to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/petition/[int petitionId]() returns json|error {
+        log:printInfo("Get activities by petition ID endpoint called for petition ID: " + petitionId.toString());
+        return petitionActivitiesService.getActivitiesByPetitionId(petitionId);
+    }
+
+    # Get activities by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/user/[int userId]() returns json|error {
+        log:printInfo("Get activities by user ID endpoint called for user ID: " + userId.toString());
+        return petitionActivitiesService.getActivitiesByUserId(userId);
+    }
+
+    # Get activities by type
+    #
+    # + activityType - Activity type to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/'type/[string activityType]() returns json|error {
+        log:printInfo("Get activities by type endpoint called for type: " + activityType);
+        return petitionActivitiesService.getActivitiesByType(activityType);
+    }
+
+    # Get recent activities
+    #
+    # + return - Recent activities list or error
+    resource function get petitionactivities/recent() returns json|error {
+        log:printInfo("Get recent petition activities endpoint called");
+        return petitionActivitiesService.getRecentActivities();
+    }
+
+    # Get activity statistics
+    #
+    # + return - Activity statistics or error
+    resource function get petitionactivities/statistics() returns json|error {
+        log:printInfo("Get petition activity statistics endpoint called");
+        return petitionActivitiesService.getActivityStatistics();
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -1064,6 +1280,8 @@ public function main() returns error? {
     log:printInfo("  ➤ Proposals CRUD: http://localhost:" + port.toString() + "/api/proposals");
     log:printInfo("  ➤ Users CRUD: http://localhost:" + port.toString() + "/api/users");
     log:printInfo("  ➤ Reports CRUD: http://localhost:" + port.toString() + "/api/reports");
+    log:printInfo("  ➤ Petitions CRUD: http://localhost:" + port.toString() + "/api/petitions");
+    log:printInfo("  ➤ Petition Activities CRUD: http://localhost:" + port.toString() + "/api/petitionactivities");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
