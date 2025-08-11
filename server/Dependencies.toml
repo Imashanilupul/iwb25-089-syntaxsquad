@@ -312,9 +312,6 @@ version = "2.6.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
-modules = [
-	{org = "ballerina", packageName = "url", moduleName = "url"}
-]
 
 [[package]]
 org = "ballerina"
@@ -349,7 +346,6 @@ dependencies = [
 	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "test"},
 	{org = "ballerina", name = "time"},
-	{org = "ballerina", name = "url"},
 	{org = "ballerinai", name = "observe"}
 ]
 modules = [

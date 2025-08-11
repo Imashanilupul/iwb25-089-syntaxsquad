@@ -766,6 +766,136 @@ service /api on apiListener {
         log:printInfo("Get recent users endpoint called");
         return usersService.getRecentUsers();
     }
+
+    # Get all reports
+    #
+    # + return - Reports list or error
+    resource function get reports() returns json|error {
+        log:printInfo("Get all reports endpoint called");
+        return reportsService.getAllReports();
+    }
+
+    # Get report by ID
+    #
+    # + reportId - Report ID to retrieve
+    # + return - Report data or error
+    resource function get reports/[int reportId]() returns json|error {
+        log:printInfo("Get report by ID endpoint called for ID: " + reportId.toString());
+        return reportsService.getReportById(reportId);
+    }
+
+    # Create a new report
+    #
+    # + request - HTTP request containing report data
+    # + return - Created report data or error
+    resource function post reports(http:Request request) returns json|error {
+        log:printInfo("Create report endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string reportTitle = check payload.report_title;
+        string evidenceHash = check payload.evidence_hash;
+
+        // Extract optional fields
+        string? description = payload.description is string ? check payload.description : ();
+        string priority = payload.priority is string ? check payload.priority : "MEDIUM";
+        string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
+        int? userId = payload.user_id is int ? check payload.user_id : ();
+
+        return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId);
+    }
+
+    # Update report by ID
+    #
+    # + request - HTTP request containing updated report data
+    # + reportId - Report ID to update
+    # + return - Updated report data or error
+    resource function put reports/[int reportId](http:Request request) returns json|error {
+        log:printInfo("Update report endpoint called for ID: " + reportId.toString());
+
+        json payload = check request.getJsonPayload();
+        return reportsService.updateReport(reportId, payload);
+    }
+
+    # Delete report by ID
+    #
+    # + reportId - Report ID to delete
+    # + return - Success message or error
+    resource function delete reports/[int reportId]() returns json|error {
+        log:printInfo("Delete report endpoint called for ID: " + reportId.toString());
+        return reportsService.deleteReport(reportId);
+    }
+
+    # Get reports by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/user/[int userId]() returns json|error {
+        log:printInfo("Get reports by user ID endpoint called for user ID: " + userId.toString());
+        return reportsService.getReportsByUserId(userId);
+    }
+
+    # Get reports by priority
+    #
+    # + priority - Priority to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/priority/[string priority]() returns json|error {
+        log:printInfo("Get reports by priority endpoint called for priority: " + priority);
+        return reportsService.getReportsByPriority(priority);
+    }
+
+    # Get reports by status
+    #
+    # + resolved - Resolved status to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/status/[boolean resolved]() returns json|error {
+        log:printInfo("Get reports by status endpoint called for resolved: " + resolved.toString());
+        return reportsService.getReportsByStatus(resolved);
+    }
+
+    # Get reports by evidence hash
+    #
+    # + evidenceHash - Evidence hash to search for
+    # + return - Filtered reports list or error
+    resource function get reports/evidence/[string evidenceHash]() returns json|error {
+        log:printInfo("Get reports by evidence hash endpoint called for hash: " + evidenceHash);
+        return reportsService.getReportsByEvidenceHash(evidenceHash);
+    }
+
+    # Search reports by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching reports list or error
+    resource function get reports/search/[string keyword]() returns json|error {
+        log:printInfo("Search reports endpoint called for keyword: " + keyword);
+        return reportsService.searchReports(keyword);
+    }
+
+    # Get report statistics
+    #
+    # + return - Report statistics or error
+    resource function get reports/statistics() returns json|error {
+        log:printInfo("Get report statistics endpoint called");
+        return reportsService.getReportStatistics();
+    }
+
+    # Get recent reports
+    #
+    # + return - Recent reports list or error
+    resource function get reports/recent() returns json|error {
+        log:printInfo("Get recent reports endpoint called");
+        return reportsService.getRecentReports();
+    }
+
+    # Mark report as resolved
+    #
+    # + reportId - Report ID to mark as resolved
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/resolve() returns json|error {
+        log:printInfo("Resolve report endpoint called for ID: " + reportId.toString());
+        return reportsService.resolveReport(reportId);
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -933,6 +1063,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Transactions CRUD: http://localhost:" + port.toString() + "/api/transactions");
     log:printInfo("  ➤ Proposals CRUD: http://localhost:" + port.toString() + "/api/proposals");
     log:printInfo("  ➤ Users CRUD: http://localhost:" + port.toString() + "/api/users");
+    log:printInfo("  ➤ Reports CRUD: http://localhost:" + port.toString() + "/api/reports");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
