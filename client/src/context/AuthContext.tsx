@@ -1,3 +1,5 @@
+'use client'
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import axios from "axios";
