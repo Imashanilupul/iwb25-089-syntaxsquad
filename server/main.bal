@@ -1,6 +1,7 @@
 import server_bal.categories;
 import server_bal.policy;
 import server_bal.projects;
+import server_bal.transactions;
 
 import ballerina/http;
 import ballerina/log;
@@ -24,6 +25,7 @@ http:Client supabaseClient = check new (supabaseUrl);
 categories:CategoriesService categoriesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 policy:PoliciesService policiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 projects:ProjectsService projectsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+transactions:TransactionsService transactionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
 # Main API service
 service /api on apiListener {
@@ -92,7 +94,18 @@ service /api on apiListener {
                 "GET /api/projects/state/{state} - Get projects by state",
                 "GET /api/projects/province/{province} - Get projects by province",
                 "GET /api/projects/search/{keyword} - Search projects by keyword",
-                "GET /api/projects/statistics - Get project statistics"
+                "GET /api/projects/statistics - Get project statistics",
+                "GET /api/transactions - List all transactions",
+                "POST /api/transactions - Create a new transaction",
+                "GET /api/transactions/{id} - Get transaction by ID",
+                "PUT /api/transactions/{id} - Update transaction by ID",
+                "DELETE /api/transactions/{id} - Delete transaction by ID",
+                "GET /api/transactions/category/{categoryId} - Get transactions by category",
+                "GET /api/transactions/project/{projectId} - Get transactions by project",
+                "GET /api/transactions/type/{type} - Get transactions by type",
+                "GET /api/transactions/search/{keyword} - Search transactions",
+                "GET /api/transactions/statistics - Get transaction statistics",
+                "GET /api/transactions/recent - Get recent transactions"
             ],
             "features": [
                 "Environment-based configuration",
@@ -100,6 +113,7 @@ service /api on apiListener {
                 "Category management",
                 "Policy management",
                 "Project management",
+                "Transaction management",
                 "Database health monitoring"
             ],
             "timestamp": currentTime[0]
@@ -388,6 +402,117 @@ service /api on apiListener {
         log:printInfo("Get project statistics endpoint called");
         return projectsService.getProjectStatistics();
     }
+
+    # Get all transactions
+    #
+    # + return - Transactions list or error
+    resource function get transactions() returns json|error {
+        log:printInfo("Get all transactions endpoint called");
+        return transactionsService.getAllTransactions();
+    }
+
+    # Get transaction by ID
+    #
+    # + transactionId - Transaction ID to retrieve
+    # + return - Transaction data or error
+    resource function get transactions/[int transactionId]() returns json|error {
+        log:printInfo("Get transaction by ID endpoint called for ID: " + transactionId.toString());
+        return transactionsService.getTransactionById(transactionId);
+    }
+
+    # Create a new transaction
+    #
+    # + request - HTTP request containing transaction data
+    # + return - Created transaction data or error
+    resource function post transactions(http:Request request) returns json|error {
+        log:printInfo("Create transaction endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        decimal amount = check payload.amount;
+        string transactionType = check payload.transactionType;
+
+        // Extract optional fields
+        string? description = payload.description is string ? check payload.description : ();
+        int? categoryId = payload.categoryId is int ? check payload.categoryId : ();
+        int? projectId = payload.projectId is int ? check payload.projectId : ();
+
+        return transactionsService.createTransaction(amount, transactionType, description, categoryId, projectId);
+    }
+
+    # Update transaction by ID
+    #
+    # + request - HTTP request containing updated transaction data
+    # + transactionId - Transaction ID to update
+    # + return - Updated transaction data or error
+    resource function put transactions/[int transactionId](http:Request request) returns json|error {
+        log:printInfo("Update transaction endpoint called for ID: " + transactionId.toString());
+
+        json payload = check request.getJsonPayload();
+        return transactionsService.updateTransaction(transactionId, payload);
+    }
+
+    # Delete transaction by ID
+    #
+    # + transactionId - Transaction ID to delete
+    # + return - Success message or error
+    resource function delete transactions/[int transactionId]() returns json|error {
+        log:printInfo("Delete transaction endpoint called for ID: " + transactionId.toString());
+        return transactionsService.deleteTransaction(transactionId);
+    }
+
+    # Get transactions by category
+    #
+    # + categoryId - Category ID to filter by
+    # + return - Filtered transactions list or error
+    resource function get transactions/category/[int categoryId]() returns json|error {
+        log:printInfo("Get transactions by category endpoint called for category ID: " + categoryId.toString());
+        return transactionsService.getTransactionsByCategory(categoryId);
+    }
+
+    # Get transactions by project
+    #
+    # + projectId - Project ID to filter by
+    # + return - Filtered transactions list or error
+    resource function get transactions/project/[int projectId]() returns json|error {
+        log:printInfo("Get transactions by project endpoint called for project ID: " + projectId.toString());
+        return transactionsService.getTransactionsByProject(projectId);
+    }
+
+    # Get transactions by type
+    #
+    # + transactionType - Transaction type to filter by
+    # + return - Filtered transactions list or error
+    resource function get transactions/'type/[string transactionType]() returns json|error {
+        log:printInfo("Get transactions by type endpoint called for type: " + transactionType);
+        return transactionsService.getTransactionsByType(transactionType);
+    }
+
+    # Search transactions by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching transactions list or error
+    resource function get transactions/search/[string keyword]() returns json|error {
+        log:printInfo("Search transactions endpoint called for keyword: " + keyword);
+        return transactionsService.searchTransactions(keyword);
+    }
+
+    # Get transaction statistics
+    #
+    # + return - Transaction statistics or error
+    resource function get transactions/statistics() returns json|error {
+        log:printInfo("Get transaction statistics endpoint called");
+        return transactionsService.getTransactionStatistics();
+    }
+
+    # Get recent transactions
+    #
+    # + return - Recent transactions list or error
+    resource function get transactions/recent() returns json|error {
+        log:printInfo("Get recent transactions endpoint called");
+        return transactionsService.getRecentTransactions();
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -552,6 +677,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Categories CRUD: http://localhost:" + port.toString() + "/api/categories");
     log:printInfo("  ➤ Policies CRUD: http://localhost:" + port.toString() + "/api/policies");
     log:printInfo("  ➤ Projects CRUD: http://localhost:" + port.toString() + "/api/projects");
+    log:printInfo("  ➤ Transactions CRUD: http://localhost:" + port.toString() + "/api/transactions");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
