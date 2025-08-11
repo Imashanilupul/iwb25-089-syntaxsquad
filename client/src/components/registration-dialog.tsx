@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { UserPlus } from "lucide-react"
+import { BiometricVerification } from "@/components/biometric-verification"
 
 interface RegistrationFormData {
   firstName: string
@@ -21,6 +22,12 @@ interface RegistrationFormData {
   email: string
   nicNumber: string
   mobileNumber: string
+}
+
+interface BiometricData {
+  isVerified: boolean
+  isUnique: boolean
+  biometricHash: string
 }
 
 interface NICValidationResult {
@@ -173,6 +180,12 @@ const calculateOldNICChecksum = (digits: string): number => {
 export function RegistrationDialog() {
   const [open, setOpen] = useState(false)
   const [nicValidation, setNicValidation] = useState<NICValidationResult | null>(null)
+  const [biometricData, setBiometricData] = useState<BiometricData>({
+    isVerified: false,
+    isUnique: false,
+    biometricHash: ''
+  })
+  const [enableBiometric, setEnableBiometric] = useState(true)
   const [formData, setFormData] = useState<RegistrationFormData>({
     firstName: "",
     lastName: "",
@@ -196,6 +209,23 @@ export function RegistrationDialog() {
         setNicValidation(validation)
       }
     }
+  }
+
+  const handleBiometricVerification = (result: { isUnique: boolean; biometricHash: string }) => {
+    setBiometricData({
+      isVerified: true,
+      isUnique: result.isUnique,
+      biometricHash: result.biometricHash
+    })
+  }
+
+  const handleBiometricError = (error: string) => {
+    setBiometricData({
+      isVerified: false,
+      isUnique: false,
+      biometricHash: ''
+    })
+    alert(`Biometric Verification Error: ${error}`)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -228,13 +258,25 @@ export function RegistrationDialog() {
       return
     }
 
+    // Biometric verification check (if enabled)
+    if (enableBiometric && !biometricData.isVerified) {
+      alert("Please complete biometric verification to ensure unique registration")
+      return
+    }
+
+    if (enableBiometric && !biometricData.isUnique) {
+      alert("Biometric verification indicates this identity is already registered. Each person can only register once.")
+      return
+    }
+
     console.log("Registration data:", {
       ...formData,
       nicInfo: {
         birthYear: nicValidationResult.birthYear,
         dayOfYear: nicValidationResult.dayOfYear,
         gender: nicValidationResult.gender
-      }
+      },
+      biometricData: enableBiometric ? biometricData : null
     })
     
     // Here you would typically send the data to your backend API
@@ -249,8 +291,14 @@ export function RegistrationDialog() {
       mobileNumber: "",
     })
     setNicValidation(null)
+    setBiometricData({
+      isVerified: false,
+      isUnique: false,
+      biometricHash: ''
+    })
     setOpen(false)
-    alert("Registration successful! NIC verified and validated.")
+    const verificationMessage = enableBiometric ? "NIC and biometric identity verified and validated." : "NIC verified and validated."
+    alert(`Registration successful! ${verificationMessage}`)
   }
 
   const handleCancel = () => {
@@ -262,6 +310,11 @@ export function RegistrationDialog() {
       mobileNumber: "",
     })
     setNicValidation(null)
+    setBiometricData({
+      isVerified: false,
+      isUnique: false,
+      biometricHash: ''
+    })
     setOpen(false)
   }
 
@@ -353,6 +406,28 @@ export function RegistrationDialog() {
                 )}
               </div>
             )}
+          </div>
+          
+          {/* Biometric Verification Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-700">Identity Verification</h3>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={enableBiometric}
+                  onChange={(e) => setEnableBiometric(e.target.checked)}
+                  className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs text-slate-600">Enable biometric verification</span>
+              </label>
+            </div>
+            
+            <BiometricVerification
+              onVerificationComplete={handleBiometricVerification}
+              onVerificationError={handleBiometricError}
+              isEnabled={enableBiometric}
+            />
           </div>
           
           <div className="space-y-2">
