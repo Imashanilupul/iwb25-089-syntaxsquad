@@ -23,8 +23,156 @@ interface RegistrationFormData {
   mobileNumber: string
 }
 
+interface NICValidationResult {
+  isValid: boolean
+  message: string
+  birthYear?: number
+  dayOfYear?: number
+  gender?: 'Male' | 'Female'
+}
+
+// Comprehensive Sri Lankan NIC validation function
+const validateSriLankanNIC = (nic: string): NICValidationResult => {
+  if (!nic) {
+    return { isValid: false, message: "NIC number is required" }
+  }
+
+  const cleanNIC = nic.trim().toUpperCase()
+
+  // Check for old format NIC (9 digits + V/X)
+  if (/^[0-9]{9}[VX]$/.test(cleanNIC)) {
+    return validateOldFormatNIC(cleanNIC)
+  }
+  
+  // Check for new format NIC (12 digits)
+  if (/^[0-9]{12}$/.test(cleanNIC)) {
+    return validateNewFormatNIC(cleanNIC)
+  }
+
+  return { 
+    isValid: false, 
+    message: "Invalid NIC format. Use old format (123456789V) or new format (123456789012)" 
+  }
+}
+
+// Validate old format NIC (9 digits + V/X)
+const validateOldFormatNIC = (nic: string): NICValidationResult => {
+  const digits = nic.substring(0, 9)
+  const suffix = nic.charAt(9)
+  
+  // Extract birth year (first 2 digits + 1900)
+  const yearPrefix = parseInt(digits.substring(0, 2))
+  const birthYear = 1900 + yearPrefix
+  
+  // Extract day of year (next 3 digits)
+  let dayOfYear = parseInt(digits.substring(2, 5))
+  let gender: 'Male' | 'Female' = 'Male'
+  
+  // If day > 500, it's female (subtract 500 to get actual day)
+  if (dayOfYear > 500) {
+    gender = 'Female'
+    dayOfYear -= 500
+  }
+  
+  // Validate day of year (1-366 for leap years, 1-365 for normal years)
+  const isLeapYear = (birthYear % 4 === 0 && birthYear % 100 !== 0) || (birthYear % 400 === 0)
+  const maxDays = isLeapYear ? 366 : 365
+  
+  if (dayOfYear < 1 || dayOfYear > maxDays) {
+    return { 
+      isValid: false, 
+      message: `Invalid day of year: ${dayOfYear}. Must be between 1-${maxDays} for year ${birthYear}` 
+    }
+  }
+  
+  
+  // Additional validation: reasonable birth year range
+  const currentYear = new Date().getFullYear()
+  if (birthYear < 1900 || birthYear > currentYear) {
+    return { 
+      isValid: false, 
+      message: `Invalid birth year: ${birthYear}. Must be between 1900-${currentYear}` 
+    }
+  }
+  
+  return { 
+    isValid: true, 
+    message: "Valid NIC number", 
+    birthYear, 
+    dayOfYear, 
+    gender 
+  }
+}
+
+// Validate new format NIC (12 digits)
+const validateNewFormatNIC = (nic: string): NICValidationResult => {
+  // Extract birth year (first 4 digits)
+  const birthYear = parseInt(nic.substring(0, 4))
+  
+  // Extract day of year (next 3 digits)
+  let dayOfYear = parseInt(nic.substring(4, 7))
+  let gender: 'Male' | 'Female' = 'Male'
+  
+  // If day > 500, it's female (subtract 500 to get actual day)
+  if (dayOfYear > 500) {
+    gender = 'Female'
+    dayOfYear -= 500
+  }
+  
+  // Validate day of year
+  const isLeapYear = (birthYear % 4 === 0 && birthYear % 100 !== 0) || (birthYear % 400 === 0)
+  const maxDays = isLeapYear ? 366 : 365
+  
+  if (dayOfYear < 1 || dayOfYear > maxDays) {
+    return { 
+      isValid: false, 
+      message: `Invalid day of year: ${dayOfYear}. Must be between 1-${maxDays} for year ${birthYear}` 
+    }
+  }
+  
+  // Additional validation: reasonable birth year range
+  const currentYear = new Date().getFullYear()
+  if (birthYear < 1900 || birthYear > currentYear) {
+    return { 
+      isValid: false, 
+      message: `Invalid birth year: ${birthYear}. Must be between 1900-${currentYear}` 
+    }
+  }
+  
+  // Validate serial number (positions 7-10) - should not be 0000
+  const serialNumber = nic.substring(7, 11)
+  if (serialNumber === "0000") {
+    return { 
+      isValid: false, 
+      message: "Invalid serial number in NIC" 
+    }
+  }
+  
+  return { 
+    isValid: true, 
+    message: "Valid NIC number", 
+    birthYear, 
+    dayOfYear, 
+    gender 
+  }
+}
+
+// Calculate checksum for old format NIC using modulo 11 algorithm
+const calculateOldNICChecksum = (digits: string): number => {
+  const multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+  let sum = 0
+  
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(digits.charAt(i)) * multipliers[i]
+  }
+  
+  const remainder = sum % 11
+  return remainder === 0 ? 0 : 11 - remainder
+}
+
 export function RegistrationDialog() {
   const [open, setOpen] = useState(false)
+  const [nicValidation, setNicValidation] = useState<NICValidationResult | null>(null)
   const [formData, setFormData] = useState<RegistrationFormData>({
     firstName: "",
     lastName: "",
@@ -38,6 +186,16 @@ export function RegistrationDialog() {
       ...prev,
       [field]: value
     }))
+    
+    // Real-time NIC validation
+    if (field === 'nicNumber') {
+      if (value.trim() === '') {
+        setNicValidation(null)
+      } else {
+        const validation = validateSriLankanNIC(value)
+        setNicValidation(validation)
+      }
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -56,10 +214,10 @@ export function RegistrationDialog() {
       return
     }
 
-    // NIC validation (basic - Sri Lankan NIC format)
-    const nicRegex = /^([0-9]{9}[vVxX]|[0-9]{12})$/
-    if (!nicRegex.test(formData.nicNumber)) {
-      alert("Please enter a valid NIC number")
+    // Comprehensive NIC validation
+    const nicValidationResult = validateSriLankanNIC(formData.nicNumber)
+    if (!nicValidationResult.isValid) {
+      alert(`NIC Validation Error: ${nicValidationResult.message}`)
       return
     }
 
@@ -70,8 +228,17 @@ export function RegistrationDialog() {
       return
     }
 
-    console.log("Registration data:", formData)
+    console.log("Registration data:", {
+      ...formData,
+      nicInfo: {
+        birthYear: nicValidationResult.birthYear,
+        dayOfYear: nicValidationResult.dayOfYear,
+        gender: nicValidationResult.gender
+      }
+    })
+    
     // Here you would typically send the data to your backend API
+    // The backend should also perform server-side NIC validation
     
     // Reset form and close dialog
     setFormData({
@@ -81,8 +248,9 @@ export function RegistrationDialog() {
       nicNumber: "",
       mobileNumber: "",
     })
+    setNicValidation(null)
     setOpen(false)
-    alert("Registration successful!")
+    alert("Registration successful! NIC verified and validated.")
   }
 
   const handleCancel = () => {
@@ -93,6 +261,7 @@ export function RegistrationDialog() {
       nicNumber: "",
       mobileNumber: "",
     })
+    setNicValidation(null)
     setOpen(false)
   }
 
@@ -160,8 +329,30 @@ export function RegistrationDialog() {
               value={formData.nicNumber}
               onChange={(e) => handleInputChange("nicNumber", e.target.value)}
               placeholder="Enter NIC number (e.g., 123456789V or 123456789012)"
+              className={`${
+                nicValidation === null 
+                  ? "" 
+                  : nicValidation.isValid 
+                    ? "border-green-500 focus:border-green-600" 
+                    : "border-red-500 focus:border-red-600"
+              }`}
               required
             />
+            {nicValidation && (
+              <div className={`text-sm flex items-center gap-2 ${
+                nicValidation.isValid ? "text-green-600" : "text-red-600"
+              }`}>
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  nicValidation.isValid ? "bg-green-500" : "bg-red-500"
+                }`}></span>
+                {nicValidation.message}
+                {nicValidation.isValid && nicValidation.birthYear && (
+                  <span className="text-blue-600 text-xs ml-2">
+                    (Born: {nicValidation.birthYear}, {nicValidation.gender})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
