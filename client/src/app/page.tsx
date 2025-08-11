@@ -21,6 +21,7 @@ import { PolicyHub } from "@/components/policy-hub"
 import { WhistleblowingSystem } from "@/components/whistleblowing-system"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { BlockchainVisualization } from "@/components/blockchain-visualization"
+import { RegistrationDialog } from "@/components/registration-dialog"
 import SignUpPage from "@/components/signup"
 
 export default function CivicPlatform() {
@@ -90,7 +91,8 @@ export default function CivicPlatform() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50">
       <div className="container mx-auto p-6">
-        <div className="fixed top-6 right-6 z-50">
+        <div className="fixed top-6 right-6 z-50 flex gap-3">
+          <RegistrationDialog />
           <ConnectButton />
         </div>
         {/* Header */}
