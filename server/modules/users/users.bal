@@ -604,11 +604,15 @@ public class UsersService {
             foreach json user in users {
                 json|error provinceResult = user.Province;
                 if provinceResult is json && provinceResult != () {
-                    string province = provinceResult.toString();
-                    if provinceCounts.hasKey(province) {
-                        provinceCounts[province] = provinceCounts.get(province) + 1;
-                    } else {
-                        provinceCounts[province] = 1;
+                    string rawProvince = provinceResult.toString();
+                    // Normalize province name: trim whitespace, remove "Province" suffix, standardize
+                    string province = self.normalizeProvinceName(rawProvince);
+                    if province.length() > 0 {
+                        if provinceCounts.hasKey(province) {
+                            provinceCounts[province] = provinceCounts.get(province) + 1;
+                        } else {
+                            provinceCounts[province] = 1;
+                        }
                     }
                 }
             }
@@ -636,6 +640,53 @@ public class UsersService {
             
         } on fail error e {
             return error("Failed to get province statistics: " + e.message());
+        }
+    }
+
+    # Normalize province name to handle inconsistent data
+    #
+    # + rawProvince - Raw province name from database
+    # + return - Normalized province name
+    private function normalizeProvinceName(string rawProvince) returns string {
+        // Basic trim and cleanup
+        string trimmed = rawProvince.trim();
+        
+        // Simple character filtering - build clean string
+        string cleaned = "";
+        foreach int i in 0 ..< trimmed.length() {
+            string char = trimmed.substring(i, i + 1);
+            if char != "\r" && char != "\n" && char != "\t" {
+                cleaned = cleaned + char;
+            }
+        }
+        cleaned = cleaned.trim();
+        
+        // Remove "Province" suffix if present (case-insensitive)
+        string lower = cleaned.toLowerAscii();
+        if lower.endsWith(" province") {
+            cleaned = cleaned.substring(0, cleaned.length() - 9);
+            cleaned = cleaned.trim();
+        }
+        
+        // Standardize common province names
+        string normalized = cleaned.toLowerAscii();
+        match normalized {
+            "western" => { return "Western"; }
+            "central" => { return "Central"; }
+            "southern" => { return "Southern"; }
+            "northern" => { return "Northern"; }
+            "eastern" => { return "Eastern"; }
+            "north western"|"northwestern"|"north-western" => { return "North Western"; }
+            "north central"|"northcentral"|"north-central" => { return "North Central"; }
+            "uva" => { return "Uva"; }
+            "sabaragamuwa" => { return "Sabaragamuwa"; }
+            _ => { 
+                // Capitalize first letter for unknown provinces
+                if cleaned.length() > 0 {
+                    return cleaned.substring(0, 1).toUpperAscii() + cleaned.substring(1).toLowerAscii();
+                }
+                return cleaned;
+            }
         }
     }
 }
