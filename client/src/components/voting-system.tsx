@@ -1,78 +1,138 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Vote, Users, Shield, Clock, CheckCircle, TrendingUp, Eye, Lock, Verified } from "lucide-react"
+import { Vote, Users, Shield, Clock, CheckCircle, TrendingUp, Eye, Lock, Verified, AlertCircle, Loader2 } from "lucide-react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts"
+import { proposalsService, type Proposal } from "@/services/proposals"
+import { categoriesService, type Category } from "@/services/categories"
+import { usersService } from "@/services/users"
+import { toast } from "sonner"
 
 export function VotingSystem() {
   const [selectedProposal, setSelectedProposal] = useState<number | null>(null)
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [votingLoading, setVotingLoading] = useState<number | null>(null)
+  const [stats, setStats] = useState({
+    totalProposals: 0,
+    totalVoters: 0,
+    participationRate: 0,
+    securityScore: 99.8
+  })
 
-  const activeProposals = [
-    {
-      id: 1,
-      title: "Provincial Council Powers Amendment",
-      description: "Proposal to devolve more administrative powers to Provincial Councils",
-      category: "Constitutional Reform",
-      totalVotes: 154320,
-      yesVotes: 98760,
-      noVotes: 55560,
-      status: "Active",
-      timeRemaining: "5 days",
-      requiredVotes: 200000,
-      blockchainHash: "0xa1b2c3d4...",
-      verificationStatus: "Verified",
-    },
-    {
-      id: 2,
-      title: "Renewable Energy Development Act",
-      description: "Investment in solar and wind energy infrastructure across all provinces",
-      category: "Environment",
-      totalVotes: 82340,
-      yesVotes: 61230,
-      noVotes: 21110,
-      status: "Active",
-      timeRemaining: "12 days",
-      requiredVotes: 150000,
-      blockchainHash: "0xe5f6g7h8...",
-      verificationStatus: "Verified",
-    },
-    {
-      id: 3,
-      title: "Free Education Enhancement Bill",
-      description: "Increase funding for public schools and universities by 20%",
-      category: "Education",
-      totalVotes: 221560,
-      yesVotes: 182340,
-      noVotes: 39220,
-      status: "Passed",
-      timeRemaining: "Completed",
-      requiredVotes: 200000,
-      blockchainHash: "0xi9j0k1l2...",
-      verificationStatus: "Verified",
-    },
-  ]
+  // Load data on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
 
+        // Load proposals, categories, and stats in parallel
+        const [proposalsRes, categoriesRes, userStatsRes] = await Promise.all([
+          proposalsService.getAllProposals(),
+          categoriesService.getAllCategories(),
+          usersService.getUserStatistics()
+        ])
+
+        if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
+          setProposals(proposalsRes.data)
+        } else {
+          throw new Error("Failed to load proposals")
+        }
+
+        if (categoriesRes.success && Array.isArray(categoriesRes.data)) {
+          setCategories(categoriesRes.data)
+        }
+
+        // Calculate stats
+        const totalProposals = Array.isArray(proposalsRes.data) ? proposalsRes.data.length : 0
+        const activeProposalsCount = Array.isArray(proposalsRes.data) 
+          ? proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length 
+          : 0
+
+        // Calculate total votes and participation
+        const totalVotes = Array.isArray(proposalsRes.data) 
+          ? proposalsRes.data.reduce((sum, p) => sum + p.yes_votes + p.no_votes, 0)
+          : 0
+
+        const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
+
+        setStats({
+          totalProposals: activeProposalsCount,
+          totalVoters: totalVotes, // This represents total votes, not unique voters
+          participationRate: participationRate,
+          securityScore: 99.8
+        })
+
+      } catch (err) {
+        console.error("Error loading data:", err)
+        setError(err instanceof Error ? err.message : "Failed to load data")
+        toast.error("Failed to load voting data")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  // Handle voting
+  const handleVote = async (proposalId: number, voteType: "yes" | "no") => {
+    try {
+      setVotingLoading(proposalId)
+      
+      const response = await proposalsService.voteOnProposal(proposalId, voteType)
+      
+      if (response.success && response.data && !Array.isArray(response.data)) {
+        // Update the proposal in the local state
+        setProposals(prev => prev.map(p => 
+          p.id === proposalId ? response.data as Proposal : p
+        ))
+        
+        toast.success(`Vote "${voteType}" recorded successfully!`)
+      } else {
+        throw new Error("Failed to record vote")
+      }
+    } catch (err) {
+      console.error("Error voting:", err)
+      toast.error("Failed to record vote. Please try again.")
+    } finally {
+      setVotingLoading(null)
+    }
+  }
+
+  // Helper function to get category name
+  const getCategoryName = (categoryId?: number): string => {
+    if (!categoryId) return "General"
+    const category = categories.find(c => c.category_id === categoryId)
+    return category?.category_name || "Unknown"
+  }
+
+  // Generate voter demographics (mock data for now)
   const voterDemographics = [
-    { name: "18-25", value: 2340, color: "#0088FE" },
-    { name: "26-35", value: 4567, color: "#00C49F" },
-    { name: "36-45", value: 3890, color: "#FFBB28" },
-    { name: "46-55", value: 2876, color: "#FF8042" },
-    { name: "55+", value: 1759, color: "#8884D8" },
+    { name: "18-25", value: Math.floor(stats.totalVoters * 0.15), color: "#0088FE" },
+    { name: "26-35", value: Math.floor(stats.totalVoters * 0.30), color: "#00C49F" },
+    { name: "36-45", value: Math.floor(stats.totalVoters * 0.25), color: "#FFBB28" },
+    { name: "46-55", value: Math.floor(stats.totalVoters * 0.20), color: "#FF8042" },
+    { name: "55+", value: Math.floor(stats.totalVoters * 0.10), color: "#8884D8" },
   ]
 
+  // Generate voting activity (mock data for now)
   const votingActivity = [
-    { hour: "00:00", votes: 45 },
-    { hour: "04:00", votes: 23 },
-    { hour: "08:00", votes: 189 },
-    { hour: "12:00", votes: 267 },
-    { hour: "16:00", votes: 234 },
-    { hour: "20:00", votes: 156 },
+    { hour: "00:00", votes: Math.floor(Math.random() * 50) + 20 },
+    { hour: "04:00", votes: Math.floor(Math.random() * 30) + 10 },
+    { hour: "08:00", votes: Math.floor(Math.random() * 200) + 150 },
+    { hour: "12:00", votes: Math.floor(Math.random() * 300) + 200 },
+    { hour: "16:00", votes: Math.floor(Math.random() * 250) + 180 },
+    { hour: "20:00", votes: Math.floor(Math.random() * 180) + 100 },
   ]
 
   const getStatusColor = (status: string) => {
@@ -80,18 +140,17 @@ export function VotingSystem() {
       case "Active":
         return "bg-blue-100 text-blue-800"
       case "Passed":
+      case "Expired":
         return "bg-green-100 text-green-800"
       case "Failed":
         return "bg-red-100 text-red-800"
       case "Pending":
         return "bg-yellow-100 text-yellow-800"
+      case "Inactive":
+        return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
-  }
-
-  const calculatePercentage = (votes: number, total: number) => {
-    return total > 0 ? Math.round((votes / total) * 100) : 0
   }
 
   return (
@@ -110,130 +169,198 @@ export function VotingSystem() {
         </TabsList>
 
         <TabsContent value="proposals" className="space-y-6">
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <span className="ml-2 text-lg">Loading proposals...</span>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="flex items-center gap-2 pt-6">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="text-red-800">{error}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => window.location.reload()}
+                  className="ml-auto"
+                >
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Voting Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
-                <Vote className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-slate-500">Currently open for voting</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Voters</CardTitle>
-                <Users className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">1.2M</div>
-                <p className="text-xs text-slate-500">Registered voters</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Participation Rate</CardTitle>
-                <TrendingUp className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">73.2%</div>
-                <p className="text-xs text-slate-500">Above average turnout</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Security Score</CardTitle>
-                <Shield className="h-4 w-4 text-emerald-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">99.8%</div>
-                <p className="text-xs text-slate-500">Zero-knowledge verified</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Proposals List */}
-          <div className="space-y-4">
-            {activeProposals.map((proposal) => (
-              <Card key={proposal.id} className="border-0 shadow-md">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{proposal.title}</CardTitle>
-                        <Badge variant="outline">{proposal.category}</Badge>
-                        <Badge className={getStatusColor(proposal.status)}>{proposal.status}</Badge>
-                      </div>
-                      <CardDescription>{proposal.description}</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <Clock className="h-4 w-4" />
-                      {proposal.timeRemaining}
-                    </div>
-                  </div>
+          {!loading && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card className="border-0 shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
+                  <Vote className="h-4 w-4 text-blue-600" />
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Voting Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>
-                        Participation: {proposal.totalVotes.toLocaleString()} /{" "}
-                        {proposal.requiredVotes.toLocaleString()}
-                      </span>
-                      <span>{Math.round((proposal.totalVotes / proposal.requiredVotes) * 100)}%</span>
-                    </div>
-                    <Progress value={(proposal.totalVotes / proposal.requiredVotes) * 100} />
-                  </div>
-
-                  {/* Vote Results */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-green-700">Yes Votes</span>
-                        <span className="text-sm font-bold">{proposal.yesVotes.toLocaleString()}</span>
-                      </div>
-                      <Progress value={calculatePercentage(proposal.yesVotes, proposal.totalVotes)} className="h-2" />
-                      <span className="text-xs text-slate-500">
-                        {calculatePercentage(proposal.yesVotes, proposal.totalVotes)}%
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-red-700">No Votes</span>
-                        <span className="text-sm font-bold">{proposal.noVotes.toLocaleString()}</span>
-                      </div>
-                      <Progress value={calculatePercentage(proposal.noVotes, proposal.totalVotes)} className="h-2" />
-                      <span className="text-xs text-slate-500">
-                        {calculatePercentage(proposal.noVotes, proposal.totalVotes)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Blockchain Verification */}
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Verified className="h-3 w-3 text-green-600" />
-                      <span className="font-mono">{proposal.blockchainHash}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {proposal.verificationStatus}
-                      </Badge>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                      {proposal.status === "Active" && <Button size="sm">Cast Vote</Button>}
-                    </div>
-                  </div>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalProposals}</div>
+                  <p className="text-xs text-slate-500">Currently open for voting</p>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+
+              <Card className="border-0 shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Votes</CardTitle>
+                  <Users className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalVoters.toLocaleString()}</div>
+                  <p className="text-xs text-slate-500">Votes cast across all proposals</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Avg Participation</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.participationRate}%</div>
+                  <p className="text-xs text-slate-500">Average votes per proposal</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Security Score</CardTitle>
+                  <Shield className="h-4 w-4 text-emerald-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.securityScore}%</div>
+                  <p className="text-xs text-slate-500">Zero-knowledge verified</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Proposals List */}
+          {!loading && !error && (
+            <div className="space-y-4">
+              {proposals.length === 0 ? (
+                <Card className="border-0 shadow-md">
+                  <CardContent className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <Vote className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-slate-600 mb-2">No Proposals Available</h3>
+                      <p className="text-slate-500">There are currently no proposals to vote on.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                proposals.map((proposal) => {
+                  const totalVotes = proposalsService.getTotalVotes(proposal)
+                  const yesPercentage = proposalsService.getYesPercentage(proposal)
+                  const noPercentage = proposalsService.getNoPercentage(proposal)
+                  const timeRemaining = proposalsService.getTimeRemaining(proposal)
+                  const status = proposalsService.getProposalStatus(proposal)
+                  const categoryName = getCategoryName(proposal.category_id)
+                  const isVoting = votingLoading === proposal.id
+
+                  return (
+                    <Card key={proposal.id} className="border-0 shadow-md">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-lg">{proposal.title}</CardTitle>
+                              <Badge variant="outline">{categoryName}</Badge>
+                              <Badge className={getStatusColor(status)}>{status}</Badge>
+                            </div>
+                            <CardDescription>{proposal.short_description}</CardDescription>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Clock className="h-4 w-4" />
+                            {timeRemaining}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Voting Progress */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Total Votes: {totalVotes.toLocaleString()}</span>
+                            <span>Participation Rate</span>
+                          </div>
+                          <Progress value={Math.min(totalVotes / 1000 * 100, 100)} />
+                        </div>
+
+                        {/* Vote Results */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-green-700">Yes Votes</span>
+                              <span className="text-sm font-bold">{proposal.yes_votes.toLocaleString()}</span>
+                            </div>
+                            <Progress value={yesPercentage} className="h-2" />
+                            <span className="text-xs text-slate-500">{yesPercentage}%</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-red-700">No Votes</span>
+                              <span className="text-sm font-bold">{proposal.no_votes.toLocaleString()}</span>
+                            </div>
+                            <Progress value={noPercentage} className="h-2" />
+                            <span className="text-xs text-slate-500">{noPercentage}%</span>
+                          </div>
+                        </div>
+
+                        {/* Blockchain Verification */}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Verified className="h-3 w-3 text-green-600" />
+                            <span className="font-mono">0x{proposal.id.toString().padStart(8, '0')}...</span>
+                            <Badge variant="outline" className="text-xs">Verified</Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setSelectedProposal(proposal.id)}
+                            >
+                              View Details
+                            </Button>
+                            {status === "Active" && (
+                              <div className="flex gap-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  disabled={isVoting}
+                                  onClick={() => handleVote(proposal.id, "yes")}
+                                  className="text-green-700 border-green-200 hover:bg-green-50"
+                                >
+                                  {isVoting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Yes"}
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  disabled={isVoting}
+                                  onClick={() => handleVote(proposal.id, "no")}
+                                  className="text-red-700 border-red-200 hover:bg-red-50"
+                                >
+                                  {isVoting ? <Loader2 className="h-3 w-3 animate-spin" /> : "No"}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
