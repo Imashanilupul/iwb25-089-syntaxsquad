@@ -81,8 +81,8 @@ export function AdminOverview() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Admin Dashboard</h2>
-        <p className="text-slate-600">Overview of all platform data and statistics</p>
+        <h2 className="text-2xl font-bold text-slate-900">Transparency Dashboard</h2>
+        <p className="text-slate-600">Blockchain-powered governance insights and aggregated public data</p>
       </div>
 
       {/* Main Stats Grid */}

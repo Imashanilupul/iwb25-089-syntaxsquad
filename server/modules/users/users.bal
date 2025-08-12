@@ -524,7 +524,9 @@ public class UsersService {
     public function getRecentUsers() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/users?created_at=gte." + "now() - interval '30 days'" + "&select=*&order=created_at.desc";
+            // Simplified approach: get all users and sort by created_at descending
+            // This avoids potential date formatting issues with Supabase
+            string endpoint = "/rest/v1/users?select=*&order=created_at.desc&limit=50";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -544,6 +546,65 @@ public class UsersService {
             
         } on fail error e {
             return error("Failed to get recent users: " + e.message());
+        }
+    }
+
+    # Get province statistics
+    #
+    # + return - Province statistics or error
+    public function getProvinceStatistics() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/users?select=Province&Province=not.is.null";
+            
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get province data: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] users = check result.ensureType();
+            
+            // Count users by province
+            map<int> provinceCounts = {};
+            int totalUsers = users.length();
+            
+            foreach json user in users {
+                json|error provinceResult = user.Province;
+                if provinceResult is json && provinceResult != () {
+                    string province = provinceResult.toString();
+                    if provinceCounts.hasKey(province) {
+                        provinceCounts[province] = provinceCounts.get(province) + 1;
+                    } else {
+                        provinceCounts[province] = 1;
+                    }
+                }
+            }
+            
+            // Convert to array format for frontend
+            json[] provinceData = [];
+            foreach string province in provinceCounts.keys() {
+                int count = provinceCounts.get(province);
+                provinceData.push({
+                    "province": province,
+                    "count": count,
+                    "percentage": totalUsers > 0 ? (count * 100) / totalUsers : 0
+                });
+            }
+            
+            return {
+                "success": true,
+                "message": "Province statistics retrieved successfully",
+                "data": {
+                    "total_users_with_province": totalUsers,
+                    "provinces": provinceData
+                },
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get province statistics: " + e.message());
         }
     }
 }

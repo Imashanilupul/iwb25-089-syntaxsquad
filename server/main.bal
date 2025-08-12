@@ -822,6 +822,14 @@ service /api on apiListener {
         return usersService.getUserStatistics();
     }
 
+    # Get province statistics
+    #
+    # + return - Province statistics or error
+    resource function get users/provinces() returns json|error {
+        log:printInfo("Get province statistics endpoint called");
+        return usersService.getProvinceStatistics();
+    }
+
     # Get recent users
     #
     # + return - Recent users list or error
