@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Card,
   CardContent,
@@ -41,6 +41,8 @@ import {
   LineChart,
   Line,
 } from "recharts"
+import { projectService } from "@/services/project"
+import { categoryService } from "@/services/category"
 
 // ------------------ Types ------------------
 interface Project {
@@ -61,98 +63,96 @@ interface Project {
 export function SpendingTracker() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
+  const [totalBudget, setTotalBudget] = useState<number>(0)
+  const [totalSpent, setTotalSpent] = useState<number>(0)
+  const [budgetData, setBudgetData] = useState<
+    Array<{ category: string; allocated: number; spent: number; remaining: number }>
+  >([])
+  const [spendingTrend, setSpendingTrend] = useState<Array<{ month: string; amount: number }>>([])
+  const [projects, setProjects] = useState<any[]>([])
 
-  const budgetData = [
-    {
-      category: "Education",
-      allocated: 850_000_000,
-      spent: 567_000_000,
-      remaining: 283_000_000,
-    },
-    {
-      category: "Health",
-      allocated: 650_000_000,
-      spent: 423_000_000,
-      remaining: 227_000_000,
-    },
-    {
-      category: "Infrastructure",
-      allocated: 1_200_000_000,
-      spent: 890_000_000,
-      remaining: 310_000_000,
-    },
-    {
-      category: "Defense",
-      allocated: 450_000_000,
-      spent: 398_000_000,
-      remaining: 52_000_000,
-    },
-    {
-      category: "Agriculture",
-      allocated: 300_000_000,
-      spent: 178_000_000,
-      remaining: 122_000_000,
-    },
-  ]
+  const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
-  const spendingTrend = [
-    { month: "Jan", amount: 245_000 },
-    { month: "Feb", amount: 289_000 },
-    { month: "Mar", amount: 334_000 },
-    { month: "Apr", amount: 298_000 },
-    { month: "May", amount: 412_000 },
-    { month: "Jun", amount: 387_000 },
-  ]
+  // Fetch categories data for charts and totals
+  useEffect(() => {
+    let isMounted = true
+    categoryService
+      .getAllCategories()
+      .then((res) => {
+        if (!isMounted) return
+        const categories = (res?.data || [])
+        
+        // Totals from categories
+        const totalAllocated = categories.reduce(
+          (acc, c) => acc + (Number(c.allocated_budget) || 0),
+          0
+        )
+        const totalSpentCalc = categories.reduce(
+          (acc, c) => acc + (Number(c.spent_budget) || 0),
+          0
+        )
+        setTotalBudget(totalAllocated)
+        setTotalSpent(totalSpentCalc)
 
-  const projects: Project[] = [
-    {
-      id: 1,
-      name: "Kandy-Colombo Expressway Extension",
-      category: "Infrastructure",
-      budget: 120_000_000_000,
-      spent: 80_400_000_000,
-      progress: 67,
-      status: "In Progress",
-      contractor: "China Harbour Engineering",
-      location: "Central & Western Provinces",
-      blockchainHash: "0x1a2b3c4d...",
-      lastUpdate: "2 hours ago",
-    },
-    {
-      id: 2,
-      name: "Mahaweli Water Supply Project",
-      category: "Infrastructure",
-      budget: 85_000_000_000,
-      spent: 76_500_000_000,
-      progress: 90,
-      status: "Near Completion",
-      contractor: "National Water Supply Board",
-      location: "North Central Province",
-      blockchainHash: "0x5e6f7g8h...",
-      lastUpdate: "4 hours ago",
-    },
-    {
-      id: 3,
-      name: "District General Hospital Modernization",
-      category: "Healthcare",
-      budget: 21_000_000_000,
-      spent: 9_450_000_000,
-      progress: 45,
-      status: "In Progress",
-      contractor: "Ministry of Health",
-      location: "All Provinces",
-      blockchainHash: "0x9i0j1k2l...",
-      lastUpdate: "1 day ago",
-    },
-  ]
+        // Chart data from categories
+        const chart = categories.map((c: any) => {
+          const allocated = Number(c.allocated_budget) || 0
+          const spent = Number(c.spent_budget) || 0
+          return {
+            category: c.category_name,
+            allocated,
+            spent,
+            remaining: Math.max(0, allocated - spent),
+          }
+        })
+        setBudgetData(chart)
+
+        // Monthly spending trend from categories
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        const now = new Date()
+        const trend: Array<{ month: string; amount: number }> = []
+        for (let i = 5; i >= 0; i--) {
+          const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+          const amount = categories.reduce((acc: number, c: any) => {
+            const ts: string | undefined = (c.updated_at as string) || (c.created_at as string)
+            if (!ts) return acc
+            const d = new Date(ts)
+            return d >= start && d < end ? acc + (Number(c.spent_budget) || 0) : acc
+          }, 0)
+          trend.push({ month: monthNames[start.getMonth()], amount })
+        }
+        setSpendingTrend(trend)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Fetch projects data for project list
+  useEffect(() => {
+    let isMounted = true
+    projectService
+      .getAllProjects()
+      .then((res) => {
+        if (!isMounted) return
+        const projectsData = (res?.data || []) as any[]
+        setProjects(projectsData)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const filteredProjects = projects.filter((project) => {
-    const matchesSearch = project.name
+    const matchesSearch = project.project_name
       .toLowerCase()
       .includes(searchTerm.toLowerCase())
     const matchesCategory =
       selectedCategory === "all" ||
-      project.category.toLowerCase() === selectedCategory.toLowerCase()
+      (project?.categories?.category_name || String(project?.category_id || "Uncategorized")).toLowerCase() === selectedCategory.toLowerCase()
     return matchesSearch && matchesCategory
   })
 
@@ -193,7 +193,7 @@ export function SpendingTracker() {
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Rs. 3.45T</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalBudget)}</div>
             <p className="text-xs text-slate-500">Allocated for FY 2024</p>
           </CardContent>
         </Card>
@@ -204,8 +204,10 @@ export function SpendingTracker() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Rs. 2.46T</div>
-            <p className="text-xs text-slate-500">71.3% of total budget</p>
+            <div className="text-2xl font-bold">{formatCurrency(totalSpent)}</div>
+            <p className="text-xs text-slate-500">
+              {totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(1) : "0.0"}% of total budget
+            </p>
           </CardContent>
         </Card>
 
@@ -331,16 +333,16 @@ export function SpendingTracker() {
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <h3 className="font-semibold text-slate-900">
-                        {project.name}
+                        {project.project_name}
                       </h3>
                       <div className="flex items-center gap-4 text-sm text-slate-600">
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {project.location}
+                          {project.province}
                         </span>
                         <span className="flex items-center gap-1">
                           <Building className="h-3 w-3" />
-                          {project.contractor}
+                          {project.ministry}
                         </span>
                       </div>
                     </div>
@@ -353,21 +355,21 @@ export function SpendingTracker() {
                     <div>
                       <p className="text-sm text-slate-600">Budget</p>
                       <p className="font-semibold">
-                        ${project.budget.toLocaleString()}
+                        {formatCurrency(project.allocated_budget)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Spent</p>
                       <p className="font-semibold">
-                        ${project.spent.toLocaleString()}
+                        {formatCurrency(project.spent_budget)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Progress</p>
                       <div className="flex items-center gap-2">
-                        <Progress value={project.progress} className="flex-1" />
+                        <Progress value={project.progress || 0} className="flex-1" />
                         <span className="text-sm font-medium">
-                          {project.progress}%
+                          {project.progress || 0}%
                         </span>
                       </div>
                     </div>
@@ -376,10 +378,10 @@ export function SpendingTracker() {
                   <div className="flex items-center justify-between pt-2 border-t">
                     <div className="text-xs text-slate-500">
                       <span className="font-mono">
-                        {project.blockchainHash}
+                        {project.view_details || "No details"}
                       </span>
                       <span className="ml-2">
-                        • Updated {project.lastUpdate}
+                        • Updated {project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "Unknown"}
                       </span>
                     </div>
                     <Button variant="outline" size="sm">
