@@ -2,6 +2,35 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
+# Helper function for pagination calculation
+#
+# + page - Current page number
+# + pageLimit - Number of items per page  
+# + total - Total number of items
+# + return - Pagination metadata record
+public function calculatePagination(int page, int pageLimit, int total) returns record {|
+    int page;
+    int 'limit;
+    int total;
+    int totalPages;
+    int offset;
+    boolean hasNext;
+    boolean hasPrev;
+|} {
+    int totalPages = (total + pageLimit - 1) / pageLimit;
+    int offset = (page - 1) * pageLimit;
+    
+    return {
+        page: page,
+        'limit: pageLimit,
+        total: total,
+        totalPages: totalPages,
+        offset: offset,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+    };
+}
+
 # Add the correct import or type definition for DatabaseClient
 # For example, if using a module named db, import it:
 # import db;
@@ -47,14 +76,30 @@ public class PoliciesService {
         return headers;
     }
 
-    # Get all policies
+    # Get all policies with pagination
     #
-    # + return - Policies list or error
-    public function getAllPolicies() returns json|error {
+    # + page - Page number (default: 1)
+    # + pageLimit - Number of items per page (default: 20)
+    # + return - Policies list with pagination metadata or error
+    public function getAllPolicies(int page = 1, int pageLimit = 20) returns json|error {
         do {
             map<string> headers = self.getHeaders();
 
-            http:Response response = check self.supabaseClient->get("/rest/v1/policies?select=*&order=created_time.desc", headers);
+            // Get total count first
+            http:Response countResponse = check self.supabaseClient->get("/rest/v1/policies?select=count", headers);
+            if countResponse.statusCode != 200 {
+                return error("Failed to get policies count: " + countResponse.statusCode.toString());
+            }
+            json countResult = check countResponse.getJsonPayload();
+            json[] countArray = check countResult.ensureType();
+            int total = check countArray[0].count;
+
+            // Calculate pagination
+            var pagination = calculatePagination(page, pageLimit, total);
+            
+            // Get paginated data
+            string endpoint = string `/rest/v1/policies?select=*&order=created_time.desc&limit=${pageLimit}&offset=${pagination.offset}`;
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
                 return error("Failed to get policies: " + response.statusCode.toString());
@@ -67,7 +112,7 @@ public class PoliciesService {
                 "success": true,
                 "message": "Policies retrieved successfully",
                 "data": policies,
-                "count": policies.length(),
+                "pagination": pagination,
                 "timestamp": time:utcNow()[0]
             };
             
@@ -144,7 +189,7 @@ public class PoliciesService {
             }
             
             // Validate status
-            string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+            string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
             boolean isValidStatus = false;
             foreach string validStatus in validStatuses {
                 if status == validStatus {
@@ -153,7 +198,7 @@ public class PoliciesService {
                 }
             }
             if !isValidStatus {
-                return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
             }
             
             json payload = {
@@ -269,7 +314,7 @@ public class PoliciesService {
             if status is json {
                 string|error statusStr = status.ensureType(string);
                 if statusStr is string {
-                    string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+                    string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
                     boolean isValidStatus = false;
                     foreach string validStatus in validStatuses {
                         if statusStr == validStatus {
@@ -280,7 +325,7 @@ public class PoliciesService {
                     if isValidStatus {
                         payloadMap["status"] = statusStr;
                     } else {
-                        return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                        return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
                     }
                 }
             }
@@ -363,7 +408,7 @@ public class PoliciesService {
     # + return - Policies list or error
     public function getPoliciesByStatus(string status) returns json|error {
         // Validate status
-        string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+        string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
         boolean isValidStatus = false;
         foreach string validStatus in validStatuses {
             if status == validStatus {
@@ -372,7 +417,7 @@ public class PoliciesService {
             }
         }
         if !isValidStatus {
-            return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+            return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
         }
         
         do {
@@ -468,7 +513,7 @@ public class PoliciesService {
         if status is json {
             string|error statusStr = status.ensureType(string);
             if statusStr is string {
-                string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+                string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
                 boolean isValidStatus = false;
                 foreach string validStatus in validStatuses {
                     if statusStr == validStatus {
@@ -477,7 +522,7 @@ public class PoliciesService {
                     }
                 }
                 if !isValidStatus {
-                    errors.push("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                    errors.push("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
                 }
             }
         }

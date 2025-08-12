@@ -9,7 +9,7 @@ import { ProposalManagement } from "@/components/admin/proposal-management"
 import { PolicyManagement } from "@/components/admin/policy-management"
 import { PetitionManagement } from "@/components/admin/petition-management"
 import { ReportManagement } from "@/components/admin/report-management"
-import { UserManagement } from "@/components/admin/user-management"
+import { UserAnalytics } from "@/components/admin/user-analytics"
 import {
   LayoutDashboard,
   DollarSign,
@@ -74,7 +74,7 @@ export default function AdminPortal() {
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Users
+              Analytics
             </TabsTrigger>
           </TabsList>
 
@@ -107,7 +107,7 @@ export default function AdminPortal() {
           </TabsContent>
 
           <TabsContent value="users">
-            <UserManagement />
+            <UserAnalytics />
           </TabsContent>
         </Tabs>
       </div>

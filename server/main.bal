@@ -3,6 +3,11 @@ import server_bal.policy;
 import server_bal.projects;
 import server_bal.transactions;
 import server_bal.proposals;
+import server_bal.reports;
+import server_bal.users;
+import server_bal.petitions;
+import server_bal.petition_activities;
+import server_bal.policy_comments;
 
 import ballerina/http;
 import ballerina/log;
@@ -28,8 +33,22 @@ policy:PoliciesService policiesService = new (supabaseClient, port, supabaseUrl,
 projects:ProjectsService projectsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 transactions:TransactionsService transactionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 proposals:ProposalsService proposalsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+reports:ReportsService reportsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+users:UsersService usersService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+petitions:PetitionsService petitionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+petition_activities:PetitionActivitiesService petitionActivitiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
+policy_comments:PolicyCommentsService policyCommentsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 
-# Main API service
+
+# Main API service with CORS configuration
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: ["http://localhost:3000"],
+        allowCredentials: true,
+        allowHeaders: ["Content-Type", "Authorization"],
+        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    }
+}
 service /api on apiListener {
 
     # Health check endpoint
@@ -107,7 +126,30 @@ service /api on apiListener {
                 "GET /api/transactions/type/{type} - Get transactions by type",
                 "GET /api/transactions/search/{keyword} - Search transactions",
                 "GET /api/transactions/statistics - Get transaction statistics",
-                "GET /api/transactions/recent - Get recent transactions"
+                "GET /api/transactions/recent - Get recent transactions",
+                "GET /api/users - List all users",
+                "POST /api/users - Create a new user",
+                "GET /api/users/{id} - Get user by ID",
+                "PUT /api/users/{id} - Update user by ID",
+                "DELETE /api/users/{id} - Delete user by ID",
+                "GET /api/users/email/{email} - Get user by email",
+                "GET /api/users/nic/{nic} - Get user by NIC",
+                "GET /api/users/search/{keyword} - Search users by keyword",
+                "GET /api/users/statistics - Get user statistics",
+                "GET /api/users/recent - Get recent users",
+                "GET /api/policycomments - List all policy comments",
+                "POST /api/policycomments - Create a new policy comment",
+                "GET /api/policycomments/{id} - Get policy comment by ID",
+                "PUT /api/policycomments/{id} - Update policy comment by ID",
+                "DELETE /api/policycomments/{id} - Delete policy comment by ID",
+                "GET /api/policycomments/user/{userId} - Get comments by user ID",
+                "GET /api/policycomments/policy/{policyId} - Get comments by policy ID",
+                "GET /api/policycomments/{id}/replies - Get replies to a comment",
+                "GET /api/policycomments/search/{keyword} - Search comments by keyword",
+                "GET /api/policycomments/statistics - Get comment statistics",
+                "GET /api/policycomments/recent - Get recent comments",
+                "POST /api/policycomments/{id}/like - Like a comment",
+                "GET /api/policycomments/top/{limit} - Get top liked comments"
             ],
             "features": [
                 "Environment-based configuration",
@@ -116,6 +158,10 @@ service /api on apiListener {
                 "Policy management",
                 "Project management",
                 "Transaction management",
+                "User management",
+                "Petition management",
+                "Petition activities tracking",
+                "Policy comments and engagement",
                 "Database health monitoring"
             ],
             "timestamp": currentTime[0]
@@ -202,12 +248,14 @@ service /api on apiListener {
         return categoriesService.deleteCategory(categoryId);
     }
 
-    # Get all policies
+    # Get all policies with pagination
     #
-    # + return - Policies list or error
-    resource function get policies() returns json|error {
-        log:printInfo("Get all policies endpoint called");
-        return policiesService.getAllPolicies();
+    # + page - Page number (optional, default: 1)
+    # + pageLimit - Number of items per page (optional, default: 20)
+    # + return - Policies list with pagination metadata or error
+    resource function get policies(int page = 1, int pageLimit = 20) returns json|error {
+        log:printInfo(string `Get all policies endpoint called - Page: ${page}, Limit: ${pageLimit}`);
+        return policiesService.getAllPolicies(page, pageLimit);
     }
 
     # Get policy by ID
@@ -278,6 +326,39 @@ service /api on apiListener {
     resource function get policies/ministry/[string ministry]() returns json|error {
         log:printInfo("Get policies by ministry endpoint called for ministry: " + ministry);
         return policiesService.getPoliciesByMinistry(ministry);
+    }
+
+    # Search policies by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching policies list or error
+    resource function get policies/search/[string keyword]() returns json|error {
+        log:printInfo("Search policies endpoint called for keyword: " + keyword);
+        return policiesService.searchPolicies(keyword);
+    }
+
+    # Get policy statistics
+    #
+    # + return - Policy statistics or error
+    resource function get policies/statistics() returns json|error {
+        log:printInfo("Get policy statistics endpoint called");
+        return policiesService.getPolicyStatistics();
+    }
+
+    # Get active policies
+    #
+    # + return - Active policies list or error
+    resource function get policies/active() returns json|error {
+        log:printInfo("Get active policies endpoint called");
+        return policiesService.getActivePolicies();
+    }
+
+    # Get draft policies
+    #
+    # + return - Draft policies list or error
+    resource function get policies/draft() returns json|error {
+        log:printInfo("Get draft policies endpoint called");
+        return policiesService.getDraftPolicies();
     }
 
     # Get all projects
@@ -648,6 +729,597 @@ service /api on apiListener {
         log:printInfo("Vote on proposal endpoint called for ID: " + proposalId.toString() + " with vote: " + voteType);
         return proposalsService.voteOnProposal(proposalId, voteType);
     }
+
+    # Get all users
+    #
+    # + return - Users list or error
+    resource function get users() returns json|error {
+        log:printInfo("Get all users endpoint called");
+        return usersService.getAllUsers();
+    }
+
+    # Get user by ID
+    #
+    # + userId - User ID to retrieve
+    # + return - User data or error
+    resource function get users/[int userId]() returns json|error {
+        log:printInfo("Get user by ID endpoint called for ID: " + userId.toString());
+        return usersService.getUserById(userId);
+    }
+
+    # Create a new user
+    #
+    # + request - HTTP request containing user data
+    # + return - Created user data or error
+    resource function post users(http:Request request) returns json|error {
+        log:printInfo("Create user endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string userName = check payload.user_name;
+        string email = check payload.email;
+        string nic = check payload.nic;
+        string mobileNo = check payload.mobile_no;
+
+        // Extract optional fields
+        string? evm = payload.evm is string ? check payload.evm : ();
+        string? province = payload.Province is string ? check payload.Province : ();
+
+        return usersService.createUser(userName, email, nic, mobileNo, evm, province);
+    }
+
+    # Update user by ID
+    #
+    # + request - HTTP request containing updated user data
+    # + userId - User ID to update
+    # + return - Updated user data or error
+    resource function put users/[int userId](http:Request request) returns json|error {
+        log:printInfo("Update user endpoint called for ID: " + userId.toString());
+
+        json payload = check request.getJsonPayload();
+        return usersService.updateUser(userId, payload);
+    }
+
+    # Delete user by ID
+    #
+    # + userId - User ID to delete
+    # + return - Success message or error
+    resource function delete users/[int userId]() returns json|error {
+        log:printInfo("Delete user endpoint called for ID: " + userId.toString());
+        return usersService.deleteUser(userId);
+    }
+
+    # Get user by email
+    #
+    # + email - Email to search for
+    # + return - User data or error
+    resource function get users/email/[string email]() returns json|error {
+        log:printInfo("Get user by email endpoint called for email: " + email);
+        return usersService.getUserByEmail(email);
+    }
+
+    # Get user by NIC
+    #
+    # + nic - NIC to search for
+    # + return - User data or error
+    resource function get users/nic/[string nic]() returns json|error {
+        log:printInfo("Get user by NIC endpoint called for NIC: " + nic);
+        return usersService.getUserByNic(nic);
+    }
+
+    # Search users by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching users list or error
+    resource function get users/search/[string keyword]() returns json|error {
+        log:printInfo("Search users endpoint called for keyword: " + keyword);
+        return usersService.searchUsers(keyword);
+    }
+
+    # Get user statistics
+    #
+    # + return - User statistics or error
+    resource function get users/statistics() returns json|error {
+        log:printInfo("Get user statistics endpoint called");
+        return usersService.getUserStatistics();
+    }
+
+    # Get province statistics
+    #
+    # + return - Province statistics or error
+    resource function get users/provinces() returns json|error {
+        log:printInfo("Get province statistics endpoint called");
+        return usersService.getProvinceStatistics();
+    }
+
+    # Get recent users
+    #
+    # + return - Recent users list or error
+    resource function get users/recent() returns json|error {
+        log:printInfo("Get recent users endpoint called");
+        return usersService.getRecentUsers();
+    }
+
+    # Get all reports
+    #
+    # + return - Reports list or error
+    resource function get reports() returns json|error {
+        log:printInfo("Get all reports endpoint called");
+        return reportsService.getAllReports();
+    }
+
+    # Get report by ID
+    #
+    # + reportId - Report ID to retrieve
+    # + return - Report data or error
+    resource function get reports/[int reportId]() returns json|error {
+        log:printInfo("Get report by ID endpoint called for ID: " + reportId.toString());
+        return reportsService.getReportById(reportId);
+    }
+
+    # Create a new report
+    #
+    # + request - HTTP request containing report data
+    # + return - Created report data or error
+    resource function post reports(http:Request request) returns json|error {
+        log:printInfo("Create report endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string reportTitle = check payload.report_title;
+        string evidenceHash = check payload.evidence_hash;
+
+        // Extract optional fields
+        string? description = payload.description is string ? check payload.description : ();
+        string priority = payload.priority is string ? check payload.priority : "MEDIUM";
+        string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
+        int? userId = payload.user_id is int ? check payload.user_id : ();
+
+        return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId);
+    }
+
+    # Update report by ID
+    #
+    # + request - HTTP request containing updated report data
+    # + reportId - Report ID to update
+    # + return - Updated report data or error
+    resource function put reports/[int reportId](http:Request request) returns json|error {
+        log:printInfo("Update report endpoint called for ID: " + reportId.toString());
+
+        json payload = check request.getJsonPayload();
+        return reportsService.updateReport(reportId, payload);
+    }
+
+    # Delete report by ID
+    #
+    # + reportId - Report ID to delete
+    # + return - Success message or error
+    resource function delete reports/[int reportId]() returns json|error {
+        log:printInfo("Delete report endpoint called for ID: " + reportId.toString());
+        return reportsService.deleteReport(reportId);
+    }
+
+    # Get reports by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/user/[int userId]() returns json|error {
+        log:printInfo("Get reports by user ID endpoint called for user ID: " + userId.toString());
+        return reportsService.getReportsByUserId(userId);
+    }
+
+    # Get reports by priority
+    #
+    # + priority - Priority to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/priority/[string priority]() returns json|error {
+        log:printInfo("Get reports by priority endpoint called for priority: " + priority);
+        return reportsService.getReportsByPriority(priority);
+    }
+
+    # Get reports by status
+    #
+    # + resolved - Resolved status to filter by
+    # + return - Filtered reports list or error
+    resource function get reports/status/[boolean resolved]() returns json|error {
+        log:printInfo("Get reports by status endpoint called for resolved: " + resolved.toString());
+        return reportsService.getReportsByStatus(resolved);
+    }
+
+    # Get reports by evidence hash
+    #
+    # + evidenceHash - Evidence hash to search for
+    # + return - Filtered reports list or error
+    resource function get reports/evidence/[string evidenceHash]() returns json|error {
+        log:printInfo("Get reports by evidence hash endpoint called for hash: " + evidenceHash);
+        return reportsService.getReportsByEvidenceHash(evidenceHash);
+    }
+
+    # Search reports by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching reports list or error
+    resource function get reports/search/[string keyword]() returns json|error {
+        log:printInfo("Search reports endpoint called for keyword: " + keyword);
+        return reportsService.searchReports(keyword);
+    }
+
+    # Get report statistics
+    #
+    # + return - Report statistics or error
+    resource function get reports/statistics() returns json|error {
+        log:printInfo("Get report statistics endpoint called");
+        return reportsService.getReportStatistics();
+    }
+
+    # Get recent reports
+    #
+    # + return - Recent reports list or error
+    resource function get reports/recent() returns json|error {
+        log:printInfo("Get recent reports endpoint called");
+        return reportsService.getRecentReports();
+    }
+
+    # Mark report as resolved
+    #
+    # + reportId - Report ID to mark as resolved
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/resolve() returns json|error {
+        log:printInfo("Resolve report endpoint called for ID: " + reportId.toString());
+        return reportsService.resolveReport(reportId);
+    }
+
+    # Mark report as pending (unresolve)
+    #
+    # + reportId - Report ID to mark as pending
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/unresolve() returns json|error {
+        log:printInfo("Unresolve report endpoint called for ID: " + reportId.toString());
+        return reportsService.unresolveReport(reportId);
+    }
+
+    # Get all petitions
+    #
+    # + return - Petitions list or error
+    resource function get petitions() returns json|error {
+        log:printInfo("Get all petitions endpoint called");
+        return petitionsService.getAllPetitions();
+    }
+
+    # Get petition by ID
+    #
+    # + petitionId - Petition ID to retrieve
+    # + return - Petition data or error
+    resource function get petitions/[int petitionId]() returns json|error {
+        log:printInfo("Get petition by ID endpoint called for ID: " + petitionId.toString());
+        return petitionsService.getPetitionById(petitionId);
+    }
+
+    # Create a new petition
+    #
+    # + request - HTTP request containing petition data
+    # + return - Created petition data or error
+    resource function post petitions(http:Request request) returns json|error {
+        log:printInfo("Create petition endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string title = check payload.title;
+        string description = check payload.description;
+        int requiredSignatureCount = check payload.required_signature_count;
+
+        // Extract optional fields
+        int? creatorId = payload.creator_id is int ? check payload.creator_id : ();
+        string? deadline = payload.deadline is string ? check payload.deadline : ();
+
+        return petitionsService.createPetition(title, description, requiredSignatureCount, creatorId, deadline);
+    }
+
+    # Update petition by ID
+    #
+    # + request - HTTP request containing updated petition data
+    # + petitionId - Petition ID to update
+    # + return - Updated petition data or error
+    resource function put petitions/[int petitionId](http:Request request) returns json|error {
+        log:printInfo("Update petition endpoint called for ID: " + petitionId.toString());
+
+        json payload = check request.getJsonPayload();
+        return petitionsService.updatePetition(petitionId, payload);
+    }
+
+    # Delete petition by ID
+    #
+    # + petitionId - Petition ID to delete
+    # + return - Success message or error
+    resource function delete petitions/[int petitionId]() returns json|error {
+        log:printInfo("Delete petition endpoint called for ID: " + petitionId.toString());
+        return petitionsService.deletePetition(petitionId);
+    }
+
+    # Get petitions by creator
+    #
+    # + creatorId - Creator ID to filter by
+    # + return - Filtered petitions list or error
+    resource function get petitions/creator/[int creatorId]() returns json|error {
+        log:printInfo("Get petitions by creator endpoint called for creator ID: " + creatorId.toString());
+        return petitionsService.getPetitionsByCreator(creatorId);
+    }
+
+    # Get petitions by status
+    #
+    # + status - Status to filter by
+    # + return - Filtered petitions list or error
+    resource function get petitions/status/[string status]() returns json|error {
+        log:printInfo("Get petitions by status endpoint called for status: " + status);
+        return petitionsService.getPetitionsByStatus(status);
+    }
+
+    # Search petitions by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching petitions list or error
+    resource function get petitions/search/[string keyword]() returns json|error {
+        log:printInfo("Search petitions endpoint called for keyword: " + keyword);
+        return petitionsService.searchPetitions(keyword);
+    }
+
+    # Get petition statistics
+    #
+    # + return - Petition statistics or error
+    resource function get petitions/statistics() returns json|error {
+        log:printInfo("Get petition statistics endpoint called");
+        return petitionsService.getPetitionStatistics();
+    }
+
+    # Get active petitions
+    #
+    # + return - Active petitions list or error
+    resource function get petitions/active() returns json|error {
+        log:printInfo("Get active petitions endpoint called");
+        return petitionsService.getActivePetitions();
+    }
+
+    # Sign a petition
+    #
+    # + petitionId - Petition ID to sign
+    # + return - Updated petition data or error
+    resource function post petitions/[int petitionId]/sign() returns json|error {
+        log:printInfo("Sign petition endpoint called for ID: " + petitionId.toString());
+        return petitionsService.signPetition(petitionId);
+    }
+
+    # Get all petition activities
+    #
+    # + return - Petition activities list or error
+    resource function get petitionactivities() returns json|error {
+        log:printInfo("Get all petition activities endpoint called");
+        return petitionActivitiesService.getAllPetitionActivities();
+    }
+
+    # Get petition activity by ID
+    #
+    # + activityId - Activity ID to retrieve
+    # + return - Activity data or error
+    resource function get petitionactivities/[int activityId]() returns json|error {
+        log:printInfo("Get petition activity by ID endpoint called for ID: " + activityId.toString());
+        return petitionActivitiesService.getPetitionActivityById(activityId);
+    }
+
+    # Create a new petition activity
+    #
+    # + request - HTTP request containing activity data
+    # + return - Created activity data or error
+    resource function post petitionactivities(http:Request request) returns json|error {
+        log:printInfo("Create petition activity endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        int petitionId = check payload.petition_id;
+
+        // Extract optional fields
+        string activityType = payload.activity_type is string ? check payload.activity_type : "SIGNATURE";
+        int signatureCount = payload.signature_count is int ? check payload.signature_count : 1;
+        int? userId = payload.user_id is int ? check payload.user_id : ();
+
+        return petitionActivitiesService.createPetitionActivity(petitionId, activityType, signatureCount, userId);
+    }
+
+    # Update petition activity by ID
+    #
+    # + request - HTTP request containing updated activity data
+    # + activityId - Activity ID to update
+    # + return - Updated activity data or error
+    resource function put petitionactivities/[int activityId](http:Request request) returns json|error {
+        log:printInfo("Update petition activity endpoint called for ID: " + activityId.toString());
+
+        json payload = check request.getJsonPayload();
+        return petitionActivitiesService.updatePetitionActivity(activityId, payload);
+    }
+
+    # Delete petition activity by ID
+    #
+    # + activityId - Activity ID to delete
+    # + return - Success message or error
+    resource function delete petitionactivities/[int activityId]() returns json|error {
+        log:printInfo("Delete petition activity endpoint called for ID: " + activityId.toString());
+        return petitionActivitiesService.deletePetitionActivity(activityId);
+    }
+
+    # Get activities by petition ID
+    #
+    # + petitionId - Petition ID to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/petition/[int petitionId]() returns json|error {
+        log:printInfo("Get activities by petition ID endpoint called for petition ID: " + petitionId.toString());
+        return petitionActivitiesService.getActivitiesByPetitionId(petitionId);
+    }
+
+    # Get activities by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/user/[int userId]() returns json|error {
+        log:printInfo("Get activities by user ID endpoint called for user ID: " + userId.toString());
+        return petitionActivitiesService.getActivitiesByUserId(userId);
+    }
+
+    # Get activities by type
+    #
+    # + activityType - Activity type to filter by
+    # + return - Filtered activities list or error
+    resource function get petitionactivities/'type/[string activityType]() returns json|error {
+        log:printInfo("Get activities by type endpoint called for type: " + activityType);
+        return petitionActivitiesService.getActivitiesByType(activityType);
+    }
+
+    # Get recent activities
+    #
+    # + return - Recent activities list or error
+    resource function get petitionactivities/recent() returns json|error {
+        log:printInfo("Get recent petition activities endpoint called");
+        return petitionActivitiesService.getRecentActivities();
+    }
+
+    # Get activity statistics
+    #
+    # + return - Activity statistics or error
+    resource function get petitionactivities/statistics() returns json|error {
+        log:printInfo("Get petition activity statistics endpoint called");
+        return petitionActivitiesService.getActivityStatistics();
+    }
+
+    # Get all policy comments
+    #
+    # + return - Policy comments list or error
+    resource function get policycomments() returns json|error {
+        log:printInfo("Get all policy comments endpoint called");
+        return policyCommentsService.getAllPolicyComments();
+    }
+
+    # Get policy comment by ID
+    #
+    # + commentId - Comment ID to retrieve
+    # + return - Comment data or error
+    resource function get policycomments/[int commentId]() returns json|error {
+        log:printInfo("Get policy comment by ID endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.getPolicyCommentById(commentId);
+    }
+
+    # Create a new policy comment
+    #
+    # + request - HTTP request containing comment data
+    # + return - Created comment data or error
+    resource function post policycomments(http:Request request) returns json|error {
+        log:printInfo("Create policy comment endpoint called");
+
+        json payload = check request.getJsonPayload();
+
+        // Extract required fields
+        string comment = check payload.comment;
+        int userId = check payload.user_id;
+        int policyId = check payload.policy_id;
+
+        // Extract optional fields
+        int? replyId = payload.reply_id is int ? check payload.reply_id : ();
+        string? replyComment = payload.reply_comment is string ? check payload.reply_comment : ();
+
+        return policyCommentsService.createPolicyComment(comment, userId, policyId, replyId, replyComment);
+    }
+
+    # Update policy comment by ID
+    #
+    # + request - HTTP request containing updated comment data
+    # + commentId - Comment ID to update
+    # + return - Updated comment data or error
+    resource function put policycomments/[int commentId](http:Request request) returns json|error {
+        log:printInfo("Update policy comment endpoint called for ID: " + commentId.toString());
+
+        json payload = check request.getJsonPayload();
+        return policyCommentsService.updatePolicyComment(commentId, payload);
+    }
+
+    # Delete policy comment by ID
+    #
+    # + commentId - Comment ID to delete
+    # + return - Success message or error
+    resource function delete policycomments/[int commentId]() returns json|error {
+        log:printInfo("Delete policy comment endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.deletePolicyComment(commentId);
+    }
+
+    # Get comments by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Filtered comments list or error
+    resource function get policycomments/user/[int userId]() returns json|error {
+        log:printInfo("Get comments by user ID endpoint called for user ID: " + userId.toString());
+        return policyCommentsService.getCommentsByUserId(userId);
+    }
+
+    # Get comments by policy ID
+    #
+    # + policyId - Policy ID to filter by
+    # + return - Filtered comments list or error
+    resource function get policycomments/policy/[int policyId]() returns json|error {
+        log:printInfo("Get comments by policy ID endpoint called for policy ID: " + policyId.toString());
+        return policyCommentsService.getCommentsByPolicyId(policyId);
+    }
+
+    # Get replies to a specific comment
+    #
+    # + commentId - Comment ID to get replies for
+    # + return - Replies list or error
+    resource function get policycomments/[int commentId]/replies() returns json|error {
+        log:printInfo("Get replies by comment ID endpoint called for comment ID: " + commentId.toString());
+        return policyCommentsService.getRepliesByCommentId(commentId);
+    }
+
+    # Search comments by keyword
+    #
+    # + keyword - Keyword to search for
+    # + return - Matching comments list or error
+    resource function get policycomments/search/[string keyword]() returns json|error {
+        log:printInfo("Search policy comments endpoint called for keyword: " + keyword);
+        return policyCommentsService.searchComments(keyword);
+    }
+
+    # Get comment statistics
+    #
+    # + return - Comment statistics or error
+    resource function get policycomments/statistics() returns json|error {
+        log:printInfo("Get policy comment statistics endpoint called");
+        return policyCommentsService.getCommentStatistics();
+    }
+
+    # Get recent comments
+    #
+    # + return - Recent comments list or error
+    resource function get policycomments/recent() returns json|error {
+        log:printInfo("Get recent policy comments endpoint called");
+        return policyCommentsService.getRecentComments();
+    }
+
+    # Like a comment
+    #
+    # + commentId - Comment ID to like
+    # + return - Updated comment data or error
+    resource function post policycomments/[int commentId]/like() returns json|error {
+        log:printInfo("Like comment endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.likeComment(commentId);
+    }
+
+    # Get top liked comments
+    #
+    # + limit - Number of top comments to retrieve (default 10)
+    # + return - Top liked comments list or error
+    resource function get policycomments/top/[int 'limit]() returns json|error {
+        log:printInfo("Get top liked comments endpoint called with limit: " + 'limit.toString());
+        return policyCommentsService.getTopLikedComments('limit);
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -814,6 +1486,11 @@ public function main() returns error? {
     log:printInfo("  ➤ Projects CRUD: http://localhost:" + port.toString() + "/api/projects");
     log:printInfo("  ➤ Transactions CRUD: http://localhost:" + port.toString() + "/api/transactions");
     log:printInfo("  ➤ Proposals CRUD: http://localhost:" + port.toString() + "/api/proposals");
+    log:printInfo("  ➤ Users CRUD: http://localhost:" + port.toString() + "/api/users");
+    log:printInfo("  ➤ Reports CRUD: http://localhost:" + port.toString() + "/api/reports");
+    log:printInfo("  ➤ Petitions CRUD: http://localhost:" + port.toString() + "/api/petitions");
+    log:printInfo("  ➤ Petition Activities CRUD: http://localhost:" + port.toString() + "/api/petitionactivities");
+    log:printInfo("  ➤ Policy Comments CRUD: http://localhost:" + port.toString() + "/api/policycomments");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 

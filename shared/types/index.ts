@@ -18,6 +18,22 @@ export enum UserRole {
   OVERSIGHT = "oversight",
 }
 
+// Category-related types
+export interface Category {
+  category_id: number
+  category_name: string
+  allocated_budget: number
+  spent_budget: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CategoryFormData {
+  categoryName: string
+  allocatedBudget: number
+  spentBudget?: number
+}
+
 // Voting-related types
 export interface VotingProposal {
   id: string

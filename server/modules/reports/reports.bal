@@ -1,0 +1,764 @@
+import ballerina/http;
+import ballerina/log;
+import ballerina/time;
+
+# Reports service for handling report operations
+public class ReportsService {
+    private http:Client supabaseClient;
+    private int port;
+    private string supabaseUrl;
+    private string supabaseServiceRoleKey;
+
+    # Initialize reports service
+    #
+    # + supabaseClient - Database client instance
+    # + port - Port number for the service
+    # + supabaseUrl - Supabase URL
+    # + supabaseServiceRoleKey - Supabase service role key
+    public function init(http:Client supabaseClient, int port, string supabaseUrl, string supabaseServiceRoleKey) {
+        self.supabaseClient = supabaseClient;
+        self.port = port;
+        self.supabaseUrl = supabaseUrl; 
+        self.supabaseServiceRoleKey = supabaseServiceRoleKey;
+        log:printInfo("✅ Reports service initialized");
+    }
+
+    # Get headers for HTTP requests with optional prefer header
+    #
+    # + includePrefer - Whether to include Prefer header for POST/PUT operations
+    # + return - Headers map
+    public function getHeaders(boolean includePrefer = false) returns map<string> {
+        map<string> headers = {
+            "apikey": self.supabaseServiceRoleKey,
+            "Authorization": "Bearer " + self.supabaseServiceRoleKey,
+            "Content-Type": "application/json"
+        };
+        
+        if includePrefer {
+            headers["Prefer"] = "return=representation";
+        }
+        
+        return headers;
+    }
+
+    # Get all reports
+    #
+    # + return - Reports list or error
+    public function getAllReports() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*&order=created_time.desc", headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get reports: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get reports: " + e.message());
+        }
+    }
+
+    # Get report by ID
+    #
+    # + reportId - Report ID to retrieve
+    # + return - Report data or error
+    public function getReportById(int reportId) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get report: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report retrieved successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to get report: " + e.message());
+        }
+    }
+
+    # Create a new report
+    #
+    # + reportTitle - Report title
+    # + evidenceHash - Evidence hash for the report
+    # + description - Report description
+    # + priority - Report priority (LOW, MEDIUM, HIGH, CRITICAL)
+    # + assignedTo - Person assigned to handle the report
+    # + userId - User ID who created the report
+    # + return - Created report data or error
+    public function createReport(string reportTitle, string evidenceHash, string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = ()) returns json|error {
+        do {
+            // Validate input
+            if reportTitle.trim().length() == 0 {
+                return error("Report title cannot be empty");
+            }
+            
+            if evidenceHash.trim().length() == 0 {
+                return error("Evidence hash cannot be empty");
+            }
+            
+            // Validate priority
+            string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+            boolean isValidPriority = false;
+            foreach string validPriority in validPriorities {
+                if priority == validPriority {
+                    isValidPriority = true;
+                    break;
+                }
+            }
+            if !isValidPriority {
+                return error("Invalid priority. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
+            }
+            
+            json payload = {
+                "report_title": reportTitle,
+                "priority": priority,
+                "evidence_hash": evidenceHash
+            };
+            
+            // Add optional fields
+            if description is string && description.trim().length() > 0 {
+                payload = check payload.mergeJson({"description": description});
+            }
+            
+            if assignedTo is string && assignedTo.trim().length() > 0 {
+                payload = check payload.mergeJson({"assigned_to": assignedTo});
+            }
+            
+            if userId is int {
+                payload = check payload.mergeJson({"user_id": userId});
+            }
+
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            http:Response response = check self.supabaseClient->post("/rest/v1/reports", payload, headers);
+            
+            if response.statusCode == 201 {
+                // Check if response has content
+                json|error result = response.getJsonPayload();
+                if result is error {
+                    return {
+                        "success": true,
+                        "message": "Report created successfully",
+                        "data": payload,
+                        "timestamp": time:utcNow()[0]
+                    };
+                } else {
+                    json[] reports = check result.ensureType();
+                    if reports.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Report created successfully",
+                            "data": reports[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return {
+                            "success": true,
+                            "message": "Report created successfully",
+                            "data": payload,
+                            "timestamp": time:utcNow()[0]
+                        };
+                    }
+                }
+            } else {
+                return error("Failed to create report: " + response.statusCode.toString());
+            }
+
+        } on fail error e {
+            return error("Failed to create report: " + e.message());
+        }
+    }
+
+    # Update report by ID
+    #
+    # + reportId - Report ID to update
+    # + updateData - Update data as JSON
+    # + return - Updated report data or error
+    public function updateReport(int reportId, json updateData) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            map<json> payloadMap = {};
+            
+            // Build update payload from provided data
+            json|error reportTitle = updateData.report_title;
+            if reportTitle is json {
+                string|error titleStr = reportTitle.ensureType(string);
+                if titleStr is string && titleStr.trim().length() > 0 {
+                    payloadMap["report_title"] = titleStr;
+                } else {
+                    return error("Report title cannot be empty");
+                }
+            }
+            
+            json|error description = updateData.description;
+            if description is json {
+                string|error descStr = description.ensureType(string);
+                if descStr is string {
+                    payloadMap["description"] = descStr;
+                }
+            }
+            
+            json|error priority = updateData.priority;
+            if priority is json {
+                string|error priorityStr = priority.ensureType(string);
+                if priorityStr is string {
+                    // Validate priority
+                    string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+                    boolean isValidPriority = false;
+                    foreach string validPriority in validPriorities {
+                        if priorityStr == validPriority {
+                            isValidPriority = true;
+                            break;
+                        }
+                    }
+                    if isValidPriority {
+                        payloadMap["priority"] = priorityStr;
+                    } else {
+                        return error("Invalid priority. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
+                    }
+                }
+            }
+            
+            json|error assignedTo = updateData.assigned_to;
+            if assignedTo is json {
+                string|error assignedStr = assignedTo.ensureType(string);
+                if assignedStr is string {
+                    payloadMap["assigned_to"] = assignedStr;
+                }
+            }
+            
+            json|error evidenceHash = updateData.evidence_hash;
+            if evidenceHash is json {
+                string|error hashStr = evidenceHash.ensureType(string);
+                if hashStr is string && hashStr.trim().length() > 0 {
+                    payloadMap["evidence_hash"] = hashStr;
+                } else {
+                    return error("Evidence hash cannot be empty");
+                }
+            }
+            
+            json|error resolvedStatus = updateData.resolved_status;
+            if resolvedStatus is json {
+                boolean|error statusBool = resolvedStatus.ensureType(boolean);
+                if statusBool is boolean {
+                    payloadMap["resolved_status"] = statusBool;
+                    // Set resolved_time if marking as resolved
+                    if statusBool {
+                        payloadMap["resolved_time"] = "now()";
+                    }
+                }
+            }
+            
+            if payloadMap.length() == 0 {
+                return error("No valid fields provided for update");
+            }
+            
+            payloadMap["last_updated_time"] = "now()";
+            json payload = payloadMap;
+            
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to update report: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report updated successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to update report: " + e.message());
+        }
+    }
+
+    # Delete report by ID
+    #
+    # + reportId - Report ID to delete
+    # + return - Success message or error
+    public function deleteReport(int reportId) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
+            
+            if response.statusCode != 200 && response.statusCode != 204 {
+                return error("Failed to delete report: " + response.statusCode.toString());
+            }
+            
+            return {
+                "success": true,
+                "message": "Report deleted successfully",
+                "reportId": reportId,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to delete report: " + e.message());
+        }
+    }
+
+    # Get reports by user ID
+    #
+    # + userId - User ID to filter by
+    # + return - Reports list or error
+    public function getReportsByUserId(int userId) returns json|error {
+        // Validate input
+        if userId <= 0 {
+            return error("User ID must be a positive integer");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get reports by user ID: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports by user retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "userId": userId,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get reports by user ID: " + e.message());
+        }
+    }
+
+    # Get reports by priority
+    #
+    # + priority - Priority to filter by
+    # + return - Reports list or error
+    public function getReportsByPriority(string priority) returns json|error {
+        // Validate priority
+        string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+        boolean isValidPriority = false;
+        foreach string validPriority in validPriorities {
+            if priority == validPriority {
+                isValidPriority = true;
+                break;
+            }
+        }
+        if !isValidPriority {
+            return error("Invalid priority. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?priority=eq." + priority + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get reports by priority: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports by priority retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "priority": priority,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get reports by priority: " + e.message());
+        }
+    }
+
+    # Get reports by resolved status
+    #
+    # + resolved - Resolved status to filter by
+    # + return - Reports list or error
+    public function getReportsByStatus(boolean resolved) returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?resolved_status=eq." + resolved.toString() + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get reports by status: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports by status retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "resolved": resolved,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get reports by status: " + e.message());
+        }
+    }
+
+    # Get reports by evidence hash
+    #
+    # + evidenceHash - Evidence hash to search for
+    # + return - Reports list or error
+    public function getReportsByEvidenceHash(string evidenceHash) returns json|error {
+        // Validate input
+        if evidenceHash.trim().length() == 0 {
+            return error("Evidence hash cannot be empty");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get reports by evidence hash: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports by evidence hash retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "evidenceHash": evidenceHash,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get reports by evidence hash: " + e.message());
+        }
+    }
+
+    # Search reports by keyword
+    #
+    # + keyword - Keyword to search for in report title or description
+    # + return - Matching reports or error
+    public function searchReports(string keyword) returns json|error {
+        // Validate input
+        if keyword.trim().length() == 0 {
+            return error("Search keyword cannot be empty");
+        }
+        
+        do {
+            // Search in both report_title and description fields
+            string searchTerm = "%" + keyword + "%";
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to search reports: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Reports search completed successfully",
+                "data": reports,
+                "count": reports.length(),
+                "keyword": keyword,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to search reports: " + e.message());
+        }
+    }
+
+    # Get report statistics
+    #
+    # + return - Report statistics or error
+    public function getReportStatistics() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*", headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get report statistics: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            // Initialize counters
+            map<int> priorityCounts = {};
+            int totalReports = reports.length();
+            int resolvedReports = 0;
+            int unresolvedReports = 0;
+            
+            foreach json report in reports {
+                if report is map<json> {
+                    // Count by priority
+                    json|error priority = report["priority"];
+                    if priority is json {
+                        string priorityStr = priority.toString();
+                        if priorityCounts.hasKey(priorityStr) {
+                            priorityCounts[priorityStr] = priorityCounts.get(priorityStr) + 1;
+                        } else {
+                            priorityCounts[priorityStr] = 1;
+                        }
+                    }
+                    
+                    // Count by resolved status
+                    json|error resolved = report["resolved_status"];
+                    if resolved is json {
+                        boolean|error resolvedBool = resolved.ensureType(boolean);
+                        if resolvedBool is boolean {
+                            if resolvedBool {
+                                resolvedReports += 1;
+                            } else {
+                                unresolvedReports += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            decimal resolutionRate = totalReports > 0 ? (resolvedReports * 100.0) / totalReports : 0.0;
+            
+            return {
+                "success": true,
+                "message": "Report statistics retrieved successfully",
+                "data": {
+                    "total_reports": totalReports,
+                    "resolved_reports": resolvedReports,
+                    "unresolved_reports": unresolvedReports,
+                    "resolution_rate_percentage": resolutionRate,
+                    "priority_breakdown": priorityCounts
+                },
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get report statistics: " + e.message());
+        }
+    }
+
+    # Get recent reports (last 30 days)
+    #
+    # + return - Recent reports list or error
+    public function getRecentReports() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/reports?created_time=gte." + "now() - interval '30 days'" + "&select=*&order=created_time.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get recent reports: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            return {
+                "success": true,
+                "message": "Recent reports retrieved successfully",
+                "data": reports,
+                "count": reports.length(),
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get recent reports: " + e.message());
+        }
+    }
+
+    # Mark report as resolved
+    #
+    # + reportId - Report ID to mark as resolved
+    # + return - Updated report data or error
+    public function resolveReport(int reportId) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            json payload = {
+                "resolved_status": true,
+                "resolved_time": "now()",
+                "last_updated_time": "now()"
+            };
+            
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to resolve report: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report resolved successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to resolve report: " + e.message());
+        }
+    }
+
+    # Mark report as pending (unresolve)
+    #
+    # + reportId - Report ID to mark as pending
+    # + return - Updated report data or error
+    public function unresolveReport(int reportId) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            json payload = {
+                "resolved_status": false,
+                "resolved_time": (),
+                "last_updated_time": "now()"
+            };
+            
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to unresolve report: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report marked as pending successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to unresolve report: " + e.message());
+        }
+    }
+
+    # Validate report data
+    #
+    # + reportData - Report data to validate
+    # + return - Validation result
+    public function validateReportData(json reportData) returns json {
+        string[] errors = [];
+        
+        json|error reportTitle = reportData.report_title;
+        if reportTitle is error || reportTitle.toString().trim().length() == 0 {
+            errors.push("Report title is required and cannot be empty");
+        }
+        
+        json|error evidenceHash = reportData.evidence_hash;
+        if evidenceHash is error || evidenceHash.toString().trim().length() == 0 {
+            errors.push("Evidence hash is required and cannot be empty");
+        }
+        
+        json|error priority = reportData.priority;
+        if priority is json {
+            string|error priorityStr = priority.ensureType(string);
+            if priorityStr is string {
+                string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+                boolean isValidPriority = false;
+                foreach string validPriority in validPriorities {
+                    if priorityStr == validPriority {
+                        isValidPriority = true;
+                        break;
+                    }
+                }
+                if !isValidPriority {
+                    errors.push("Invalid priority. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
+                }
+            }
+        }
+        
+        return {
+            "valid": errors.length() == 0,
+            "errors": errors
+        };
+    }
+}
