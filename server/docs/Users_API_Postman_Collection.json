@@ -1,0 +1,209 @@
+{
+    "info": {
+        "name": "Transparent Governance Platform - Users API",
+        "description": "Complete CRUD operations for Users management",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8080"
+        }
+    ],
+    "item": [
+        {
+            "name": "Users CRUD Operations",
+            "item": [
+                {
+                    "name": "Get All Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get User by ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "1"]
+                        }
+                    }
+                },
+                {
+                    "name": "Create New User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"user_name\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"nic\": \"199512345678\",\n    \"mobile_no\": \"+94771234567\",\n    \"evm\": \"0x1234567890abcdef1234567890abcdef12345678\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/users",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users"]
+                        }
+                    }
+                },
+                {
+                    "name": "Update User",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"user_name\": \"Jane Smith Updated\",\n    \"email\": \"jane.smith.updated@example.com\",\n    \"mobile_no\": \"+94771234568\",\n    \"evm\": \"0xabcdef1234567890abcdef1234567890abcdef12\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/users/1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "1"]
+                        }
+                    }
+                },
+                {
+                    "name": "Delete User",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "1"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Users Search Operations",
+            "item": [
+                {
+                    "name": "Get User by Email",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/email/john.doe@example.com",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "email", "john.doe@example.com"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get User by NIC",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/nic/199512345678",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "nic", "199512345678"]
+                        }
+                    }
+                },
+                {
+                    "name": "Search Users by Keyword",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/search/john",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "search", "john"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Users Analytics",
+            "item": [
+                {
+                    "name": "Get User Statistics",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/statistics",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "statistics"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Recent Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/users/recent",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "users", "recent"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Server Health Checks",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/health",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "health"]
+                        }
+                    }
+                },
+                {
+                    "name": "Server Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/status",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "status"]
+                        }
+                    }
+                },
+                {
+                    "name": "Server Info",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/info",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "info"]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
