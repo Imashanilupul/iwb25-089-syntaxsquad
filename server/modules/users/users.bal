@@ -116,8 +116,9 @@ public class UsersService {
     # + nic - National Identity Card number
     # + mobileNo - Mobile number
     # + evm - EVM address (optional)
+    # + province - Province (optional)
     # + return - Created user data or error
-    public function createUser(string userName, string email, string nic, string mobileNo, string? evm = ()) returns json|error {
+    public function createUser(string userName, string email, string nic, string mobileNo, string? evm = (), string? province = ()) returns json|error {
         do {
             // Validate input
             if userName.trim().length() == 0 {
@@ -151,6 +152,11 @@ public class UsersService {
             // Add EVM address if provided
             if evm is string && evm.trim().length() > 0 {
                 payload = check payload.mergeJson({"evm": evm});
+            }
+
+            // Add Province if provided
+            if province is string && province.trim().length() > 0 {
+                payload = check payload.mergeJson({"Province": province});
             }
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
@@ -257,6 +263,14 @@ public class UsersService {
                 string|error evmStr = evm.ensureType(string);
                 if evmStr is string {
                     payloadMap["evm"] = evmStr;
+                }
+            }
+            
+            json|error province = updateData.Province;
+            if province is json {
+                string|error provinceStr = province.ensureType(string);
+                if provinceStr is string && provinceStr.trim().length() > 0 {
+                    payloadMap["Province"] = provinceStr;
                 }
             }
             
@@ -466,6 +480,23 @@ public class UsersService {
         json|error mobileNo = userData.mobile_no;
         if mobileNo is error || mobileNo.toString().trim().length() == 0 {
             errors.push("Mobile number is required and cannot be empty");
+        }
+        
+        // Validate Province if provided
+        json|error province = userData.Province;
+        if province is json && province.toString().trim().length() > 0 {
+            string[] validProvinces = ["Western", "Central", "Southern", "Northern", "Eastern", "North Western", "North Central", "Uva", "Sabaragamuwa"];
+            string provinceStr = province.toString();
+            boolean isValidProvince = false;
+            foreach string validProvince in validProvinces {
+                if provinceStr == validProvince {
+                    isValidProvince = true;
+                    break;
+                }
+            }
+            if !isValidProvince {
+                errors.push("Invalid province. Must be one of: " + string:'join(", ", ...validProvinces));
+            }
         }
         
         return {

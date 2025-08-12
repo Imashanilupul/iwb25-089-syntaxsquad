@@ -762,8 +762,9 @@ service /api on apiListener {
 
         // Extract optional fields
         string? evm = payload.evm is string ? check payload.evm : ();
+        string? province = payload.Province is string ? check payload.Province : ();
 
-        return usersService.createUser(userName, email, nic, mobileNo, evm);
+        return usersService.createUser(userName, email, nic, mobileNo, evm, province);
     }
 
     # Update user by ID
