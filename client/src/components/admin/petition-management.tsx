@@ -7,21 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { Plus, Edit, Trash2, MessageSquare, Users, TrendingUp, Search, Calendar, Loader2, X } from "lucide-react"
-import { petitionService, type Petition as PetitionType, type CreatePetitionData, type PetitionStatistics } from "@/services/petition"
+import { Search, Calendar, Loader2, X, MessageSquare, Users, TrendingUp } from "lucide-react"
+import { petitionService, type Petition as PetitionType, type PetitionStatistics } from "@/services/petition"
 import { petitionActivityService } from "@/services/petition-activity"
 import { useToast } from "@/hooks/use-toast"
 
@@ -31,15 +21,6 @@ export function PetitionManagement() {
   const [statistics, setStatistics] = useState<PetitionStatistics["data"] | null>(null)
   const { toast } = useToast()
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    required_signature_count: "",
-    deadline: "",
-  })
-
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [sortBy, setSortBy] = useState<"title" | "created_at" | "signature_count">("created_at")
@@ -185,88 +166,6 @@ export function PetitionManagement() {
     setSearchResults("")
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    try {
-      const petitionData: CreatePetitionData = {
-        title: formData.title,
-        description: formData.description,
-        required_signature_count: Number.parseInt(formData.required_signature_count),
-        deadline: formData.deadline || undefined,
-      }
-
-      if (editingId) {
-        // Update existing petition
-        await petitionService.updatePetition(editingId, petitionData)
-        toast({
-          title: "Success",
-          description: "Petition updated successfully.",
-        })
-      } else {
-        // Create new petition
-        await petitionService.createPetition(petitionData)
-        toast({
-          title: "Success",
-          description: "Petition created successfully.",
-        })
-      }
-
-      // Reset form and reload data
-      setFormData({
-        title: "",
-        description: "",
-        required_signature_count: "",
-        deadline: "",
-      })
-      setEditingId(null)
-      setIsDialogOpen(false)
-      loadPetitions()
-      loadStatistics()
-    } catch (error) {
-      console.error("Submit failed:", error)
-      toast({
-        title: "Error",
-        description: editingId ? "Failed to update petition." : "Failed to create petition.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleEdit = (petition: PetitionType) => {
-    setFormData({
-      title: petition.title,
-      description: petition.description,
-      required_signature_count: petition.required_signature_count.toString(),
-      deadline: petition.deadline || "",
-    })
-    setEditingId(petition.id)
-    setIsDialogOpen(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this petition?")) {
-      return
-    }
-
-    try {
-      await petitionService.deletePetition(id)
-      toast({
-        title: "Success",
-        description: "Petition deleted successfully.",
-      })
-      loadPetitions()
-      loadStatistics()
-    } catch (error) {
-      console.error("Delete failed:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete petition.",
-        variant: "destructive",
-      })
-    }
-  }
-
   const getStatusColor = (status: string) => {
     switch (status.toUpperCase()) {
       case "ACTIVE":
@@ -305,94 +204,9 @@ export function PetitionManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">National Petition Management</h2>
-          <p className="text-slate-600">Manage citizen petitions across all provinces and districts</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                setFormData({
-                  title: "",
-                  description: "",
-                  required_signature_count: "",
-                  deadline: "",
-                })
-                setEditingId(null)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Petition
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Petition" : "Add New Petition"}</DialogTitle>
-              <DialogDescription>
-                {editingId ? "Update the petition details" : "Create a new citizen petition"}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Petition Title</Label>
-                <Input
-                  id="title"
-                  placeholder="e.g., Preserve Sinharaja Forest Reserve"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Detailed description of the petition..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="required_signature_count">Required Signatures</Label>
-                  <Input
-                    id="required_signature_count"
-                    type="number"
-                    placeholder="e.g., 100000"
-                    value={formData.required_signature_count}
-                    onChange={(e) => setFormData({ ...formData, required_signature_count: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="deadline">Deadline (Optional)</Label>
-                  <Input
-                    id="deadline"
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                  {editingId ? "Update Petition" : "Add Petition"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">National Petition Management</h2>
+        <p className="text-slate-600">Manage citizen petitions across all provinces and districts</p>
       </div>
 
       {/* Search and Filters */}
@@ -536,7 +350,6 @@ export function PetitionManagement() {
                   <TableHead>Status</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -544,6 +357,9 @@ export function PetitionManagement() {
                   const currentSignatures = getSignatureCount(petition.id)
                   const requiredSignatures = petition.required_signature_count
                   const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
+                  
+                  // Determine display status - show "completed" if progress is 100%
+                  const displayStatus = progress >= 100 ? "COMPLETED" : petition.status
 
                   return (
                     <TableRow key={petition.id}>
@@ -554,8 +370,8 @@ export function PetitionManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getStatusColor(petition.status)} variant="secondary">
-                          {formatStatus(petition.status)}
+                        <Badge className={getStatusColor(displayStatus)} variant="secondary">
+                          {formatStatus(displayStatus)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -569,16 +385,6 @@ export function PetitionManagement() {
                         </div>
                       </TableCell>
                       <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(petition)}>
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDelete(petition.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
                   )
                 })}
