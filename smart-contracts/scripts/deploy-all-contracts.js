@@ -30,8 +30,14 @@ async function main() {
   const policies = await Policies.deploy(authRegistry.address);
   console.log("✅ Policies deployed to:", policies.address);
 
+  // Deploy Proposals contract
+  console.log("\n5. Deploying Proposals...");
+  const Proposals = await hre.ethers.getContractFactory("Proposals");
+  const proposals = await Proposals.deploy(authRegistry.address);
+  console.log("✅ Proposals deployed to:", proposals.address);
+
   // Authorize the deployer
-  console.log("\n5. Authorizing deployer address...");
+  console.log("\n6. Authorizing deployer address...");
   await authRegistry.authorizeUser(deployer.address);
   console.log("✅ Deployer authorized successfully");
 
@@ -41,6 +47,7 @@ async function main() {
   console.log("Petitions:     ", petitions.address);
   console.log("Reports:       ", reports.address);
   console.log("Policies:      ", policies.address);
+  console.log("Proposals:     ", proposals.address);
   console.log("Authorized:    ", [deployer.address]);
 
 
