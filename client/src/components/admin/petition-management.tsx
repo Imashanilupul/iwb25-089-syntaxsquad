@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,199 +20,272 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { Plus, Edit, Trash2, MessageSquare, Users, TrendingUp, Search, Calendar } from "lucide-react"
-
-interface Petition {
-  id: number
-  title: string
-  description: string
-  requiredSignatureCount: number
-  signatureCount: number
-  creatorId: number
-  creatorName: string
-  status: string
-  category: string
-  createdDate: string
-  province: string
-}
+import { Plus, Edit, Trash2, MessageSquare, Users, TrendingUp, Search, Calendar, Loader2, X } from "lucide-react"
+import { petitionService, type Petition as PetitionType, type CreatePetitionData, type PetitionStatistics } from "@/services/petition"
+import { petitionActivityService } from "@/services/petition-activity"
+import { useToast } from "@/hooks/use-toast"
 
 export function PetitionManagement() {
-  const [petitions, setPetitions] = useState<Petition[]>([
-    {
-      id: 1,
-      title: "Preserve Sinharaja Forest Reserve",
-      description:
-        "Petition to strengthen protection measures for UNESCO World Heritage Site and prevent deforestation",
-      requiredSignatureCount: 100000,
-      signatureCount: 84560,
-      creatorId: 1,
-      creatorName: "Environmental Protection Society",
-      status: "Active",
-      category: "Environment",
-      createdDate: "2024-01-20",
-      province: "Sabaragamuwa Province",
-    },
-    {
-      id: 2,
-      title: "Improve Public Transport in Colombo",
-      description: "Petition for better bus services and railway connectivity in the Western Province",
-      requiredSignatureCount: 50000,
-      signatureCount: 67890,
-      creatorId: 2,
-      creatorName: "Commuters Association",
-      status: "Threshold Met",
-      category: "Transport",
-      createdDate: "2024-01-15",
-      province: "Western Province",
-    },
-    {
-      id: 3,
-      title: "Free WiFi in All Public Schools",
-      description: "Petition to provide internet connectivity to all government schools across Sri Lanka",
-      requiredSignatureCount: 75000,
-      signatureCount: 45230,
-      creatorId: 3,
-      creatorName: "Parents-Teachers Association",
-      status: "Active",
-      category: "Education",
-      createdDate: "2024-01-10",
-      province: "All Provinces",
-    },
-    {
-      id: 4,
-      title: "Establish Cancer Treatment Centers",
-      description: "Petition to establish specialized cancer treatment centers in all provinces",
-      requiredSignatureCount: 200000,
-      signatureCount: 234567,
-      creatorId: 4,
-      creatorName: "Cancer Patients Support Group",
-      status: "Implemented",
-      category: "Healthcare",
-      createdDate: "2023-12-01",
-      province: "All Provinces",
-    },
-  ])
+  const [petitions, setPetitions] = useState<PetitionType[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statistics, setStatistics] = useState<PetitionStatistics["data"] | null>(null)
+  const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    requiredSignatureCount: "",
-    signatureCount: "",
-    creatorName: "",
-    status: "Active",
-    category: "",
-    province: "",
+    required_signature_count: "",
+    deadline: "",
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-  const [filterCategory, setFilterCategory] = useState("all")
+  const [sortBy, setSortBy] = useState<"title" | "created_at" | "signature_count">("created_at")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [searchResults, setSearchResults] = useState<string>("")
+  const [signatureCounts, setSignatureCounts] = useState<Record<number, number>>({})
 
-  const provinces = [
-    "Western Province",
-    "Central Province",
-    "Southern Province",
-    "Northern Province",
-    "Eastern Province",
-    "North Western Province",
-    "North Central Province",
-    "Uva Province",
-    "Sabaragamuwa Province",
-    "All Provinces",
-  ]
+  const petitionStatuses = ["ACTIVE", "COMPLETED", "EXPIRED", "CANCELLED"]
 
-  const categories = [
-    "Environment",
-    "Transport",
-    "Education",
-    "Healthcare",
-    "Infrastructure",
-    "Social Welfare",
-    "Economic Development",
-    "Governance",
-    "Technology",
-    "Agriculture",
-  ]
-
-  const petitionStatuses = ["Active", "Threshold Met", "Under Review", "Approved", "Implemented", "Rejected", "Expired"]
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const newPetition: Petition = {
-      id: editingId || Date.now(),
-      title: formData.title,
-      description: formData.description,
-      requiredSignatureCount: Number.parseInt(formData.requiredSignatureCount),
-      signatureCount: Number.parseInt(formData.signatureCount || "0"),
-      creatorId: Date.now(),
-      creatorName: formData.creatorName,
-      status: formData.status,
-      category: formData.category,
-      createdDate: new Date().toISOString().split("T")[0],
-      province: formData.province,
+  // Debounced search function
+  const debounce = (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout
+    return (...args: any[]) => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => func(...args), wait)
     }
-
-    if (editingId) {
-      setPetitions(petitions.map((petition) => (petition.id === editingId ? newPetition : petition)))
-    } else {
-      setPetitions([...petitions, newPetition])
-    }
-
-    setFormData({
-      title: "",
-      description: "",
-      requiredSignatureCount: "",
-      signatureCount: "",
-      creatorName: "",
-      status: "Active",
-      category: "",
-      province: "",
-    })
-    setEditingId(null)
-    setIsDialogOpen(false)
   }
 
-  const handleEdit = (petition: Petition) => {
+  // Create debounced search function
+  const debouncedSearch = useCallback(
+    debounce(() => {
+      handleSearch()
+    }, 300),
+    [searchTerm, filterStatus, sortBy, sortOrder]
+  )
+
+  // Load petitions and statistics
+  useEffect(() => {
+    loadPetitions()
+    loadStatistics()
+  }, [])
+
+  // Load signature counts after petitions are loaded
+  useEffect(() => {
+    if (petitions.length > 0) {
+      loadSignatureCounts()
+    }
+  }, [petitions])
+
+  // Apply filters when search term or filters change
+  useEffect(() => {
+    debouncedSearch()
+  }, [searchTerm, filterStatus, sortBy, sortOrder, debouncedSearch])
+
+  const loadPetitions = async () => {
+    try {
+      setLoading(true)
+      const response = await petitionService.getAllPetitions()
+      setPetitions(response.data)
+    } catch (error) {
+      console.error("Failed to load petitions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load petitions. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadStatistics = async () => {
+    try {
+      const response = await petitionService.getPetitionStatistics()
+      setStatistics(response.data)
+    } catch (error) {
+      console.error("Failed to load statistics:", error)
+    }
+  }
+
+  const loadSignatureCounts = async () => {
+    try {
+      const counts: Record<number, number> = {}
+      // Load signature counts for all current petitions
+      const currentPetitions = petitions
+      if (currentPetitions.length === 0) return
+      
+      for (const petition of currentPetitions) {
+        try {
+          const response = await petitionActivityService.getActivitiesByPetitionId(petition.id)
+          // Sum up signature counts from activities
+          const totalSignatures = response.data
+            .filter(activity => activity.activity_type === 'SIGNATURE')
+            .reduce((sum, activity) => sum + activity.signature_count, 0)
+          counts[petition.id] = totalSignatures
+        } catch (error) {
+          console.error(`Failed to load signatures for petition ${petition.id}:`, error)
+          counts[petition.id] = petition.signature_count || 0
+        }
+      }
+      setSignatureCounts(counts)
+    } catch (error) {
+      console.error("Failed to load signature counts:", error)
+    }
+  }
+
+  const handleSearch = async () => {
+    try {
+      setLoading(true)
+      
+      // Use advanced search with filters - this will handle all cases including empty filters
+      const response = await petitionService.searchPetitionsAdvanced({
+        keyword: searchTerm || undefined,
+        status: filterStatus !== "all" ? filterStatus : undefined,
+        sortBy,
+        sortOrder,
+      })
+      
+      // Set the filtered petitions as the main display data
+      setPetitions(response.data)
+      
+      // Update search results indicator
+      const activeFilters = []
+      if (searchTerm) activeFilters.push(`keyword: "${searchTerm}"`)
+      if (filterStatus !== "all") activeFilters.push(`status: ${filterStatus}`)
+      
+      if (activeFilters.length > 0) {
+        setSearchResults(`Found ${response.data.length} petitions (filtered by ${activeFilters.join(', ')})`)
+      } else {
+        setSearchResults(`Showing all ${response.data.length} petitions`)
+      }
+      
+    } catch (error) {
+      console.error("Search failed:", error)
+      toast({
+        title: "Error",
+        description: "Search failed. Please try again.",
+        variant: "destructive",
+      })
+      // On error, clear results
+      setPetitions([])
+      setSearchResults("Search failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setFilterStatus("all")
+    setSortBy("created_at")
+    setSortOrder("desc")
+    setSearchResults("")
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      const petitionData: CreatePetitionData = {
+        title: formData.title,
+        description: formData.description,
+        required_signature_count: Number.parseInt(formData.required_signature_count),
+        deadline: formData.deadline || undefined,
+      }
+
+      if (editingId) {
+        // Update existing petition
+        await petitionService.updatePetition(editingId, petitionData)
+        toast({
+          title: "Success",
+          description: "Petition updated successfully.",
+        })
+      } else {
+        // Create new petition
+        await petitionService.createPetition(petitionData)
+        toast({
+          title: "Success",
+          description: "Petition created successfully.",
+        })
+      }
+
+      // Reset form and reload data
+      setFormData({
+        title: "",
+        description: "",
+        required_signature_count: "",
+        deadline: "",
+      })
+      setEditingId(null)
+      setIsDialogOpen(false)
+      loadPetitions()
+      loadStatistics()
+    } catch (error) {
+      console.error("Submit failed:", error)
+      toast({
+        title: "Error",
+        description: editingId ? "Failed to update petition." : "Failed to create petition.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEdit = (petition: PetitionType) => {
     setFormData({
       title: petition.title,
       description: petition.description,
-      requiredSignatureCount: petition.requiredSignatureCount.toString(),
-      signatureCount: petition.signatureCount.toString(),
-      creatorName: petition.creatorName,
-      status: petition.status,
-      category: petition.category,
-      province: petition.province,
+      required_signature_count: petition.required_signature_count.toString(),
+      deadline: petition.deadline || "",
     })
     setEditingId(petition.id)
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: number) => {
-    setPetitions(petitions.filter((petition) => petition.id !== id))
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this petition?")) {
+      return
+    }
+
+    try {
+      await petitionService.deletePetition(id)
+      toast({
+        title: "Success",
+        description: "Petition deleted successfully.",
+      })
+      loadPetitions()
+      loadStatistics()
+    } catch (error) {
+      console.error("Delete failed:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete petition.",
+        variant: "destructive",
+      })
+    }
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
+    switch (status.toUpperCase()) {
+      case "ACTIVE":
         return "bg-blue-100 text-blue-800"
-      case "Threshold Met":
+      case "COMPLETED":
         return "bg-green-100 text-green-800"
-      case "Under Review":
+      case "EXPIRED":
         return "bg-yellow-100 text-yellow-800"
-      case "Approved":
-        return "bg-emerald-100 text-emerald-800"
-      case "Implemented":
-        return "bg-purple-100 text-purple-800"
-      case "Rejected":
+      case "CANCELLED":
         return "bg-red-100 text-red-800"
-      case "Expired":
-        return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  const formatStatus = (status: string) => {
+    return status.replace("_", " ").split(" ").map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(" ")
   }
 
   const formatNumber = (num: number) => {
@@ -224,14 +297,10 @@ export function PetitionManagement() {
     return num.toString()
   }
 
-  const filteredPetitions = petitions.filter((petition) => {
-    const matchesSearch =
-      petition.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      petition.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || petition.status === filterStatus
-    const matchesCategory = filterCategory === "all" || petition.category === filterCategory
-    return matchesSearch && matchesStatus && matchesCategory
-  })
+  // Get signature count for a petition from the loaded data
+  const getSignatureCount = (petitionId: number) => {
+    return signatureCounts[petitionId] || 0
+  }
 
   return (
     <div className="space-y-6">
@@ -248,12 +317,8 @@ export function PetitionManagement() {
                 setFormData({
                   title: "",
                   description: "",
-                  requiredSignatureCount: "",
-                  signatureCount: "",
-                  creatorName: "",
-                  status: "Active",
-                  category: "",
-                  province: "",
+                  required_signature_count: "",
+                  deadline: "",
                 })
                 setEditingId(null)
               }}
@@ -295,98 +360,25 @@ export function PetitionManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="province">Province</Label>
-                  <Select
-                    value={formData.province}
-                    onValueChange={(value) => setFormData({ ...formData, province: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select province" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {provinces.map((province) => (
-                        <SelectItem key={province} value={province}>
-                          {province}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="requiredSignatureCount">Required Signatures</Label>
+                  <Label htmlFor="required_signature_count">Required Signatures</Label>
                   <Input
-                    id="requiredSignatureCount"
+                    id="required_signature_count"
                     type="number"
                     placeholder="e.g., 100000"
-                    value={formData.requiredSignatureCount}
-                    onChange={(e) => setFormData({ ...formData, requiredSignatureCount: e.target.value })}
+                    value={formData.required_signature_count}
+                    onChange={(e) => setFormData({ ...formData, required_signature_count: e.target.value })}
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signatureCount">Current Signatures</Label>
+                  <Label htmlFor="deadline">Deadline (Optional)</Label>
                   <Input
-                    id="signatureCount"
-                    type="number"
-                    placeholder="e.g., 84560"
-                    value={formData.signatureCount}
-                    onChange={(e) => setFormData({ ...formData, signatureCount: e.target.value })}
+                    id="deadline"
+                    type="date"
+                    value={formData.deadline}
+                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="creatorName">Creator/Organization</Label>
-                  <Input
-                    id="creatorName"
-                    placeholder="e.g., Environmental Protection Society"
-                    value={formData.creatorName}
-                    onChange={(e) => setFormData({ ...formData, creatorName: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {petitionStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 
@@ -404,29 +396,24 @@ export function PetitionManagement() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex gap-4">
-        <div className="relative flex-1">
+      <div className="flex gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-64">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search petitions..."
+            placeholder="Search petitions by title or description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 pr-10"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Filter by status" />
@@ -435,12 +422,43 @@ export function PetitionManagement() {
             <SelectItem value="all">All Statuses</SelectItem>
             {petitionStatuses.map((status) => (
               <SelectItem key={status} value={status}>
-                {status}
+                {formatStatus(status)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <Select value={sortBy} onValueChange={(value: "title" | "created_at" | "signature_count") => setSortBy(value)}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_at">Date</SelectItem>
+            <SelectItem value="title">Title</SelectItem>
+            <SelectItem value="signature_count">Signatures</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortOrder} onValueChange={(value: "asc" | "desc") => setSortOrder(value)}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Order" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="desc">Newest</SelectItem>
+            <SelectItem value="asc">Oldest</SelectItem>
+          </SelectContent>
+        </Select>
+        {(searchTerm || filterStatus !== "all") && (
+          <Button variant="outline" onClick={clearFilters} className="whitespace-nowrap">
+            Clear Filters
+          </Button>
+        )}
       </div>
+
+      {/* Results indicator */}
+      {searchResults && (
+        <div className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
+          {searchResults}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -450,7 +468,7 @@ export function PetitionManagement() {
             <MessageSquare className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{petitions.length}</div>
+            <div className="text-2xl font-bold">{statistics?.total_petitions || petitions.length}</div>
             <p className="text-xs text-slate-500">All time</p>
           </CardContent>
         </Card>
@@ -461,7 +479,10 @@ export function PetitionManagement() {
             <Calendar className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{petitions.filter((p) => p.status === "Active").length}</div>
+            <div className="text-2xl font-bold">
+              {statistics?.status_breakdown?.ACTIVE || 
+               petitions.filter((p) => p.status.toUpperCase() === "ACTIVE").length}
+            </div>
             <p className="text-xs text-slate-500">Currently collecting signatures</p>
           </CardContent>
         </Card>
@@ -473,7 +494,8 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatNumber(petitions.reduce((sum, petition) => sum + petition.signatureCount, 0))}
+              {formatNumber(statistics?.total_signatures || 
+                Object.values(signatureCounts).reduce((sum, count) => sum + count, 0))}
             </div>
             <p className="text-xs text-slate-500">Citizen participation</p>
           </CardContent>
@@ -481,14 +503,15 @@ export function PetitionManagement() {
 
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round((petitions.filter((p) => p.status === "Implemented").length / petitions.length) * 100)}%
+              {statistics?.completion_rate_percentage?.toFixed(0) || 
+               Math.round((petitions.filter((p) => p.status === "COMPLETED").length / Math.max(petitions.length, 1)) * 100)}%
             </div>
-            <p className="text-xs text-slate-500">Implemented petitions</p>
+            <p className="text-xs text-slate-500">Completed petitions</p>
           </CardContent>
         </Card>
       </div>
@@ -496,67 +519,72 @@ export function PetitionManagement() {
       {/* Petitions Table */}
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle>National Petitions ({filteredPetitions.length})</CardTitle>
+          <CardTitle>National Petitions ({petitions.length})</CardTitle>
           <CardDescription>Citizen petitions from across all provinces and districts</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Petition Title</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Province</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPetitions.map((petition) => {
-                const progress = Math.min((petition.signatureCount / petition.requiredSignatureCount) * 100, 100)
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading petitions...</span>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Petition Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {petitions.map((petition) => {
+                  const currentSignatures = getSignatureCount(petition.id)
+                  const requiredSignatures = petition.required_signature_count
+                  const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
 
-                return (
-                  <TableRow key={petition.id}>
-                    <TableCell className="font-medium max-w-xs">
-                      <div>
-                        <p className="font-semibold">{petition.title}</p>
-                        <p className="text-sm text-slate-500">By {petition.creatorName}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{petition.category}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span>{formatNumber(petition.signatureCount)}</span>
-                          <span>{formatNumber(petition.requiredSignatureCount)}</span>
+                  return (
+                    <TableRow key={petition.id}>
+                      <TableCell className="font-medium max-w-xs">
+                        <div>
+                          <p className="font-semibold">{petition.title}</p>
+                          <p className="text-sm text-slate-500 truncate">{petition.description}</p>
                         </div>
-                        <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(petition.status)} variant="secondary">
-                        {petition.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{petition.province}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(petition)}>
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(petition.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(petition.status)} variant="secondary">
+                          {formatStatus(petition.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span>{formatNumber(currentSignatures)}</span>
+                            <span>{formatNumber(requiredSignatures)}</span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                          <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(petition)}>
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleDelete(petition.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

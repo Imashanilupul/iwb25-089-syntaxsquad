@@ -677,6 +677,50 @@ public class ReportsService {
         }
     }
 
+    # Mark report as pending (unresolve)
+    #
+    # + reportId - Report ID to mark as pending
+    # + return - Updated report data or error
+    public function unresolveReport(int reportId) returns json|error {
+        // Validate input
+        if reportId <= 0 {
+            return error("Report ID must be a positive integer");
+        }
+        
+        do {
+            json payload = {
+                "resolved_status": false,
+                "resolved_time": (),
+                "last_updated_time": "now()"
+            };
+            
+            map<string> headers = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to unresolve report: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report marked as pending successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to unresolve report: " + e.message());
+        }
+    }
+
     # Validate report data
     #
     # + reportData - Report data to validate

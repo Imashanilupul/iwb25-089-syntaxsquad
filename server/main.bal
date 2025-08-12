@@ -46,7 +46,7 @@ policy_comments:PolicyCommentsService policyCommentsService = new (supabaseClien
         allowOrigins: ["http://localhost:3000"],
         allowCredentials: true,
         allowHeaders: ["Content-Type", "Authorization"],
-        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     }
 }
 service /api on apiListener {
@@ -958,6 +958,15 @@ service /api on apiListener {
     resource function post reports/[int reportId]/resolve() returns json|error {
         log:printInfo("Resolve report endpoint called for ID: " + reportId.toString());
         return reportsService.resolveReport(reportId);
+    }
+
+    # Mark report as pending (unresolve)
+    #
+    # + reportId - Report ID to mark as pending
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/unresolve() returns json|error {
+        log:printInfo("Unresolve report endpoint called for ID: " + reportId.toString());
+        return reportsService.unresolveReport(reportId);
     }
 
     # Get all petitions
