@@ -762,8 +762,9 @@ service /api on apiListener {
 
         // Extract optional fields
         string? evm = payload.evm is string ? check payload.evm : ();
+        string? province = payload.Province is string ? check payload.Province : ();
 
-        return usersService.createUser(userName, email, nic, mobileNo, evm);
+        return usersService.createUser(userName, email, nic, mobileNo, evm, province);
     }
 
     # Update user by ID
@@ -820,6 +821,14 @@ service /api on apiListener {
     resource function get users/statistics() returns json|error {
         log:printInfo("Get user statistics endpoint called");
         return usersService.getUserStatistics();
+    }
+
+    # Get province statistics
+    #
+    # + return - Province statistics or error
+    resource function get users/provinces() returns json|error {
+        log:printInfo("Get province statistics endpoint called");
+        return usersService.getProvinceStatistics();
     }
 
     # Get recent users

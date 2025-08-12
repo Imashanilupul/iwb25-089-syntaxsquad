@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "@/hooks/use-toast"
 import {
   DollarSign,
   FileText,
@@ -14,48 +15,54 @@ import {
   CheckCircle,
   Clock,
   MapPin,
+  Loader2,
 } from "lucide-react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
+import { adminService, type AdminDashboardData } from "@/services/admin"
 
 export function AdminOverview() {
-  // Mock data - in real app, this would come from your database
-  const [stats, setStats] = useState({
-    totalBudget: 3450000000000, // Rs. 3.45T - National Budget
-    totalSpent: 2460000000000, // Rs. 2.46T
-    activeProjects: 1247, // National projects across all provinces
-    completedProjects: 892,
-    activeProposals: 23, // Parliamentary and provincial proposals
-    totalVotes: 2458920, // Citizens participating in digital voting
-    activePolicies: 156, // Active policies across all ministries
-    totalComments: 45200, // Public consultation comments
-    pendingReports: 89, // Whistleblowing reports pending investigation
-    resolvedReports: 1234,
-    activePetitions: 67, // Public petitions
-    totalSignatures: 890000, // Total petition signatures
-    totalUsers: 2100000, // Registered citizens (about 10% of population)
-    provinces: 9, // All 9 provinces
-    districts: 25, // All 25 districts
-    ministries: 28, // All government ministries
-    localAuthorities: 341, // Municipal councils, urban councils, pradeshiya sabhas
-  })
+  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const categoryData = [
-    { name: "Education", allocated: 850000000000, spent: 567000000000 },
-    { name: "Health", allocated: 650000000000, spent: 423000000000 },
-    { name: "Infrastructure", allocated: 1200000000000, spent: 890000000000 },
-    { name: "Defense", allocated: 450000000000, spent: 398000000000 },
-    { name: "Agriculture", allocated: 300000000000, spent: 178000000000 },
-  ]
+  useEffect(() => {
+    loadDashboardData()
 
-  const monthlySpending = [
-    { month: "Jan", amount: 245000000000 },
-    { month: "Feb", amount: 289000000000 },
-    { month: "Mar", amount: 334000000000 },
-    { month: "Apr", amount: 298000000000 },
-    { month: "May", amount: 412000000000 },
-    { month: "Jun", amount: 387000000000 },
-  ]
+    // Set up auto-refresh every 30 seconds for real-time updates
+    const refreshInterval = setInterval(() => {
+      loadDashboardData(true) // Silent refresh (no loading state)
+    }, 30000)
+
+    return () => clearInterval(refreshInterval)
+  }, [])
+
+  const loadDashboardData = async (silent = false) => {
+    try {
+      if (!silent) {
+        setIsLoading(true)
+        setError(null)
+      }
+      const data = await adminService.getDashboardData()
+      setDashboardData(data)
+      setLastUpdated(new Date())
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      if (!silent) {
+        setError('Failed to load dashboard data')
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      if (!silent) {
+        setIsLoading(false)
+      }
+    }
+  }
 
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000000000) {
@@ -77,12 +84,52 @@ export function AdminOverview() {
     return num.toString()
   }
 
+  const getIconComponent = (iconName: string) => {
+    const icons: any = {
+      DollarSign,
+      Building,
+      Vote,
+      AlertTriangle,
+      FileText,
+      MessageSquare
+    }
+    return icons[iconName] || FileText
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !dashboardData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-slate-600 mb-4">{error || 'Failed to load dashboard data'}</p>
+          <button 
+            onClick={() => loadDashboardData(false)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Admin Dashboard</h2>
-        <p className="text-slate-600">Overview of all platform data and statistics</p>
+        <h2 className="text-2xl font-bold text-slate-900">Transparency Dashboard</h2>
+        <p className="text-slate-600">Blockchain-powered governance insights and aggregated public data</p>
       </div>
 
       {/* Main Stats Grid */}
@@ -93,9 +140,9 @@ export function AdminOverview() {
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.totalBudget)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(dashboardData.totalBudget)}</div>
             <p className="text-xs text-slate-500">
-              Spent: {formatCurrency(stats.totalSpent)} ({Math.round((stats.totalSpent / stats.totalBudget) * 100)}%)
+              Spent: {formatCurrency(dashboardData.totalSpent)} ({dashboardData.budgetUtilization}%)
             </p>
           </CardContent>
         </Card>
@@ -106,8 +153,8 @@ export function AdminOverview() {
             <Building className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeProjects}</div>
-            <p className="text-xs text-slate-500">Active • {stats.completedProjects} completed</p>
+            <div className="text-2xl font-bold">{dashboardData.activeProjects}</div>
+            <p className="text-xs text-slate-500">Active • {dashboardData.completedProjects} completed</p>
           </CardContent>
         </Card>
 
@@ -117,8 +164,8 @@ export function AdminOverview() {
             <Vote className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeProposals}</div>
-            <p className="text-xs text-slate-500">{formatNumber(stats.totalVotes)} total votes</p>
+            <div className="text-2xl font-bold">{dashboardData.activeProposals}</div>
+            <p className="text-xs text-slate-500">{formatNumber(dashboardData.totalVotes)} total votes</p>
           </CardContent>
         </Card>
 
@@ -128,13 +175,13 @@ export function AdminOverview() {
             <Users className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(stats.totalUsers)}</div>
+            <div className="text-2xl font-bold">{formatNumber(dashboardData.totalUsers)}</div>
             <p className="text-xs text-slate-500">Registered citizens</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Add after existing stats cards */}
+      {/* Geographic and Government Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -142,9 +189,9 @@ export function AdminOverview() {
             <MapPin className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.provinces}</div>
+            <div className="text-2xl font-bold">{dashboardData.provinces}</div>
             <p className="text-xs text-slate-500">
-              {stats.districts} districts • {stats.localAuthorities} local authorities
+              {dashboardData.districts} districts • 341 local authorities
             </p>
           </CardContent>
         </Card>
@@ -155,7 +202,7 @@ export function AdminOverview() {
             <Building className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.ministries}</div>
+            <div className="text-2xl font-bold">28</div>
             <p className="text-xs text-slate-500">Ministries and departments</p>
           </CardContent>
         </Card>
@@ -169,8 +216,8 @@ export function AdminOverview() {
             <FileText className="h-4 w-4 text-indigo-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activePolicies}</div>
-            <p className="text-xs text-slate-500">{formatNumber(stats.totalComments)} comments</p>
+            <div className="text-2xl font-bold">{dashboardData.activePolicies}</div>
+            <p className="text-xs text-slate-500">{formatNumber(dashboardData.totalComments)} comments</p>
           </CardContent>
         </Card>
 
@@ -180,8 +227,8 @@ export function AdminOverview() {
             <AlertTriangle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingReports}</div>
-            <p className="text-xs text-slate-500">Pending • {stats.resolvedReports} resolved</p>
+            <div className="text-2xl font-bold">{dashboardData.pendingReports}</div>
+            <p className="text-xs text-slate-500">Pending • {dashboardData.resolvedReports} resolved</p>
           </CardContent>
         </Card>
 
@@ -191,8 +238,8 @@ export function AdminOverview() {
             <MessageSquare className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activePetitions}</div>
-            <p className="text-xs text-slate-500">{formatNumber(stats.totalSignatures)} signatures</p>
+            <div className="text-2xl font-bold">{dashboardData.activePetitions}</div>
+            <p className="text-xs text-slate-500">{formatNumber(dashboardData.totalSignatures)} signatures</p>
           </CardContent>
         </Card>
 
@@ -202,8 +249,8 @@ export function AdminOverview() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">99.8%</div>
-            <p className="text-xs text-slate-500">Uptime • All systems operational</p>
+            <div className="text-2xl font-bold">{dashboardData.systemHealth.uptime}%</div>
+            <p className="text-xs text-slate-500">Uptime • All systems {dashboardData.systemHealth.status}</p>
           </CardContent>
         </Card>
       </div>
@@ -221,12 +268,26 @@ export function AdminOverview() {
                 allocated: { label: "Allocated", color: "#3b82f6" },
                 spent: { label: "Spent", color: "#10b981" },
               }}
-              className="h-64"
+              className="h-80"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData}>
-                  <XAxis dataKey="name" />
-                  <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <BarChart 
+                  data={dashboardData.categoryData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                >
+                  <XAxis 
+                    dataKey="name" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    interval={0}
+                    fontSize={12}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis 
+                    tickFormatter={(value) => formatCurrency(value)}
+                    fontSize={12}
+                  />
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     formatter={(value) => [formatCurrency(Number(value)), ""]}
@@ -249,17 +310,34 @@ export function AdminOverview() {
               config={{
                 amount: { label: "Amount", color: "#8b5cf6" },
               }}
-              className="h-64"
+              className="h-80"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlySpending}>
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <LineChart 
+                  data={dashboardData.monthlySpending}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                >
+                  <XAxis 
+                    dataKey="month" 
+                    fontSize={12}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis 
+                    tickFormatter={(value) => formatCurrency(value)}
+                    fontSize={12}
+                  />
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     formatter={(value) => [formatCurrency(Number(value)), ""]}
                   />
-                  <Line type="monotone" dataKey="amount" stroke="#8b5cf6" strokeWidth={2} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={3}
+                    dot={{ fill: "#8b5cf6", strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: "#8b5cf6", strokeWidth: 2 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </ChartContainer>
@@ -270,46 +348,60 @@ export function AdminOverview() {
       {/* Recent Activity */}
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Recent Data Updates
-          </CardTitle>
-          <CardDescription>Latest changes to platform data</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              <CardTitle>Recent Data Updates</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              {lastUpdated && (
+                <span className="text-xs text-slate-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={() => loadDashboardData(false)}
+                className="p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                title="Refresh data"
+              >
+                <Clock className="h-4 w-4 text-slate-600" />
+              </button>
+            </div>
+          </div>
+          <CardDescription>Latest changes to platform data (auto-refreshes every 30 seconds)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <DollarSign className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="font-medium">Budget updated for Education category</p>
-                  <p className="text-sm text-slate-500">Allocated amount increased by Rs. 50B</p>
-                </div>
-              </div>
-              <Badge variant="outline">2 hours ago</Badge>
-            </div>
+            {dashboardData.recentActivities.map((activity, index) => {
+              const IconComponent = getIconComponent(activity.icon)
+              const colorClass = {
+                green: 'text-green-600',
+                blue: 'text-blue-600', 
+                purple: 'text-purple-600',
+                red: 'text-red-600',
+                indigo: 'text-indigo-600'
+              }[activity.color] || 'text-gray-600'
 
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Building className="h-5 w-5 text-blue-600" />
-                <div>
-                  <p className="font-medium">New project added</p>
-                  <p className="text-sm text-slate-500">Colombo Metro Rail Extension - Rs. 120B</p>
+              return (
+                <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                    <div>
+                      <p className="font-medium">{activity.title}</p>
+                      <p className="text-sm text-slate-500">{activity.description}</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline">{activity.timestamp}</Badge>
                 </div>
+              )
+            })}
+            
+            {dashboardData.recentActivities.length === 0 && (
+              <div className="text-center py-8 text-slate-500">
+                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No recent activities</p>
               </div>
-              <Badge variant="outline">4 hours ago</Badge>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Vote className="h-5 w-5 text-purple-600" />
-                <div>
-                  <p className="font-medium">Voting proposal created</p>
-                  <p className="text-sm text-slate-500">Provincial Council Reform Bill</p>
-                </div>
-              </div>
-              <Badge variant="outline">6 hours ago</Badge>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>

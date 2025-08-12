@@ -116,8 +116,9 @@ public class UsersService {
     # + nic - National Identity Card number
     # + mobileNo - Mobile number
     # + evm - EVM address (optional)
+    # + province - Province (optional)
     # + return - Created user data or error
-    public function createUser(string userName, string email, string nic, string mobileNo, string? evm = ()) returns json|error {
+    public function createUser(string userName, string email, string nic, string mobileNo, string? evm = (), string? province = ()) returns json|error {
         do {
             // Validate input
             if userName.trim().length() == 0 {
@@ -151,6 +152,11 @@ public class UsersService {
             // Add EVM address if provided
             if evm is string && evm.trim().length() > 0 {
                 payload = check payload.mergeJson({"evm": evm});
+            }
+
+            // Add Province if provided
+            if province is string && province.trim().length() > 0 {
+                payload = check payload.mergeJson({"Province": province});
             }
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
@@ -257,6 +263,14 @@ public class UsersService {
                 string|error evmStr = evm.ensureType(string);
                 if evmStr is string {
                     payloadMap["evm"] = evmStr;
+                }
+            }
+            
+            json|error province = updateData.Province;
+            if province is json {
+                string|error provinceStr = province.ensureType(string);
+                if provinceStr is string && provinceStr.trim().length() > 0 {
+                    payloadMap["Province"] = provinceStr;
                 }
             }
             
@@ -468,6 +482,23 @@ public class UsersService {
             errors.push("Mobile number is required and cannot be empty");
         }
         
+        // Validate Province if provided
+        json|error province = userData.Province;
+        if province is json && province.toString().trim().length() > 0 {
+            string[] validProvinces = ["Western", "Central", "Southern", "Northern", "Eastern", "North Western", "North Central", "Uva", "Sabaragamuwa"];
+            string provinceStr = province.toString();
+            boolean isValidProvince = false;
+            foreach string validProvince in validProvinces {
+                if provinceStr == validProvince {
+                    isValidProvince = true;
+                    break;
+                }
+            }
+            if !isValidProvince {
+                errors.push("Invalid province. Must be one of: " + string:'join(", ", ...validProvinces));
+            }
+        }
+        
         return {
             "valid": errors.length() == 0,
             "errors": errors
@@ -524,7 +555,9 @@ public class UsersService {
     public function getRecentUsers() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/users?created_at=gte." + "now() - interval '30 days'" + "&select=*&order=created_at.desc";
+            // Simplified approach: get all users and sort by created_at descending
+            // This avoids potential date formatting issues with Supabase
+            string endpoint = "/rest/v1/users?select=*&order=created_at.desc&limit=50";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -544,6 +577,116 @@ public class UsersService {
             
         } on fail error e {
             return error("Failed to get recent users: " + e.message());
+        }
+    }
+
+    # Get province statistics
+    #
+    # + return - Province statistics or error
+    public function getProvinceStatistics() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/users?select=Province&Province=not.is.null";
+            
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get province data: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] users = check result.ensureType();
+            
+            // Count users by province
+            map<int> provinceCounts = {};
+            int totalUsers = users.length();
+            
+            foreach json user in users {
+                json|error provinceResult = user.Province;
+                if provinceResult is json && provinceResult != () {
+                    string rawProvince = provinceResult.toString();
+                    // Normalize province name: trim whitespace, remove "Province" suffix, standardize
+                    string province = self.normalizeProvinceName(rawProvince);
+                    if province.length() > 0 {
+                        if provinceCounts.hasKey(province) {
+                            provinceCounts[province] = provinceCounts.get(province) + 1;
+                        } else {
+                            provinceCounts[province] = 1;
+                        }
+                    }
+                }
+            }
+            
+            // Convert to array format for frontend
+            json[] provinceData = [];
+            foreach string province in provinceCounts.keys() {
+                int count = provinceCounts.get(province);
+                provinceData.push({
+                    "province": province,
+                    "count": count,
+                    "percentage": totalUsers > 0 ? (count * 100) / totalUsers : 0
+                });
+            }
+            
+            return {
+                "success": true,
+                "message": "Province statistics retrieved successfully",
+                "data": {
+                    "total_users_with_province": totalUsers,
+                    "provinces": provinceData
+                },
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get province statistics: " + e.message());
+        }
+    }
+
+    # Normalize province name to handle inconsistent data
+    #
+    # + rawProvince - Raw province name from database
+    # + return - Normalized province name
+    private function normalizeProvinceName(string rawProvince) returns string {
+        // Basic trim and cleanup
+        string trimmed = rawProvince.trim();
+        
+        // Simple character filtering - build clean string
+        string cleaned = "";
+        foreach int i in 0 ..< trimmed.length() {
+            string char = trimmed.substring(i, i + 1);
+            if char != "\r" && char != "\n" && char != "\t" {
+                cleaned = cleaned + char;
+            }
+        }
+        cleaned = cleaned.trim();
+        
+        // Remove "Province" suffix if present (case-insensitive)
+        string lower = cleaned.toLowerAscii();
+        if lower.endsWith(" province") {
+            cleaned = cleaned.substring(0, cleaned.length() - 9);
+            cleaned = cleaned.trim();
+        }
+        
+        // Standardize common province names
+        string normalized = cleaned.toLowerAscii();
+        match normalized {
+            "western" => { return "Western"; }
+            "central" => { return "Central"; }
+            "southern" => { return "Southern"; }
+            "northern" => { return "Northern"; }
+            "eastern" => { return "Eastern"; }
+            "north western"|"northwestern"|"north-western" => { return "North Western"; }
+            "north central"|"northcentral"|"north-central" => { return "North Central"; }
+            "uva" => { return "Uva"; }
+            "sabaragamuwa" => { return "Sabaragamuwa"; }
+            _ => { 
+                // Capitalize first letter for unknown provinces
+                if cleaned.length() > 0 {
+                    return cleaned.substring(0, 1).toUpperAscii() + cleaned.substring(1).toLowerAscii();
+                }
+                return cleaned;
+            }
         }
     }
 }
