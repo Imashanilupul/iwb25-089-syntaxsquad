@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Plus, Edit, Trash2, DollarSign, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import categoryService, { type Category, type CategoryFormData } from "@/services/category"
@@ -36,6 +37,11 @@ export function CategoryManagement() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
+
   // Load categories on component mount
   useEffect(() => {
     loadCategories()
@@ -47,6 +53,7 @@ export function CategoryManagement() {
       const response = await categoryService.getAllCategories()
       if (response.success) {
         setCategories(response.data)
+        setTotalItems(response.data.length)
       } else {
         toast({
           title: "Error",
@@ -223,6 +230,23 @@ export function CategoryManagement() {
     return "text-green-600"
   }
 
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  // Get paginated data
+  const getPaginatedCategories = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return categories.slice(startIndex, endIndex)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -386,7 +410,7 @@ export function CategoryManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {categories.map((category) => {
+                {getPaginatedCategories().map((category) => {
                   const utilization = (category.spent_budget / category.allocated_budget) * 100
                   const remaining = category.allocated_budget - category.spent_budget
 
@@ -419,6 +443,18 @@ export function CategoryManagement() {
                 })}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {categories.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
           )}
         </CardContent>
       </Card>

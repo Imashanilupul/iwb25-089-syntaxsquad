@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Switch } from "@/components/ui/switch"
 import { Plus, Edit, Trash2, Vote, Calendar, Users, Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
@@ -43,6 +44,28 @@ export function ProposalManagement() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  // Get paginated data
+  const getPaginatedProposals = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return proposals.slice(startIndex, endIndex)
+  }
+
   // Load data on component mount
   useEffect(() => {
     loadData()
@@ -58,6 +81,7 @@ export function ProposalManagement() {
 
       if (proposalsResponse.success) {
         setProposals(proposalsResponse.data)
+        setTotalItems(proposalsResponse.data.length)
       } else {
         toast({
           title: "Error",
@@ -460,7 +484,7 @@ export function ProposalManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {proposals.map((proposal) => {
+              {getPaginatedProposals().map((proposal) => {
                 const totalVotes = proposal.yes_votes + proposal.no_votes
                 const yesPercentage = totalVotes > 0 ? Math.round((proposal.yes_votes / totalVotes) * 100) : 0
 
@@ -511,6 +535,18 @@ export function ProposalManagement() {
               })}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {proposals.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

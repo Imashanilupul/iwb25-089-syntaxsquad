@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Progress } from "@/components/ui/progress"
 import { Search, Calendar, Loader2, X, MessageSquare, Users, TrendingUp } from "lucide-react"
 import { petitionService, type Petition as PetitionType, type PetitionStatistics } from "@/services/petition"
@@ -27,6 +28,11 @@ export function PetitionManagement() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
   const [signatureCounts, setSignatureCounts] = useState<Record<number, number>>({})
+
+  // Pagination state  
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
 
   const petitionStatuses = ["ACTIVE", "COMPLETED", "EXPIRED", "CANCELLED"]
 
@@ -70,6 +76,7 @@ export function PetitionManagement() {
       setLoading(true)
       const response = await petitionService.getAllPetitions()
       setPetitions(response.data)
+      setTotalItems(response.data.length)
     } catch (error) {
       console.error("Failed to load petitions:", error)
       toast({
@@ -131,6 +138,7 @@ export function PetitionManagement() {
       
       // Set the filtered petitions as the main display data
       setPetitions(response.data)
+      setTotalItems(response.data.length)
       
       // Update search results indicator
       const activeFilters = []
@@ -199,6 +207,23 @@ export function PetitionManagement() {
   // Get signature count for a petition from the loaded data
   const getSignatureCount = (petitionId: number) => {
     return signatureCounts[petitionId] || 0
+  }
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  // Get paginated data
+  const getPaginatedPetitions = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return petitions.slice(startIndex, endIndex)
   }
 
   return (
@@ -353,7 +378,7 @@ export function PetitionManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {petitions.map((petition) => {
+                {getPaginatedPetitions().map((petition) => {
                   const currentSignatures = getSignatureCount(petition.id)
                   const requiredSignatures = petition.required_signature_count
                   const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
@@ -390,6 +415,18 @@ export function PetitionManagement() {
                 })}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {petitions.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
           )}
         </CardContent>
       </Card>
