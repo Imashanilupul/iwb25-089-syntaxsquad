@@ -20,60 +20,99 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
 import { adminService, type AdminDashboardData } from "@/services/admin"
+import { categoryService } from "@/services/category"
 
 export function AdminOverview() {
   const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null)
+  const [categoriesData, setCategoriesData] = useState({
+    totalBudget: 0,
+    totalSpent: 0,
+    monthlySpending: [] as Array<{ month: string; amount: number }>
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
-    loadDashboardData()
+    let isMounted = true
+    
+    // Fetch admin dashboard data
+    adminService.getDashboardData()
+      .then((data) => {
+        if (!isMounted) return
+        setDashboardData(data)
+        setIsLoading(false)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setError(error.message)
+        setIsLoading(false)
+      })
 
-    // Set up auto-refresh every 30 seconds for real-time updates
-    const refreshInterval = setInterval(() => {
-      loadDashboardData(true) // Silent refresh (no loading state)
-    }, 30000)
-
-    return () => clearInterval(refreshInterval)
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  const loadDashboardData = async (silent = false) => {
-    try {
-      if (!silent) {
-        setIsLoading(true)
-        setError(null)
-      }
-      const data = await adminService.getDashboardData()
-      setDashboardData(data)
-      setLastUpdated(new Date())
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-      if (!silent) {
-        setError('Failed to load dashboard data')
-        toast({
-          title: "Error",
-          description: "Failed to load dashboard data. Please try again.",
-          variant: "destructive",
-        })
-      }
-    } finally {
-      if (!silent) {
-        setIsLoading(false)
-      }
-    }
-  }
+  useEffect(() => {
+    let isMounted = true
+    
+    // Fetch categories data for spending analysis (only once)
+    categoryService.getAllCategories()
+      .then((res) => {
+        if (!isMounted) return
+        const categories = (res?.data || [])
+        
+        // Calculate totals from categories
+        const totalBudget = categories.reduce(
+          (acc, c) => acc + (Number(c.allocated_budget) || 0),
+          0
+        )
+        const totalSpent = categories.reduce(
+          (acc, c) => acc + (Number(c.spent_budget) || 0),
+          0
+        )
 
-  const formatCurrency = (amount: number) => {
-    if (amount >= 1000000000000) {
-      return `Rs. ${(amount / 1000000000000).toFixed(1)}T`
-    } else if (amount >= 1000000000) {
-      return `Rs. ${(amount / 1000000000).toFixed(1)}B`
-    } else if (amount >= 1000000) {
-      return `Rs. ${(amount / 1000000).toFixed(1)}M`
+        // Calculate monthly spending trend from categories
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        const now = new Date()
+        const monthlySpending: Array<{ month: string; amount: number }> = []
+        
+        for (let i = 5; i >= 0; i--) {
+          const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+          
+          // Calculate total spent for this month from all categories
+          const amount = categories.reduce((acc: number, c: any) => {
+            const ts: string | undefined = (c.updated_at as string) || (c.created_at as string)
+            if (!ts) return acc
+            const d = new Date(ts)
+            return d >= start && d < end ? acc + (Number(c.spent_budget) || 0) : acc
+          }, 0)
+          
+          monthlySpending.push({ 
+            month: monthNames[start.getMonth()], 
+            amount 
+          })
+        }
+
+        // Set categories data separately to avoid infinite loops
+        setCategoriesData({
+          totalBudget,
+          totalSpent,
+          monthlySpending
+        })
+      })
+      .catch((error) => {
+        console.error('Error fetching categories:', error)
+      })
+
+    return () => {
+      isMounted = false
     }
-    return `Rs. ${amount.toLocaleString()}`
-  }
+  }, []) // Empty dependency array - only run once
+
+  const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) {
@@ -114,7 +153,7 @@ export function AdminOverview() {
           <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-4" />
           <p className="text-slate-600 mb-4">{error || 'Failed to load dashboard data'}</p>
           <button 
-            onClick={() => loadDashboardData(false)}
+            onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             Retry
@@ -140,9 +179,9 @@ export function AdminOverview() {
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(dashboardData.totalBudget)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(categoriesData.totalBudget)}</div>
             <p className="text-xs text-slate-500">
-              Spent: {formatCurrency(dashboardData.totalSpent)} ({dashboardData.budgetUtilization}%)
+              Spent: {formatCurrency(categoriesData.totalSpent)} ({categoriesData.totalBudget > 0 ? ((categoriesData.totalSpent / categoriesData.totalBudget) * 100).toFixed(1) : 0}%)
             </p>
           </CardContent>
         </Card>
@@ -303,7 +342,7 @@ export function AdminOverview() {
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle>Monthly Spending Trend</CardTitle>
-            <CardDescription>Government expenditure over time</CardDescription>
+            <CardDescription>Government expenditure over time from categories</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -314,7 +353,7 @@ export function AdminOverview() {
             >
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart 
-                  data={dashboardData.monthlySpending}
+                  data={categoriesData.monthlySpending}
                   margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                 >
                   <XAxis 
@@ -360,7 +399,7 @@ export function AdminOverview() {
                 </span>
               )}
               <button
-                onClick={() => loadDashboardData(false)}
+                onClick={() => window.location.reload()}
                 className="p-1.5 rounded-md hover:bg-slate-100 transition-colors"
                 title="Refresh data"
               >

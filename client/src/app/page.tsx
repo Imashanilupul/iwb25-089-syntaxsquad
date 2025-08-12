@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -23,22 +23,70 @@ import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { BlockchainVisualization } from "@/components/blockchain-visualization"
 import { RegistrationDialog } from "@/components/registration-dialog"
 import SignUpPage from "@/components/signup"
+import { userService } from "@/services/user"
+import { categoryService } from "@/services/category"
 
 export default function CivicPlatform() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [userCount, setUserCount] = useState<number>(0)
+  const [userChangePct, setUserChangePct] = useState<number>(0)
+  const [totalBudget, setTotalBudget] = useState<number>(0)
+  const [budgetChangePct, setBudgetChangePct] = useState<number>(0)
+
+  const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
+
+  useEffect(() => {
+    let isMounted = true
+    userService
+      .getAllUsers()
+      .then((users) => {
+        if (!isMounted) return
+        setUserCount(users.length)
+        try {
+          const trend = userService.calculateGrowthTrend(users)
+          const latest = trend?.[trend.length - 1]?.growth ?? 0
+          setUserChangePct(Number.isFinite(latest) ? latest : 0)
+        } catch {
+          setUserChangePct(0)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    categoryService
+      .getAllCategories()
+      .then((res) => {
+        if (!isMounted) return
+        const sum = (res?.data || []).reduce((acc, c) => acc + (c.allocated_budget || 0), 0)
+        setTotalBudget((prev) => {
+          const change = prev > 0 ? ((sum - prev) / prev) * 100 : 0
+          setBudgetChangePct(Number.isFinite(change) ? change : 0)
+          return sum
+        })
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const overviewStats = [
     {
       title: "Total Budget Tracked",
-      value: "Rs. 2.4T",
-      change: "+12.5%",
+      value: formatCurrency(totalBudget),
+      change: `${budgetChangePct >= 0 ? "+" : ""}${budgetChangePct.toFixed(1)}%`,
       icon: DollarSign,
       color: "text-green-600",
     },
     {
       title: "Active Citizens",
-      value: "1.2M",
-      change: "+8.2%",
+      value: userCount.toLocaleString(),
+      change: `${userChangePct >= 0 ? "+" : ""}${userChangePct.toFixed(1)}%`,
       icon: Vote,
       color: "text-blue-600",
     },
