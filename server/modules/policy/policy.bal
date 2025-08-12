@@ -144,7 +144,7 @@ public class PoliciesService {
             }
             
             // Validate status
-            string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+            string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
             boolean isValidStatus = false;
             foreach string validStatus in validStatuses {
                 if status == validStatus {
@@ -153,7 +153,7 @@ public class PoliciesService {
                 }
             }
             if !isValidStatus {
-                return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
             }
             
             json payload = {
@@ -269,7 +269,7 @@ public class PoliciesService {
             if status is json {
                 string|error statusStr = status.ensureType(string);
                 if statusStr is string {
-                    string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+                    string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
                     boolean isValidStatus = false;
                     foreach string validStatus in validStatuses {
                         if statusStr == validStatus {
@@ -280,7 +280,7 @@ public class PoliciesService {
                     if isValidStatus {
                         payloadMap["status"] = statusStr;
                     } else {
-                        return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                        return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
                     }
                 }
             }
@@ -363,7 +363,7 @@ public class PoliciesService {
     # + return - Policies list or error
     public function getPoliciesByStatus(string status) returns json|error {
         // Validate status
-        string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+        string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
         boolean isValidStatus = false;
         foreach string validStatus in validStatuses {
             if status == validStatus {
@@ -372,7 +372,7 @@ public class PoliciesService {
             }
         }
         if !isValidStatus {
-            return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+            return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
         }
         
         do {
@@ -468,7 +468,7 @@ public class PoliciesService {
         if status is json {
             string|error statusStr = status.ensureType(string);
             if statusStr is string {
-                string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
+                string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
                 boolean isValidStatus = false;
                 foreach string validStatus in validStatuses {
                     if statusStr == validStatus {
@@ -477,7 +477,7 @@ public class PoliciesService {
                     }
                 }
                 if !isValidStatus {
-                    errors.push("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
+                    errors.push("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
                 }
             }
         }

@@ -23,6 +23,7 @@ import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X } 
 import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 import { useToast } from "@/hooks/use-toast"
+import { MinistryInput } from "@/components/ui/ministry-input"
 
 interface Policy {
   id: number
@@ -39,6 +40,8 @@ export function PolicyManagement() {
   const [policies, setPolicies] = useState<PolicyType[]>([])
   const [loading, setLoading] = useState(true)
   const [statistics, setStatistics] = useState<PolicyStatistics["data"] | null>(null)
+  const [ministries, setMinistries] = useState<string[]>([])
+  const [loadingMinistries, setLoadingMinistries] = useState(false)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
@@ -58,37 +61,6 @@ export function PolicyManagement() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
   const [commentCounts, setCommentCounts] = useState<Record<number, number>>({})
-
-  const ministries = [
-    "Ministry of Technology",
-    "Ministry of Education",
-    "Ministry of Health",
-    "Ministry of Environment",
-    "Ministry of Finance",
-    "Ministry of Transport",
-    "Ministry of Agriculture",
-    "Ministry of Defense",
-    "Ministry of Justice",
-    "Ministry of Foreign Affairs",
-    "Ministry of Trade",
-    "Ministry of Tourism",
-    "Ministry of Energy",
-    "Ministry of Water Supply",
-    "Ministry of Urban Development",
-    "Ministry of Rural Development",
-    "Ministry of Women and Child Affairs",
-    "Ministry of Youth and Sports",
-    "Ministry of Cultural Affairs",
-    "Ministry of Labour",
-    "Ministry of Industries",
-    "Ministry of Fisheries",
-    "Ministry of Livestock",
-    "Ministry of Plantation Industries",
-    "Ministry of Public Administration",
-    "Ministry of Provincial Councils",
-    "Ministry of Parliamentary Affairs",
-    "Ministry of Mass Media",
-  ]
 
   const policyStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"]
 
@@ -113,6 +85,7 @@ export function PolicyManagement() {
   useEffect(() => {
     loadPolicies()
     loadStatistics()
+    loadMinistries()
   }, [])
 
   // Load comment counts after policies are loaded
@@ -126,6 +99,23 @@ export function PolicyManagement() {
   useEffect(() => {
     debouncedSearch()
   }, [searchTerm, filterMinistry, filterStatus, sortBy, sortOrder, debouncedSearch])
+
+  const loadMinistries = async () => {
+    try {
+      setLoadingMinistries(true)
+      const uniqueMinistries = await policyService.getUniqueMinistries()
+      setMinistries(uniqueMinistries)
+    } catch (error) {
+      console.error("Failed to load ministries:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load ministries. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingMinistries(false)
+    }
+  }
 
   const loadPolicies = async () => {
     try {
@@ -294,6 +284,7 @@ export function PolicyManagement() {
       setIsDialogOpen(false)
       loadPolicies()
       loadStatistics()
+      loadMinistries() // Refresh ministries in case a new one was added
     } catch (error) {
       console.error("Submit failed:", error)
       toast({
@@ -430,21 +421,13 @@ export function PolicyManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="ministry">Ministry</Label>
-                  <Select
+                  <MinistryInput
                     value={formData.ministry}
-                    onValueChange={(value) => setFormData({ ...formData, ministry: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select ministry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ministries.map((ministry) => (
-                        <SelectItem key={ministry} value={ministry}>
-                          {ministry}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setFormData({ ...formData, ministry: value })}
+                    ministries={ministries}
+                    placeholder="Type or select ministry..."
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">

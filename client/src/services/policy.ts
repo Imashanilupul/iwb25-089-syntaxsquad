@@ -219,5 +219,39 @@ export const policyService = {
         timestamp: Date.now()
       }
     }
+  },
+
+  // Get unique ministries from the database
+  async getUniqueMinistries(): Promise<string[]> {
+    try {
+      const response = await this.getAllPolicies()
+      if (response.success) {
+        // Extract unique ministries from the policies
+        const ministries = Array.from(new Set(response.data.map(policy => policy.ministry)))
+        return ministries.filter(ministry => ministry && ministry.trim().length > 0).sort()
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to get unique ministries:', error)
+      return []
+    }
+  },
+
+  // Search ministries by keyword for autocomplete
+  async searchMinistries(keyword: string): Promise<string[]> {
+    try {
+      const allMinistries = await this.getUniqueMinistries()
+      if (!keyword || keyword.trim().length === 0) {
+        return allMinistries
+      }
+      
+      const lowerKeyword = keyword.toLowerCase()
+      return allMinistries.filter(ministry => 
+        ministry.toLowerCase().includes(lowerKeyword)
+      )
+    } catch (error) {
+      console.error('Failed to search ministries:', error)
+      return []
+    }
   }
 }
