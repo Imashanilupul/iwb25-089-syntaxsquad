@@ -19,8 +19,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X } from "lucide-react"
-import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics } from "@/services/policy"
+import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics, type PaginationMeta } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 import { useToast } from "@/hooks/use-toast"
 import { MinistryInput } from "@/components/ui/ministry-input"
@@ -61,6 +62,11 @@ export function PolicyManagement() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
   const [commentCounts, setCommentCounts] = useState<Record<number, number>>({})
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null)
 
   const policyStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"]
 
@@ -117,11 +123,14 @@ export function PolicyManagement() {
     }
   }
 
-  const loadPolicies = async () => {
+  const loadPolicies = async (page: number = currentPage, limit: number = pageSize) => {
     try {
       setLoading(true)
-      const response = await policyService.getAllPolicies()
+      const response = await policyService.getAllPolicies(page, limit)
       setPolicies(response.data)
+      if (response.pagination) {
+        setPagination(response.pagination)
+      }
     } catch (error) {
       console.error("Failed to load policies:", error)
       toast({
@@ -168,6 +177,10 @@ export function PolicyManagement() {
   const handleSearch = async () => {
     try {
       setLoading(true)
+      
+      // Reset pagination when searching
+      setCurrentPage(1)
+      setPagination(null)
       
       // Use advanced search with filters - this will handle all cases including empty filters
       const response = await policyService.searchPoliciesAdvanced({
@@ -242,6 +255,9 @@ export function PolicyManagement() {
     setSortBy("created_time")
     setSortOrder("desc")
     setSearchResults("")
+    setCurrentPage(1)
+    // Reload with pagination
+    loadPolicies(1, pageSize)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,7 +298,7 @@ export function PolicyManagement() {
       })
       setEditingId(null)
       setIsDialogOpen(false)
-      loadPolicies()
+      loadPolicies(currentPage, pageSize)
       loadStatistics()
       loadMinistries() // Refresh ministries in case a new one was added
     } catch (error) {
@@ -318,7 +334,7 @@ export function PolicyManagement() {
         title: "Success",
         description: "Policy deleted successfully.",
       })
-      loadPolicies()
+      loadPolicies(currentPage, pageSize)
       loadStatistics()
     } catch (error) {
       console.error("Delete failed:", error)
@@ -359,6 +375,18 @@ export function PolicyManagement() {
   // Get real comment count for a policy from the loaded data
   const getCommentCount = (policyId: number) => {
     return commentCounts[policyId] || 0
+  }
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    loadPolicies(page, pageSize)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+    loadPolicies(1, size)
   }
 
   return (
@@ -667,6 +695,18 @@ export function PolicyManagement() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {pagination && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={pagination.totalPages}
+              pageSize={pageSize}
+              totalItems={pagination.total}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
           )}
         </CardContent>
       </Card>

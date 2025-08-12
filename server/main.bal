@@ -248,12 +248,14 @@ service /api on apiListener {
         return categoriesService.deleteCategory(categoryId);
     }
 
-    # Get all policies
+    # Get all policies with pagination
     #
-    # + return - Policies list or error
-    resource function get policies() returns json|error {
-        log:printInfo("Get all policies endpoint called");
-        return policiesService.getAllPolicies();
+    # + page - Page number (optional, default: 1)
+    # + pageLimit - Number of items per page (optional, default: 20)
+    # + return - Policies list with pagination metadata or error
+    resource function get policies(int page = 1, int pageLimit = 20) returns json|error {
+        log:printInfo(string `Get all policies endpoint called - Page: ${page}, Limit: ${pageLimit}`);
+        return policiesService.getAllPolicies(page, pageLimit);
     }
 
     # Get policy by ID

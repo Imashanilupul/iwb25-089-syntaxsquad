@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { AlertTriangle, Shield, Clock, CheckCircle, Search, Loader2, X, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { reportService, type Report, type ReportStatistics } from "@/services/report"
@@ -23,6 +24,28 @@ export function ReportManagement() {
   const [sortBy, setSortBy] = useState<"created_time" | "priority" | "report_title">("created_time")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  // Get paginated data
+  const getPaginatedReports = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return reports.slice(startIndex, endIndex)
+  }
 
   const priorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
@@ -55,6 +78,7 @@ export function ReportManagement() {
       const reportsData = await reportService.getAllReports()
       const sortedReports = sortReports(reportsData)
       setReports(sortedReports)
+      setTotalItems(sortedReports.length)
       setSearchResults("")
       
       // Load statistics
@@ -79,6 +103,7 @@ export function ReportManagement() {
       })
       const sortedReports = sortReports(searchData)
       setReports(sortedReports)
+      setTotalItems(sortedReports.length)
       setSearchResults(`Found ${searchData.length} report(s) matching "${debouncedSearchTerm}"`)
     } catch (error) {
       console.error('Failed to search reports:', error)
@@ -362,7 +387,7 @@ export function ReportManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reports.map((report) => (
+                {getPaginatedReports().map((report) => (
                   <TableRow key={report.report_id}>
                     <TableCell className="font-medium max-w-xs">
                       <div>
@@ -429,6 +454,18 @@ export function ReportManagement() {
                 )}
               </TableBody>
             </Table>
+          )}
+          
+          {/* Pagination */}
+          {reports.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
           )}
         </CardContent>
       </Card>

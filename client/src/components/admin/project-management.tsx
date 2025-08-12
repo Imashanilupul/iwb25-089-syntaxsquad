@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Plus, Edit, Trash2, Building, MapPin, Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { projectService, type Project, type ProjectFormData } from "@/services/project"
@@ -42,6 +43,28 @@ export function ProjectManagement() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  // Get paginated data
+  const getPaginatedProjects = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return projects.slice(startIndex, endIndex)
+  }
 
   const provinces = [
     "Western Province",
@@ -91,6 +114,7 @@ export function ProjectManagement() {
 
       if (projectsResponse.success) {
         setProjects(projectsResponse.data)
+        setTotalItems(projectsResponse.data.length)
       } else {
         toast({
           title: "Error",
@@ -530,7 +554,7 @@ export function ProjectManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => (
+              {getPaginatedProjects().map((project) => (
                 <TableRow key={project.project_id}>
                   <TableCell className="font-medium">{project.project_name}</TableCell>
                   <TableCell>
@@ -558,6 +582,18 @@ export function ProjectManagement() {
               ))}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {projects.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

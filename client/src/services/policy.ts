@@ -1,5 +1,15 @@
 import { apiService } from './api'
 
+export interface PaginationMeta {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  offset: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
 export interface Policy {
   id: number
   name: string
@@ -16,7 +26,8 @@ export interface PolicyResponse {
   success: boolean
   message: string
   data: Policy[]
-  count: number
+  count?: number
+  pagination?: PaginationMeta
   timestamp: number
 }
 
@@ -58,9 +69,15 @@ export interface PolicyStatistics {
 }
 
 export const policyService = {
-  // Get all policies
-  async getAllPolicies(): Promise<PolicyResponse> {
-    const response = await apiService.get<PolicyResponse>('/api/policies')
+  // Get all policies with pagination
+  async getAllPolicies(page: number = 1, pageLimit: number = 20): Promise<PolicyResponse> {
+    const response = await apiService.get<PolicyResponse>(`/api/policies?page=${page}&pageLimit=${pageLimit}`)
+    return response
+  },
+
+  // Get all policies without pagination (for searches, dropdowns, etc.)
+  async getAllPoliciesUnpaginated(): Promise<PolicyResponse> {
+    const response = await apiService.get<PolicyResponse>('/api/policies?pageLimit=1000')
     return response
   },
 
@@ -137,7 +154,7 @@ export const policyService = {
       let policies: PolicyResponse
       
       try {
-        policies = await this.getAllPolicies()
+        policies = await this.getAllPoliciesUnpaginated()
       } catch (error) {
         console.error('Failed to get base policies:', error)
         return { 
@@ -224,7 +241,7 @@ export const policyService = {
   // Get unique ministries from the database
   async getUniqueMinistries(): Promise<string[]> {
     try {
-      const response = await this.getAllPolicies()
+      const response = await this.getAllPoliciesUnpaginated()
       if (response.success) {
         // Extract unique ministries from the policies
         const ministries = Array.from(new Set(response.data.map(policy => policy.ministry)))
