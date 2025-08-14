@@ -52,6 +52,7 @@ interface WhistleblowingSystemProps {
 
 export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProps) {
   const { toast } = useToast()
+  const { address, verified } = useAuth() // Get auth state
 
   const [reportForm, setReportForm] = useState({
     category: "",
@@ -334,7 +335,7 @@ By signing this message, you confirm your signature on this petition.`
           )
 
           // Also create petition activity
-          await fetch("http://localhost:8080/api/petition_activities", {
+          await fetch("http://localhost:8080/api/petitionactivities", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -346,6 +347,12 @@ By signing this message, you confirm your signature on this petition.`
               user_id: 1, // You might want to get this from user context
             }),
           })
+
+          // Update user signatures state
+          setUserSignatures(prev => ({
+            ...prev,
+            [petitionId]: true
+          }))
 
           toast({
             title: "✅ Petition signed!",
@@ -1064,30 +1071,19 @@ Timestamp: ${timestamp}
                             <Button
                               size="sm"
                               onClick={() => signPetition(petition.id)}
-                              disabled={!walletAddress || signingPetition === petition.id}
+                              disabled={!walletAddress || signingPetition === petition.id || userSignatures[petition.id]}
                             >
                               {signingPetition === petition.id ? (
                                 <>
                                   <span className="mr-2 animate-spin">⏳</span>
                                   Signing...
                                 </>
+                              ) : userSignatures[petition.id] ? (
+                                "Already Signed"
                               ) : (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => signPetition(petition.id)}
-                                  disabled={!walletAddress || signingPetition === petition.id}
-                                >
-                                  {signingPetition === petition.id ? (
-                                    <>
-                                      <span className="animate-spin mr-2">⏳</span>
-                                      Signing...
-                                    </>
-                                  ) : (
-                                    "Sign Petition"
-                                  )}
-                                </Button>
+                                "Sign Petition"
                               )}
-                            </>
+                            </Button>
                           )}
                         </div>
                       </div>
