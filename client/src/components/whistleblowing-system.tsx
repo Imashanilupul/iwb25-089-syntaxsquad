@@ -28,12 +28,16 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } fro
 // Web3 types
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>
-      isMetaMask?: boolean
-    }
+    ethereum?: Record<string, unknown>;
   }
 }
+
+type Ethereumish = {
+  request: (args: { method: string; params?: any[] }) => Promise<any>;
+  isMetaMask?: boolean;
+};
+
+// Usage: cast window.ethereum as Ethereumish when you need the specific methods
 
 interface WhistleblowingSystemProps {
   walletAddress?: string | null;
