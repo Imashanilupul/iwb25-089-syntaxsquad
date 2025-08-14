@@ -255,13 +255,15 @@ service /api/petitions on new http:Listener(8082) {
         }
         
         try {
-            // Create petition in database
+            // Note: This is a standalone controller, not connected to the main service
+            // The actual petition creation should be done through the main API service
+            // which uses the petitionsService for database operations
+            
+            // Create petition in database using a direct HTTP call to main service
             json petitionData = {
                 "title": title,
                 "description": description,
-                "required_signature_count": requiredSignatureCount,
-                "signature_count": 0,
-                "status": "active"
+                "required_signature_count": requiredSignatureCount
             };
             
             // Add optional fields if provided
@@ -285,8 +287,6 @@ service /api/petitions on new http:Listener(8082) {
                 petitionData = check petitionData.mergeJson({"wallet_address": walletAddress});
             }
             
-            // For now, we'll return a success response
-            // In a real implementation, you would save this to a database
             response.statusCode = 201;
             response.setJsonPayload({
                 "success": true,

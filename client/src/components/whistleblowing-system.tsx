@@ -117,7 +117,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       const contractData = await smartContractResponse.json()
       
       // Step 3: Save petition to Ballerina backend
-      const ballerinaResponse = await fetch("http://localhost:8080/petitions", {
+      const ballerinaResponse = await fetch("http://localhost:8080/api/petitions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -136,14 +136,21 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       })
 
       if (!ballerinaResponse.ok) {
-        throw new Error("Failed to save petition to database")
+        const errorText = await ballerinaResponse.text();
+        console.error("Ballerina API Error:", errorText);
+        throw new Error(`Failed to save petition to database: ${ballerinaResponse.status} ${ballerinaResponse.statusText}`);
       }
 
-      const ballerinaData = await ballerinaResponse.json()
+      const ballerinaData = await ballerinaResponse.json();
+
+      // Check if the response indicates success
+      if (!ballerinaData.success) {
+        throw new Error(ballerinaData.message || "Failed to save petition to database");
+      }
 
       toast({
         title: "Petition created successfully!",
-        description: `Petition ID: ${contractData.petitionId}`,
+        description: `Petition saved to database with ID: ${ballerinaData.data?.id || 'unknown'}`,
       })
 
       // Reset form
@@ -156,10 +163,10 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       console.log("Smart contract data:", contractData)
       console.log("Database data:", ballerinaData)
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create petition:", error)
       
-      if (error.code === 4001) {
+      if (error?.code === 4001) {
         toast({
           title: "Signature cancelled",
           description: "You cancelled the signature request",
