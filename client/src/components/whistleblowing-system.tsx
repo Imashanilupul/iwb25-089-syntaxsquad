@@ -74,6 +74,8 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [isLoadingPetitions, setIsLoadingPetitions] = useState(false)
   const [signingPetition, setSigningPetition] = useState<number | null>(null)
   const [userSignatures, setUserSignatures] = useState<{[key: number]: boolean}>({})
+  const [categories, setCategories] = useState<any[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
 
   // Get user ID from wallet address (consistent with petition signing)
   const getUserId = (walletAddress: string): number => {
@@ -112,7 +114,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     setIsSubmittingReport(true)
     try {
       // Create evidence hash (for anonymity)
-      const reportData = {
+      let evidenceData: any = {
         category: reportForm.category,
         title: reportForm.title,
         description: reportForm.description,
@@ -120,8 +122,19 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         userAddress: address // For hashing only, not stored directly
       }
       
+      // If evidence file is provided, include it in hash
+      if (reportForm.evidence) {
+        const fileContent = await readFileAsText(reportForm.evidence)
+        evidenceData.evidenceFile = {
+          name: reportForm.evidence.name,
+          size: reportForm.evidence.size,
+          type: reportForm.evidence.type,
+          content: fileContent.substring(0, 1000) // Only hash first 1000 chars for privacy
+        }
+      }
+      
       // Generate evidence hash from report data
-      const evidenceHash = await generateEvidenceHash(JSON.stringify(reportData))
+      const evidenceHash = await generateEvidenceHash(JSON.stringify(evidenceData))
       
       // Get user ID from wallet address
       const userId = getUserId(address)
@@ -178,6 +191,22 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     }
   }
 
+  // Read file as text for evidence processing
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target?.result as string || '')
+      reader.onerror = (e) => reject(e)
+      
+      // For binary files, convert to base64 for hashing
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        reader.readAsDataURL(file)
+      } else {
+        reader.readAsText(file)
+      }
+    })
+  }
+
   // Generate evidence hash for anonymity
   const generateEvidenceHash = async (data: string): Promise<string> => {
     const encoder = new TextEncoder()
@@ -190,7 +219,17 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
   // Map category to priority
   const getCategoryPriority = (category: string): string => {
-    switch (category) {
+    // Map database categories to priorities
+    switch (category.toLowerCase()) {
+      case "health": return "HIGH"
+      case "defense": return "CRITICAL" 
+      case "infrastructure": return "HIGH"
+      case "agriculture": return "MEDIUM"
+      case "education": return "MEDIUM"
+      case "finance": return "HIGH"
+      case "security": return "CRITICAL"
+      case "environment": return "HIGH"
+      // Legacy categories for backward compatibility
       case "financial": return "HIGH"
       case "safety": return "CRITICAL" 
       case "regulatory": return "HIGH"
@@ -235,6 +274,36 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       })
     } finally {
       setIsLoadingPetitions(false)
+    }
+  }
+
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    setIsLoadingCategories(true)
+    try {
+      const response = await fetch("http://localhost:8080/api/categories")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setCategories(data.data)
+        }
+      } else {
+        console.error("Failed to fetch categories:", response.statusText)
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load categories",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingCategories(false)
     }
   }
 
@@ -395,9 +464,10 @@ By signing this message, you confirm your signature on this petition.`
     }
   }
 
-  // Load petitions when component mounts
+  // Load petitions and categories when component mounts
   React.useEffect(() => {
     fetchPetitions()
+    fetchCategories()
   }, [])
 
   // Check user signatures when wallet address changes
@@ -1114,16 +1184,22 @@ Timestamp: ${timestamp}
                   <Select
                     value={reportForm.category}
                     onValueChange={(value) => setReportForm({ ...reportForm, category: value })}
+                    disabled={isLoadingCategories}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select category"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="financial">Financial Misconduct</SelectItem>
-                      <SelectItem value="regulatory">Regulatory Breach</SelectItem>
-                      <SelectItem value="ethical">Ethical Violation</SelectItem>
-                      <SelectItem value="safety">Safety Concern</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.category_id} value={category.category_name}>
+                          {category.category_name}
+                        </SelectItem>
+                      ))}
+                      {categories.length === 0 && !isLoadingCategories && (
+                        <SelectItem value="other" disabled>
+                          No categories available
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1149,12 +1225,83 @@ Timestamp: ${timestamp}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Evidence (Optional)</label>
-                  <div className="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center">
+                  <div 
+                    className="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center cursor-pointer hover:border-slate-400 transition-colors"
+                    onClick={() => document.getElementById('evidence-upload')?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                      const files = e.dataTransfer.files
+                      if (files.length > 0) {
+                        const file = files[0]
+                        // Check file size (max 10MB)
+                        if (file.size > 10 * 1024 * 1024) {
+                          toast({
+                            title: "File too large",
+                            description: "Please select a file smaller than 10MB",
+                            variant: "destructive",
+                          })
+                          return
+                        }
+                        setReportForm({ ...reportForm, evidence: file })
+                      }
+                    }}
+                  >
                     <Upload className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-                    <p className="text-sm text-slate-600">Drop files here or click to upload</p>
-                    <p className="text-xs text-slate-500">
-                      Files will be encrypted and hashed for verification
-                    </p>
+                    {reportForm.evidence ? (
+                      <div>
+                        <p className="text-sm text-slate-600">Selected: {reportForm.evidence.name}</p>
+                        <p className="text-xs text-slate-500">
+                          Size: {(reportForm.evidence.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setReportForm({ ...reportForm, evidence: null })
+                          }}
+                          className="mt-2 text-xs text-red-600 hover:text-red-800"
+                        >
+                          Remove file
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-slate-600">Drop files here or click to upload</p>
+                        <p className="text-xs text-slate-500">
+                          Files will be encrypted and hashed for verification
+                        </p>
+                      </div>
+                    )}
+                    <input
+                      id="evidence-upload"
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          // Check file size (max 10MB)
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast({
+                              title: "File too large",
+                              description: "Please select a file smaller than 10MB",
+                              variant: "destructive",
+                            })
+                            return
+                          }
+                          setReportForm({ ...reportForm, evidence: file })
+                        }
+                      }}
+                    />
                   </div>
                 </div>
 
