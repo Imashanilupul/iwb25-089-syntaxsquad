@@ -755,22 +755,19 @@ Timestamp: ${timestamp}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Target Signatures</label>
-                  <Select
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="Enter target signature count"
                     value={petitionForm.targetSignatures.toString()}
-                    onValueChange={(value) =>
-                      setPetitionForm({ ...petitionForm, targetSignatures: Number.parseInt(value) })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5000">5,000 signatures</SelectItem>
-                      <SelectItem value="10000">10,000 signatures</SelectItem>
-                      <SelectItem value="25000">25,000 signatures</SelectItem>
-                      <SelectItem value="50000">50,000 signatures</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onChange={(e) => {
+                      const value = e.target.value
+                      const numValue = value === '' ? 0 : Number.parseInt(value)
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        setPetitionForm({ ...petitionForm, targetSignatures: numValue })
+                      }
+                    }}
+                  />
                 </div>
 
                 <div className="bg-green-50 p-3 rounded-lg">
