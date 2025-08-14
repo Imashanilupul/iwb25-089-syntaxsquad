@@ -190,7 +190,7 @@ export function PolicyHub() {
     }
   }
 
-  // Open comment dialog
+  // Open comment dialog (read-only for viewing comments)
   const openCommentDialog = (policyId: number) => {
     setSelectedPolicy(policyId)
     setIsCommentDialogOpen(true)
@@ -470,10 +470,13 @@ export function PolicyHub() {
                         <MessageSquare className="h-4 w-4 text-slate-500" />
                         <span className="text-sm">{getCommentCount(policy.id)} comments</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm">Views</span>
-                      </div>
+                      <button 
+                        className="flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
+                        onClick={() => openCommentDialog(policy.id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span>View Comments</span>
+                      </button>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-slate-500" />
                         <span className="text-sm">Public</span>
@@ -599,7 +602,10 @@ export function PolicyHub() {
               {policies.find((p) => p.id === selectedPolicy)?.name}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-600">
-              Join the conversation • Connected as {address?.slice(0, 6)}...{address?.slice(-4)}
+              {isConnected 
+                ? `Join the conversation • Connected as ${address?.slice(0, 6)}...${address?.slice(-4)}`
+                : "Viewing comments • Connect your wallet to participate in the discussion"
+              }
             </DialogDescription>
           </DialogHeader>
           
@@ -790,43 +796,60 @@ export function PolicyHub() {
             </div>
             
             {/* New Comment Form - Fixed at bottom */}
-            <div className="border-t bg-white p-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
-                    <AvatarFallback className="bg-green-100 text-green-700 text-sm font-medium">
-                      Me
-                    </AvatarFallback>
-                  </Avatar>
-                  <Textarea
-                    placeholder="What are your thoughts on this policy?"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="min-h-[60px] resize-none border-slate-200 focus:border-blue-300 transition-colors"
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <Button 
-                    size="sm" 
-                    onClick={handleSubmitComment}
-                    disabled={isSubmittingComment || !newComment.trim()}
-                    className="h-9 px-4"
-                  >
-                    {isSubmittingComment ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Posting...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Comment
-                      </>
-                    )}
-                  </Button>
+            {isConnected && (
+              <div className="border-t bg-white p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
+                      <AvatarFallback className="bg-green-100 text-green-700 text-sm font-medium">
+                        Me
+                      </AvatarFallback>
+                    </Avatar>
+                    <Textarea
+                      placeholder="What are your thoughts on this policy?"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="min-h-[60px] resize-none border-slate-200 focus:border-blue-300 transition-colors"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button 
+                      size="sm" 
+                      onClick={handleSubmitComment}
+                      disabled={isSubmittingComment || !newComment.trim()}
+                      className="h-9 px-4"
+                    >
+                      {isSubmittingComment ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Posting...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 mr-2" />
+                          Comment
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+            
+            {/* Wallet connection prompt for non-connected users */}
+            {!isConnected && (
+              <div className="border-t bg-slate-50 p-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 text-slate-600 mb-2">
+                    <Wallet className="h-4 w-4" />
+                    <span className="text-sm">Connect your wallet to join the discussion</span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    You can view comments without connecting, but need a wallet to participate
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
