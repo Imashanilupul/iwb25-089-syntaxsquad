@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/context/AuthContext"
 import {
   Shield,
   AlertTriangle,
@@ -45,6 +46,7 @@ interface WhistleblowingSystemProps {
 
 export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProps) {
   const { toast } = useToast()
+  const { address, verified } = useAuth() // Get auth state
   
   const [reportForm, setReportForm] = useState({
     category: "",
@@ -52,6 +54,8 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     description: "",
     evidence: null as File | null,
   })
+
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
 
   const [petitionForm, setPetitionForm] = useState({
     title: "",
@@ -65,8 +69,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [signingPetition, setSigningPetition] = useState<number | null>(null)
   const [userSignatures, setUserSignatures] = useState<{[key: number]: boolean}>({})
 
-  // For demo purposes, create a simple user ID based on wallet address
-  // In a real app, this would come from a proper user authentication system
+  // Get user ID from wallet address (consistent with petition signing)
   const getUserId = (walletAddress: string): number => {
     // Simple hash of wallet address to create consistent user ID
     let hash = 0;
@@ -76,6 +79,118 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash % 10000) + 1; // Ensure positive ID between 1-10000
+  }
+
+  // Submit anonymous report function
+  const submitReport = async () => {
+    // Check wallet connection and verification
+    if (!address || !verified) {
+      toast({
+        title: "Wallet Required",
+        description: "Please connect and verify your wallet to submit reports",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate form
+    if (!reportForm.category || !reportForm.title || !reportForm.description) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmittingReport(true)
+    try {
+      // Create evidence hash (for anonymity)
+      const reportData = {
+        category: reportForm.category,
+        title: reportForm.title,
+        description: reportForm.description,
+        timestamp: new Date().toISOString(),
+        userAddress: address // For hashing only, not stored directly
+      }
+      
+      // Generate evidence hash from report data
+      const evidenceHash = await generateEvidenceHash(JSON.stringify(reportData))
+      
+      // Get user ID from wallet address
+      const userId = getUserId(address)
+      
+      // Prepare report payload for backend
+      const reportPayload = {
+        report_title: reportForm.title,
+        description: reportForm.description,
+        evidence_hash: evidenceHash,
+        priority: getCategoryPriority(reportForm.category),
+        // Only include user_id if we want to track (for now, we'll make it optional for true anonymity)
+        // user_id: userId
+      }
+
+      // Submit to backend
+      const response = await fetch("http://localhost:8080/api/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reportPayload),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          toast({
+            title: "✅ Report Submitted",
+            description: `Your anonymous report has been submitted successfully. Report ID: ${data.data?.report_id || 'Generated'}`,
+          })
+          
+          // Reset form
+          setReportForm({
+            category: "",
+            title: "",
+            description: "",
+            evidence: null,
+          })
+        } else {
+          throw new Error(data.message || "Failed to submit report")
+        }
+      } else {
+        throw new Error("Failed to submit report to server")
+      }
+    } catch (error: any) {
+      console.error("Error submitting report:", error)
+      toast({
+        title: "Submission Failed",
+        description: error.message || "Failed to submit report. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmittingReport(false)
+    }
+  }
+
+  // Generate evidence hash for anonymity
+  const generateEvidenceHash = async (data: string): Promise<string> => {
+    const encoder = new TextEncoder()
+    const dataBuffer = encoder.encode(data)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    return `0x${hashHex.substring(0, 16)}` // Truncate for display
+  }
+
+  // Map category to priority
+  const getCategoryPriority = (category: string): string => {
+    switch (category) {
+      case "financial": return "HIGH"
+      case "safety": return "CRITICAL" 
+      case "regulatory": return "HIGH"
+      case "ethical": return "MEDIUM"
+      default: return "MEDIUM"
+    }
   }
 
   // Web3 state
@@ -971,7 +1086,57 @@ Timestamp: ${timestamp}
                   </p>
                 </div>
 
-                <Button className="w-full">Submit Anonymous Report</Button>
+                {/* Wallet Status Display */}
+                {address && verified ? (
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800 text-sm">
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="font-medium">Wallet Connected & Verified</span>
+                    </div>
+                    <p className="text-xs text-green-700 mt-1">
+                      {address.slice(0, 6)}...{address.slice(-4)} - Ready to submit anonymous reports
+                    </p>
+                  </div>
+                ) : address && !verified ? (
+                  <div className="bg-yellow-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="font-medium">Wallet Verification Required</span>
+                    </div>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Your wallet is connected but needs verification to submit reports.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="font-medium">Wallet Required</span>
+                    </div>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Please connect your wallet to submit anonymous reports securely.
+                    </p>
+                  </div>
+                )}
+
+                <Button 
+                  className="w-full" 
+                  onClick={submitReport}
+                  disabled={!address || !verified || isSubmittingReport || !reportForm.title.trim() || !reportForm.description.trim() || !reportForm.category}
+                >
+                  {isSubmittingReport ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Submitting Report...
+                    </>
+                  ) : !address ? (
+                    "🔐 Connect Wallet to Submit"
+                  ) : !verified ? (
+                    "🔑 Verify Wallet to Submit"  
+                  ) : (
+                    "🛡️ Submit Anonymous Report"
+                  )}
+                </Button>
               </CardContent>
             </Card>
 
