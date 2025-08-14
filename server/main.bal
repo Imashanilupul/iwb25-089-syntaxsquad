@@ -1004,18 +1004,88 @@ service /api on apiListener {
     resource function post petitions(http:Request request) returns json|error {
         log:printInfo("Create petition endpoint called");
 
-        json payload = check request.getJsonPayload();
+        json|error maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            return {
+                "success": false,
+                "message": "Invalid JSON payload",
+                "error": maybePayload.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
 
-        // Extract required fields
-        string title = check payload.title;
-        string description = check payload.description;
-        int requiredSignatureCount = check payload.required_signature_count;
+        if maybePayload is map<json> {
+            map<json> payload = maybePayload;
 
-        // Extract optional fields
-        int? creatorId = payload.creator_id is int ? check payload.creator_id : ();
-        string? deadline = payload.deadline is string ? check payload.deadline : ();
+            string[] missing = [];
+            if !payload.hasKey("title") {
+                missing.push("title");
+            }
+            if !payload.hasKey("description") {
+                missing.push("description");
+            }
+            if !payload.hasKey("required_signature_count") {
+                missing.push("required_signature_count");
+            }
 
-        return petitionsService.createPetition(title, description, requiredSignatureCount, creatorId, deadline);
+            if missing.length() > 0 {
+                string missingStr = "";
+                foreach int i in 0 ..< missing.length() {
+                    if i == 0 {
+                        missingStr = missing[i];
+                    } else {
+                        missingStr = missingStr + ", " + missing[i];
+                    }
+                }
+
+                return {
+                    "success": false,
+                    "message": "Missing required fields: " + missingStr,
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+
+            // Validate and extract fields
+            string|error titleVal = payload["title"].ensureType(string);
+            if titleVal is error {
+                return { "success": false, "message": "Invalid 'title' field: must be a string", "timestamp": time:utcNow()[0] };
+            }
+            string title = titleVal;
+
+            string|error descVal = payload["description"].ensureType(string);
+            if descVal is error {
+                return { "success": false, "message": "Invalid 'description' field: must be a string", "timestamp": time:utcNow()[0] };
+            }
+            string description = descVal;
+
+            int|error reqSigVal = payload["required_signature_count"].ensureType(int);
+            if reqSigVal is error {
+                return { "success": false, "message": "Invalid 'required_signature_count': must be an integer", "timestamp": time:utcNow()[0] };
+            }
+            int requiredSignatureCount = reqSigVal;
+
+            int? creatorId = ();
+            if payload.hasKey("creator_id") {
+                if payload["creator_id"] is int {
+                    creatorId = check payload["creator_id"].ensureType(int);
+                }
+            }
+
+            string? deadline = ();
+            if payload.hasKey("deadline") {
+                if payload["deadline"] is string {
+                    deadline = check payload["deadline"].ensureType(string);
+                }
+            }
+
+            return petitionsService.createPetition(title, description, requiredSignatureCount, creatorId, deadline);
+        } else {
+            return {
+                "success": false,
+                "message": "Invalid payload format: expected JSON object",
+                "timestamp": time:utcNow()[0]
+            };
+        }
     }
 
     # Update petition by ID
