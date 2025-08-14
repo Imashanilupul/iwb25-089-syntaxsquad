@@ -55,14 +55,18 @@ export function PolicyHub() {
 
         // Fetch policy statistics
         const statsResponse = await policyService.getPolicyStatistics()
+        console.log('Policy stats response:', statsResponse)
         if (statsResponse.success) {
-          setPolicyStats(statsResponse.data)
+          setPolicyStats(statsResponse.statistics)
+          console.log('Set policy stats to:', statsResponse.statistics)
         }
 
         // Fetch comment statistics
         const commentStatsResponse = await policyCommentService.getCommentStatistics()
+        console.log('Comment stats response:', commentStatsResponse)
         if (commentStatsResponse.success) {
           setCommentStats(commentStatsResponse.data)
+          console.log('Set comment stats to:', commentStatsResponse.data)
         }
 
       } catch (error) {
@@ -301,8 +305,11 @@ export function PolicyHub() {
 
   // Helper function to count comments for a policy
   const getCommentCount = (policyId: number) => {
-    // This could be enhanced to fetch from API or cache
-    return 0 // Placeholder for now
+    // Use the policy engagement breakdown from comment statistics
+    if (commentStats?.policy_engagement_breakdown) {
+      return commentStats.policy_engagement_breakdown[policyId.toString()] || 0
+    }
+    return 0
   }
 
   const sentimentData = [
@@ -376,7 +383,7 @@ export function PolicyHub() {
           {loading ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            policyStats?.totalPolicies || policies.length
+            policyStats?.statistics?.total_policies || policies.length
           )}
         </div>
         <p className="text-xs text-slate-500">Under discussion</p>
@@ -393,7 +400,7 @@ export function PolicyHub() {
           {loading ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            commentStats?.totalComments || "0"
+            commentStats?.total_comments || "0"
           )}
         </div>
         <p className="text-xs text-slate-500">This month</p>
@@ -410,7 +417,7 @@ export function PolicyHub() {
           {loading ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            commentStats?.avgLikesPerComment ? Math.round(commentStats.avgLikesPerComment) + "%" : "72%"
+            commentStats?.average_likes_per_comment ? Math.round(commentStats.average_likes_per_comment * 100) + "%" : "72%"
           )}
         </div>
         <p className="text-xs text-slate-500">Positive feedback</p>

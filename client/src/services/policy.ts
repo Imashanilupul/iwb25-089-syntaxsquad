@@ -59,11 +59,10 @@ export interface UpdatePolicyData {
 export interface PolicyStatistics {
   success: boolean
   message: string
-  data: {
-    totalPolicies: number
-    statusCounts: Record<string, number>
-    ministryCounts: Record<string, number>
-    averagePoliciesPerMinistry: number
+  statistics: {
+    total_policies: number
+    status_distribution: Record<string, number>
+    ministry_distribution: Record<string, number>
   }
   timestamp: number
 }

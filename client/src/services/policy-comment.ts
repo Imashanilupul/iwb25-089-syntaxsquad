@@ -32,12 +32,12 @@ export interface PolicyCommentStatistics {
   success: boolean
   message: string
   data: {
-    totalComments: number
-    totalLikes: number
-    avgLikesPerComment: number
-    repliesCount: number
-    userCounts: Record<string, number>
-    policyCounts: Record<string, number>
+    total_comments: number
+    total_likes: number
+    replies_count: number
+    average_likes_per_comment: number
+    user_activity_breakdown: Record<string, number>
+    policy_engagement_breakdown: Record<string, number>
   }
   timestamp: number
 }
