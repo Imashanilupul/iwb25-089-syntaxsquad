@@ -93,30 +93,36 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
       toast({
         title: "Signature confirmed",
-        description: "Creating petition on blockchain...",
+        description: "Creating petition...",
       })
 
-      // Step 2: Create petition on smart contract backend
-      const smartContractResponse = await fetch("http://localhost:3001/petition/create-petition", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: petitionForm.title,
-          description: petitionForm.description,
-          requiredSignatures: petitionForm.targetSignatures,
-          signerIndex: 0, // Use first signer for demo
-        }),
-      })
+      // Step 2: Try to create petition on smart contract backend (optional)
+      let contractData = null
+      try {
+        const smartContractResponse = await fetch("http://localhost:3001/petition/create-petition", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: petitionForm.title,
+            description: petitionForm.description,
+            requiredSignatures: petitionForm.targetSignatures,
+            signerIndex: 0, // Use first signer for demo
+          }),
+        })
 
-      if (!smartContractResponse.ok) {
-        throw new Error("Failed to create petition on blockchain")
+        if (smartContractResponse.ok) {
+          contractData = await smartContractResponse.json()
+          console.log("✅ Smart contract petition created:", contractData)
+        } else {
+          console.warn("⚠️ Smart contract service responded with error:", smartContractResponse.status)
+        }
+      } catch (blockchainError) {
+        console.warn("⚠️ Smart contract service unavailable, continuing with database storage only:", blockchainError)
       }
-
-      const contractData = await smartContractResponse.json()
       
-      // Step 3: Save petition to Ballerina backend
+      // Step 3: Save petition to Ballerina backend (this always happens)
       const ballerinaResponse = await fetch("http://localhost:8080/api/petitions", {
         method: "POST",
         headers: {
@@ -127,9 +133,9 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
           description: petitionForm.description,
           required_signature_count: petitionForm.targetSignatures,
           creator_id: 1, // You might want to get this from user context
-          blockchain_petition_id: contractData.petitionId,
-          title_cid: contractData.titleCid,
-          description_cid: contractData.descriptionCid,
+          blockchain_petition_id: contractData?.petitionId || null,
+          title_cid: contractData?.titleCid || null,
+          description_cid: contractData?.descriptionCid || null,
           wallet_address: walletAddress,
           signature: signature,
         }),
