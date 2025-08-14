@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,12 +28,16 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } fro
 // Web3 types
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>
-      isMetaMask?: boolean
-    }
+    ethereum?: Record<string, unknown>;
   }
 }
+
+type Ethereumish = {
+  request: (args: { method: string; params?: any[] }) => Promise<any>;
+  isMetaMask?: boolean;
+};
+
+// Usage: cast window.ethereum as Ethereumish when you need the specific methods
 
 interface WhistleblowingSystemProps {
   walletAddress?: string | null;
@@ -55,53 +59,310 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     targetSignatures: 10000,
   })
 
+  // Real petition data state
+  const [petitions, setPetitions] = useState<any[]>([])
+  const [isLoadingPetitions, setIsLoadingPetitions] = useState(false)
+  const [signingPetition, setSigningPetition] = useState<number | null>(null)
+
   // Web3 state
   const [isCreatingPetition, setIsCreatingPetition] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
+
+  // Fetch petitions from API
+  const fetchPetitions = async () => {
+    setIsLoadingPetitions(true)
+    try {
+      const response = await fetch("http://localhost:8080/api/petitions")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setPetitions(data.data)
+        }
+      } else {
+        console.error("Failed to fetch petitions:", response.statusText)
+        toast({
+          title: "Error",
+          description: "Failed to load petitions",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching petitions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load petitions",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingPetitions(false)
+    }
+  }
+
+  // Sign petition function
+  const signPetition = async (petitionId: number) => {
+    if (!walletAddress) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to sign petitions",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSigningPetition(petitionId)
+    try {
+      // Create signature for petition signing
+      if (!window.ethereum) {
+        throw new Error("MetaMask is not installed")
+      }
+
+      const petition = petitions.find(p => p.id === petitionId)
+      if (!petition) {
+        throw new Error("Petition not found")
+      }
+
+      const message = `🗳️ SIGN PETITION
+
+Title: ${petition.title}
+ID: ${petition.id}
+Wallet: ${walletAddress}
+Timestamp: ${new Date().toISOString()}
+
+By signing this message, you confirm your signature on this petition.`
+
+      const signature = await (window.ethereum as any).request({
+        method: "personal_sign",
+        params: [message, walletAddress],
+      })
+
+      // Submit signature to backend
+      const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          wallet_address: walletAddress,
+          signature: signature,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Update local petition data
+          setPetitions(prev => prev.map(p => 
+            p.id === petitionId 
+              ? { ...p, signature_count: (p.signature_count || 0) + 1 }
+              : p
+          ))
+          
+          // Also create petition activity
+          await fetch("http://localhost:8080/api/petition_activities", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              petition_id: petitionId,
+              activity_type: "SIGNATURE",
+              signature_count: 1,
+              user_id: 1, // You might want to get this from user context
+            }),
+          })
+
+          toast({
+            title: "✅ Petition signed!",
+            description: `Your signature has been added to "${petition.title}"`,
+          })
+        } else {
+          throw new Error(data.message || "Failed to sign petition")
+        }
+      } else {
+        throw new Error("Failed to sign petition")
+      }
+    } catch (error: any) {
+      console.error("Error signing petition:", error)
+      if (error.code === 4001) {
+        toast({
+          title: "Signature cancelled",
+          description: "You cancelled the signature request",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error signing petition",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setSigningPetition(null)
+    }
+  }
+
+  // Load petitions when component mounts
+  React.useEffect(() => {
+    fetchPetitions()
+  }, [])
 
   // Create petition function
   const createPetition = async () => {
     // Prevent multiple simultaneous requests
     if (isCreatingPetition) {
-      toast({ title: "Please wait", description: "Petition creation is already in progress", variant: "destructive" })
+      toast({
+        title: "Please wait",
+        description: "Petition creation is already in progress",
+        variant: "destructive",
+      })
       return
     }
 
-    // Validate wallet and form
-    if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-      toast({ title: "Wallet not connected", description: "Connect your wallet", variant: "destructive" })
+    // Enhanced wallet address validation
+    if (!walletAddress || walletAddress.trim() === "") {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first using the Connect button",
+        variant: "destructive",
+      })
       return
     }
-    if (!petitionForm.title.trim() || !petitionForm.description.trim()) {
-      toast({ title: "Missing information", description: "Please fill title and description", variant: "destructive" })
+
+    // Validate Ethereum address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      toast({
+        title: "Invalid wallet address",
+        description: "The wallet address format is invalid. Please reconnect your wallet.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!petitionForm.title || !petitionForm.description) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
       return
     }
 
     setIsCreatingPetition(true)
-    setLastError(null)
-
+    setLastError(null) // Clear any previous errors
     try {
-      // 1) Save draft to Ballerina (returns draftId)
-      const draftRes = await fetch("http://localhost:8080/api/petitions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: petitionForm.title,
-          description: petitionForm.description,
-          required_signature_count: petitionForm.targetSignatures,
-          creator_wallet: walletAddress,
-          status: "draft",
-        }),
+      // Step 1: Check if MetaMask/wallet is available
+      if (!window.ethereum) {
+        throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
+      }
+
+      // Step 2: Ensure we're connected to the right account
+      let accounts
+      try {
+        accounts = await (window.ethereum as any).request({ method: 'eth_accounts' })
+      } catch (accountError: any) {
+        console.error("Failed to get accounts:", accountError)
+        throw new Error("Failed to get wallet accounts. Please try again.")
+      }
+
+      if (accounts.length === 0) {
+        // Only request accounts if we don't have any
+        try {
+          toast({
+            title: "Account Access Required",
+            description: "Please approve wallet connection in MetaMask",
+          })
+          accounts = await (window.ethereum as any).request({ method: 'eth_requestAccounts' })
+        } catch (requestError: any) {
+          if (requestError.code === -32002) {
+            throw new Error("MetaMask is already processing a connection request. Please check your MetaMask extension and try again.")
+          } else if (requestError.code === 4001) {
+            throw new Error("User rejected wallet connection request")
+          }
+          throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+        }
+      }
+
+      // Double-check the current account matches our walletAddress
+      const currentAccount = accounts[0]?.toLowerCase()
+      if (!currentAccount) {
+        throw new Error("No wallet account found. Please connect your wallet first.")
+      }
+      
+      if (currentAccount !== walletAddress.toLowerCase()) {
+        throw new Error(`Account mismatch. Please switch to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} in MetaMask`)
+      }
+
+      // Step 3: Create a clear message to sign
+      const timestamp = new Date().toISOString()
+      const message = `🗳️ CREATE PETITION CONFIRMATION
+
+Title: ${petitionForm.title}
+
+Description: ${petitionForm.description}
+
+Target Signatures: ${petitionForm.targetSignatures.toLocaleString()}
+
+Wallet: ${walletAddress}
+Timestamp: ${timestamp}
+
+⚠️ By signing this message, you confirm that you want to create this petition on the blockchain. This action cannot be undone.`
+      
+      toast({
+        title: "Signature Required",
+        description: "Please check your wallet to sign the petition creation request",
       })
-      if (!draftRes.ok) throw new Error("Failed to create draft on backend")
-      const draftJson = await draftRes.json()
-      const draftId = draftJson.data?.id || draftJson.id || null
-      if (!draftId) throw new Error("No draft id returned from backend")
 
-      toast({ title: "Draft saved", description: "Uploaded draft to backend, preparing IPFS..." })
+      // Step 4: Request signature from user
+      let signature
+      try {
+        signature = await (window.ethereum as any).request({
+          method: "personal_sign",
+          params: [message, walletAddress],
+        })
+      } catch (signError: any) {
+        if (signError.code === 4001) {
+          throw new Error("User rejected the signature request")
+        }
+        throw new Error(`Signature failed: ${signError.message || signError}`)
+      }
 
-      // 2) Call Express prepare endpoint to upload to IPFS and get contract info
-      const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+      if (!signature) {
+        throw new Error("No signature received from wallet")
+      }
+
+      toast({
+        title: "✅ Signature confirmed",
+        description: "Creating petition on blockchain...",
+      })
+
+      // Step 2: Try to create petition on smart contract backend (optional)
+      let contractData = null
+      try {
+        const smartContractResponse = await fetch("http://localhost:3001/petition/create-petition", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: petitionForm.title,
+            description: petitionForm.description,
+            requiredSignatures: petitionForm.targetSignatures,
+            signerIndex: 0, // Use first signer for demo
+          }),
+        })
+
+        if (smartContractResponse.ok) {
+          contractData = await smartContractResponse.json()
+          console.log("✅ Smart contract petition created:", contractData)
+        } else {
+          console.warn("⚠️ Smart contract service responded with error:", smartContractResponse.status)
+        }
+      } catch (blockchainError) {
+        console.warn("⚠️ Smart contract service unavailable, continuing with database storage only:", blockchainError)
+      }
+      
+      // Step 3: Save petition to Ballerina backend (this always happens)
+      const ballerinaResponse = await fetch("http://localhost:8080/api/petitions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -184,7 +445,17 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       toast({ title: "Petition created", description: "Saved to blockchain and backend" })
 
       // Reset form
-      setPetitionForm({ title: "", description: "", targetSignatures: 10000 })
+      setPetitionForm({
+        title: "",
+        description: "",
+        targetSignatures: 10000,
+      })
+
+      // Refresh petitions list
+      fetchPetitions()
+
+      console.log("Smart contract data:", contractData)
+      console.log("Database data:", ballerinaData)
 
     } catch (error: any) {
       console.error("Failed create flow:", error)
@@ -219,37 +490,6 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       anonymityLevel: "Partial",
       evidenceHash: "0x5i6j7k8l9m0n1o2p",
       investigator: "Central Environmental Authority",
-    },
-  ]
-
-  const petitions = [
-    {
-      id: "PET-LK-2024-001",
-      title: "Preserve Sinharaja Forest Reserve",
-      description: "Petition to strengthen protection measures for UNESCO World Heritage Site",
-      currentSignatures: 84560,
-      targetSignatures: 100000,
-      progress: 84.56,
-      status: "Active",
-      category: "Environment",
-      createdDate: "2024-01-20",
-      deadline: "2024-02-20",
-      blockchainHash: "0x3q4r5s6t7u8v9w0x",
-      autoExecute: true,
-    },
-    {
-      id: "PET-LK-2024-002",
-      title: "Right to Information Act Enhancement",
-      description: "Strengthen RTI implementation and reduce response times for public information requests",
-      currentSignatures: 152340,
-      targetSignatures: 120000,
-      progress: 126.95,
-      status: "Threshold Met",
-      category: "Governance",
-      createdDate: "2024-01-05",
-      deadline: "2024-02-05",
-      blockchainHash: "0x1y2z3a4b5c6d7e8f",
-      autoExecute: true,
     },
   ]
 
@@ -438,7 +678,9 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
                 <FileText className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">18</div>
+                <div className="text-2xl font-bold">
+                  {petitions.filter(p => p.status === 'ACTIVE').length}
+                </div>
                 <p className="text-xs text-slate-500">Collecting signatures</p>
               </CardContent>
             </Card>
@@ -449,7 +691,9 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
                 <Users className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">156K</div>
+                <div className="text-2xl font-bold">
+                  {petitions.reduce((total, p) => total + (p.signature_count || 0), 0).toLocaleString()}
+                </div>
                 <p className="text-xs text-slate-500">All time</p>
               </CardContent>
             </Card>
@@ -460,77 +704,122 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
                 <TrendingUp className="h-4 w-4 text-purple-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">73%</div>
+                <div className="text-2xl font-bold">
+                  {petitions.length > 0 
+                    ? Math.round((petitions.filter(p => (p.signature_count || 0) >= p.required_signature_count).length / petitions.length) * 100)
+                    : 0}%
+                </div>
                 <p className="text-xs text-slate-500">Threshold reached</p>
               </CardContent>
             </Card>
 
             <Card className="border-0 shadow-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Auto-Executed</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Petitions</CardTitle>
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">42</div>
-                <p className="text-xs text-slate-500">Smart contracts</p>
+                <div className="text-2xl font-bold">{petitions.length}</div>
+                <p className="text-xs text-slate-500">All petitions</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Petitions List */}
           <div className="space-y-4">
-            {petitions.map((petition) => (
-              <Card key={petition.id} className="border-0 shadow-md">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{petition.title}</CardTitle>
-                        <Badge variant="outline">{petition.category}</Badge>
-                        <Badge className={getStatusColor(petition.status)}>{petition.status}</Badge>
-                      </div>
-                      <CardDescription>{petition.description}</CardDescription>
-                      <div className="flex items-center gap-4 text-sm text-slate-600">
-                        <span>Created: {petition.createdDate}</span>
-                        <span>•</span>
-                        <span>Deadline: {petition.deadline}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>
-                        Signatures: {petition.currentSignatures.toLocaleString()} /{" "}
-                        {petition.targetSignatures.toLocaleString()}
-                      </span>
-                      <span>{petition.progress.toFixed(1)}%</span>
-                    </div>
-                    <Progress value={Math.min(petition.progress, 100)} />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Hash className="h-3 w-3" />
-                      <span className="font-mono">{petition.blockchainHash}</span>
-                      {petition.autoExecute && (
-                        <Badge variant="outline" className="text-xs">
-                          Auto-Execute
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                      {petition.status === "Active" && <Button size="sm">Sign Petition</Button>}
-                    </div>
-                  </div>
+            {isLoadingPetitions ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin mr-2">⏳</div>
+                Loading petitions...
+              </div>
+            ) : petitions.length === 0 ? (
+              <Card className="border-0 shadow-md">
+                <CardContent className="py-8 text-center text-slate-500">
+                  No petitions found. Create the first petition to get started!
                 </CardContent>
               </Card>
-            ))}
+            ) : (
+              petitions.map((petition) => {
+                const progress = petition.required_signature_count > 0 
+                  ? ((petition.signature_count || 0) / petition.required_signature_count) * 100 
+                  : 0
+                const isThresholdMet = (petition.signature_count || 0) >= petition.required_signature_count
+                const status = isThresholdMet ? "Threshold Met" : petition.status || "Active"
+                
+                return (
+                  <Card key={petition.id} className="border-0 shadow-md">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg">{petition.title}</CardTitle>
+                            <Badge variant="outline">Governance</Badge>
+                            <Badge className={getStatusColor(status)}>{status}</Badge>
+                          </div>
+                          <CardDescription>{petition.description}</CardDescription>
+                          <div className="flex items-center gap-4 text-sm text-slate-600">
+                            <span>Created: {new Date(petition.created_at).toLocaleDateString()}</span>
+                            {petition.deadline && (
+                              <>
+                                <span>•</span>
+                                <span>Deadline: {new Date(petition.deadline).toLocaleDateString()}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Progress */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>
+                            Signatures: {(petition.signature_count || 0).toLocaleString()} /{" "}
+                            {petition.required_signature_count.toLocaleString()}
+                          </span>
+                          <span>{progress.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={Math.min(progress, 100)} />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Hash className="h-3 w-3" />
+                          <span>ID: {petition.id}</span>
+                          {petition.blockchain_petition_id && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono">Blockchain: {petition.blockchain_petition_id}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm">
+                            View Details
+                          </Button>
+                          {petition.status === "ACTIVE" && !isThresholdMet && (
+                            <Button 
+                              size="sm" 
+                              onClick={() => signPetition(petition.id)}
+                              disabled={!walletAddress || signingPetition === petition.id}
+                            >
+                              {signingPetition === petition.id ? (
+                                <>
+                                  <span className="animate-spin mr-2">⏳</span>
+                                  Signing...
+                                </>
+                              ) : (
+                                "Sign Petition"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
           </div>
         </TabsContent>
 
@@ -639,22 +928,19 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Target Signatures</label>
-                  <Select
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="Enter target signature count"
                     value={petitionForm.targetSignatures.toString()}
-                    onValueChange={(value) =>
-                      setPetitionForm({ ...petitionForm, targetSignatures: Number.parseInt(value) })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5000">5,000 signatures</SelectItem>
-                      <SelectItem value="10000">10,000 signatures</SelectItem>
-                      <SelectItem value="25000">25,000 signatures</SelectItem>
-                      <SelectItem value="50000">50,000 signatures</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onChange={(e) => {
+                      const value = e.target.value
+                      const numValue = value === '' ? 0 : Number.parseInt(value)
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        setPetitionForm({ ...petitionForm, targetSignatures: numValue })
+                      }
+                    }}
+                  />
                 </div>
 
                 <div className="bg-green-50 p-3 rounded-lg">

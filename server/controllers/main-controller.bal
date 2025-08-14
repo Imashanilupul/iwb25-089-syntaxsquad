@@ -230,81 +230,69 @@ service /api/petitions on new http:Listener(8082) {
         
         // Extract optional fields
         int? creatorId = ();
-        if payload.creator_id is int {
-            creatorId = <int>payload.creator_id;
+        if (payload.creator_id is json) {
+            creatorId = <int>(check payload.creator_id);
         }
         
         string? blockchainPetitionId = ();
-        if payload.blockchain_petition_id is string {
-            blockchainPetitionId = payload.blockchain_petition_id.toString();
+        if (payload.blockchain_petition_id is json) {
+            blockchainPetitionId = (check payload.blockchain_petition_id).toString();
         }
         
         string? titleCid = ();
-        if payload.title_cid is string {
-            titleCid = payload.title_cid.toString();
+        if (payload.title_cid is json) {
+            titleCid = (check payload.title_cid).toString();
         }
         
         string? descriptionCid = ();
-        if payload.description_cid is string {
-            descriptionCid = payload.description_cid.toString();
+        if (payload.description_cid is json) {
+            descriptionCid = (check payload.description_cid).toString();
         }
         
         string? walletAddress = ();
-        if payload.wallet_address is string {
-            walletAddress = payload.wallet_address.toString();
+        if (payload.wallet_address is json) {
+            walletAddress = (check payload.wallet_address).toString();
         }
         
-        try {
-            // Note: This is a standalone controller, not connected to the main service
-            // The actual petition creation should be done through the main API service
-            // which uses the petitionsService for database operations
-            
-            // Create petition in database using a direct HTTP call to main service
-            json petitionData = {
-                "title": title,
-                "description": description,
-                "required_signature_count": requiredSignatureCount
-            };
-            
-            // Add optional fields if provided
-            if creatorId is int {
-                petitionData = check petitionData.mergeJson({"creator_id": creatorId});
-            }
-            
-            if blockchainPetitionId is string {
-                petitionData = check petitionData.mergeJson({"blockchain_petition_id": blockchainPetitionId});
-            }
-            
-            if titleCid is string {
-                petitionData = check petitionData.mergeJson({"title_cid": titleCid});
-            }
-            
-            if descriptionCid is string {
-                petitionData = check petitionData.mergeJson({"description_cid": descriptionCid});
-            }
-            
-            if walletAddress is string {
-                petitionData = check petitionData.mergeJson({"wallet_address": walletAddress});
-            }
-            
-            response.statusCode = 201;
-            response.setJsonPayload({
-                "success": true,
-                "message": "Petition created successfully",
-                "data": petitionData,
-                "timestamp": time:utcNow()[0]
-            });
-            
-        } catch (error e) {
-            log:printError("Error creating petition: " + e.message());
-            response.statusCode = 500;
-            response.setJsonPayload({
-                "success": false,
-                "message": "Failed to create petition",
-                "error": e.message(),
-                "timestamp": time:utcNow()[0]
-            });
+        // Note: This is a standalone controller, not connected to the main service
+        // The actual petition creation should be done through the main API service
+        // which uses the petitionsService for database operations
+        
+        // Create petition data structure
+        map<json> petitionData = {
+            "title": title,
+            "description": description,
+            "required_signature_count": requiredSignatureCount
+        };
+        
+        // Add optional fields if provided
+        if creatorId is int {
+            petitionData["creator_id"] = creatorId;
         }
+        
+        if blockchainPetitionId is string {
+            petitionData["blockchain_petition_id"] = blockchainPetitionId;
+        }
+        
+        if titleCid is string {
+            petitionData["title_cid"] = titleCid;
+        }
+        
+        if descriptionCid is string {
+            petitionData["description_cid"] = descriptionCid;
+        }
+        
+        if walletAddress is string {
+            petitionData["wallet_address"] = walletAddress;
+        }
+        
+        response.statusCode = 201;
+        response.setJsonPayload({
+            "success": true,
+            "message": "Petition created successfully",
+            "data": petitionData,
+            "timestamp": time:utcNow()[0]
+        });
         
         return response;
     }
