@@ -1,8 +1,8 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\user\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\auth\\auth.sol": {
-      "lastModificationDate": 1754595712604,
+    "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\auth\\auth.sol": {
+      "lastModificationDate": 1754909726444,
       "contentHash": "cef9cc1b7f874ca9456b550b7aef161a",
       "sourceName": "contracts/auth/auth.sol",
       "solcConfig": {
@@ -37,9 +37,9 @@
         "AuthRegistry"
       ]
     },
-    "C:\\Users\\user\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\petition\\petitions.sol": {
-      "lastModificationDate": 1754595680251,
-      "contentHash": "5a16a1ed617272f39811c854c67ed9dd",
+    "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\petition\\petitions.sol": {
+      "lastModificationDate": 1754919238060,
+      "contentHash": "54af279d1b78d21e65b0aa955c95faa0",
       "sourceName": "contracts/petition/petitions.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -70,7 +70,82 @@
         "^0.8.20"
       ],
       "artifacts": [
+        "IAuthRegistry",
         "Petitions"
+      ]
+    },
+    "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\proposal\\proposals.sol": {
+      "lastModificationDate": 1755177325639,
+      "contentHash": "0f6eba7960e704faba9f659bb3ea3673",
+      "sourceName": "contracts/proposal/proposals.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "IAuthRegistry",
+        "Proposals"
+      ]
+    },
+    "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\report\\reports.sol": {
+      "lastModificationDate": 1755177346383,
+      "contentHash": "9f1a6e1847053e5c4772bdf735c7c188",
+      "sourceName": "contracts/report/reports.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "IAuthRegistry",
+        "Reports"
       ]
     }
   }

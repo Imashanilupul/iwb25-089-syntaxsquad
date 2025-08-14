@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import { useToast } from "@/hooks/use-toast"
 import {
   Shield,
   AlertTriangle,
@@ -24,7 +25,20 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
 
-export function WhistleblowingSystem() {
+// Web3 types
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
+interface WhistleblowingSystemProps {
+  walletAddress?: string | null;
+}
+
+export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProps) {
+  const { toast } = useToast()
+  
   const [reportForm, setReportForm] = useState({
     category: "",
     title: "",
@@ -37,6 +51,131 @@ export function WhistleblowingSystem() {
     description: "",
     targetSignatures: 10000,
   })
+
+  // Web3 state
+  const [isCreatingPetition, setIsCreatingPetition] = useState(false)
+
+  // Create petition function
+  const createPetition = async () => {
+    if (!walletAddress) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!petitionForm.title || !petitionForm.description) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsCreatingPetition(true)
+    try {
+      // Step 1: Request wallet signature confirmation
+      if (!window.ethereum) {
+        throw new Error("MetaMask not found")
+      }
+
+      // Create a message to sign
+      const message = `Create Petition: ${petitionForm.title}\n\nDescription: ${petitionForm.description}\n\nTarget Signatures: ${petitionForm.targetSignatures}\n\nBy signing this message, you confirm that you want to create this petition on the blockchain.`
+      
+      // Request signature from user
+      const signature = await window.ethereum.request({
+        method: "personal_sign",
+        params: [message, walletAddress],
+      })
+
+      toast({
+        title: "Signature confirmed",
+        description: "Creating petition on blockchain...",
+      })
+
+      // Step 2: Create petition on smart contract backend
+      const smartContractResponse = await fetch("http://localhost:3001/petition/create-petition", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: petitionForm.title,
+          description: petitionForm.description,
+          requiredSignatures: petitionForm.targetSignatures,
+          signerIndex: 0, // Use first signer for demo
+        }),
+      })
+
+      if (!smartContractResponse.ok) {
+        throw new Error("Failed to create petition on blockchain")
+      }
+
+      const contractData = await smartContractResponse.json()
+      
+      // Step 3: Save petition to Ballerina backend
+      const ballerinaResponse = await fetch("http://localhost:8080/petitions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: petitionForm.title,
+          description: petitionForm.description,
+          required_signature_count: petitionForm.targetSignatures,
+          creator_id: 1, // You might want to get this from user context
+          blockchain_petition_id: contractData.petitionId,
+          title_cid: contractData.titleCid,
+          description_cid: contractData.descriptionCid,
+          wallet_address: walletAddress,
+          signature: signature,
+        }),
+      })
+
+      if (!ballerinaResponse.ok) {
+        throw new Error("Failed to save petition to database")
+      }
+
+      const ballerinaData = await ballerinaResponse.json()
+
+      toast({
+        title: "Petition created successfully!",
+        description: `Petition ID: ${contractData.petitionId}`,
+      })
+
+      // Reset form
+      setPetitionForm({
+        title: "",
+        description: "",
+        targetSignatures: 10000,
+      })
+
+      console.log("Smart contract data:", contractData)
+      console.log("Database data:", ballerinaData)
+
+    } catch (error) {
+      console.error("Failed to create petition:", error)
+      
+      if (error.code === 4001) {
+        toast({
+          title: "Signature cancelled",
+          description: "You cancelled the signature request",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Failed to create petition",
+          description: error instanceof Error ? error.message : "An error occurred",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setIsCreatingPetition(false)
+    }
+  }
 
   const reports = [
     {
@@ -511,7 +650,36 @@ export function WhistleblowingSystem() {
                   </p>
                 </div>
 
-                <Button className="w-full">Create Petition</Button>
+                {/* Wallet Status Display */}
+                {walletAddress ? (
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800 text-sm">
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="font-medium">Wallet Connected</span>
+                    </div>
+                    <p className="text-xs text-green-700 mt-1">
+                      {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="font-medium">Wallet Required</span>
+                    </div>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Please connect your wallet using the button in the top right corner to create petitions.
+                    </p>
+                  </div>
+                )}
+
+                <Button 
+                  className="w-full" 
+                  onClick={createPetition}
+                  disabled={!walletAddress || isCreatingPetition}
+                >
+                  {isCreatingPetition ? "Creating Petition..." : "Create Petition"}
+                </Button>
               </CardContent>
             </Card>
           </div>

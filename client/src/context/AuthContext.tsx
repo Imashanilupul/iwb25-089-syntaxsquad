@@ -33,12 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function checkAuth() {
       if (isConnected && address) {
-        const res = await axios.post("http://localhost:8000/auth/isauthorized", { address });
-        setAuth({
-          address,
-          verified: res.data.verified,
-          jwt: res.data.token ?? null,
-        });
+        try {
+          const res = await axios.get(`http://localhost:8080/auth/isauthorized/${address}`);
+          setAuth({
+            address,
+            verified: res.data.verified,
+            jwt: res.data.token ?? null,
+          });
+        } catch (error) {
+          console.error("Auth check failed:", error);
+          setAuth({ address, verified: false, jwt: null });
+        }
       } else {
         setAuth({ address: null, verified: false, jwt: null });
       }

@@ -2,7 +2,7 @@ const express = require("express");
 const { ethers } = require("hardhat");
 const router = express.Router();
 
-const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Replace with real Proposals contract address
+const contractAddress = "0x9AA4cAC63d30429edB1F21e6EA84dbc1F439ABB2"; // Replace with real Proposals contract address
 let proposals;
 let signers;
 

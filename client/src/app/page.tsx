@@ -23,9 +23,11 @@ import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { BlockchainVisualization } from "@/components/blockchain-visualization"
 import { RegistrationDialog } from "@/components/registration-dialog"
 import SignUpPage from "@/components/signup"
+import { useAuth } from "@/context/AuthContext"
 
 export default function CivicPlatform() {
   const [activeTab, setActiveTab] = useState("overview")
+  const { address } = useAuth()
 
   const overviewStats = [
     {
@@ -228,7 +230,7 @@ export default function CivicPlatform() {
           </TabsContent>
 
           <TabsContent value="whistleblowing">
-            <WhistleblowingSystem />
+            <WhistleblowingSystem walletAddress={address} />
           </TabsContent>
         </Tabs>
       </div>
