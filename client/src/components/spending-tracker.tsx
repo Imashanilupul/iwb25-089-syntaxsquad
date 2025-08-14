@@ -46,17 +46,22 @@ import { categoryService } from "@/services/category"
 
 // ------------------ Types ------------------
 interface Project {
-  id: number
-  name: string
-  category: string
-  budget: number
-  spent: number
-  progress: number
+  project_id: number
+  project_name: string
+  category_id?: number
+  allocated_budget: number
+  spent_budget: number
+  state: string
+  province: string
+  ministry: string
+  view_details?: string
   status: string
-  contractor: string
-  location: string
-  blockchainHash: string
-  lastUpdate: string
+  created_at?: string
+  updated_at?: string
+  categories?: {
+    category_name: string
+  }
+  progress?: number
 }
 
 // ------------------ Component ------------------
@@ -327,7 +332,7 @@ export function SpendingTracker() {
             {filteredProjects.length > 0 ? (
               filteredProjects.map((project) => (
                 <div
-                  key={project.id}
+                  key={project.project_id}
                   className="border rounded-lg p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between">
