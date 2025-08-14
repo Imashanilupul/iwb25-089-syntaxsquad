@@ -149,6 +149,7 @@ service /api on apiListener {
                 "GET /api/policycomments/statistics - Get comment statistics",
                 "GET /api/policycomments/recent - Get recent comments",
                 "POST /api/policycomments/{id}/like - Like a comment",
+                "POST /api/policycomments/{id}/unlike - Unlike a comment",
                 "GET /api/policycomments/top/{limit} - Get top liked comments"
             ],
             "features": [
@@ -1409,6 +1410,15 @@ service /api on apiListener {
     resource function post policycomments/[int commentId]/like() returns json|error {
         log:printInfo("Like comment endpoint called for ID: " + commentId.toString());
         return policyCommentsService.likeComment(commentId);
+    }
+
+    # Unlike a comment
+    #
+    # + commentId - Comment ID to unlike
+    # + return - Updated comment data or error
+    resource function post policycomments/[int commentId]/unlike() returns json|error {
+        log:printInfo("Unlike comment endpoint called for ID: " + commentId.toString());
+        return policyCommentsService.unlikeComment(commentId);
     }
 
     # Get top liked comments

@@ -115,6 +115,12 @@ export const policyCommentService = {
     return response
   },
 
+  // Unlike a comment
+  async unlikeComment(commentId: number): Promise<{ success: boolean; message: string; data: PolicyComment; timestamp: number }> {
+    const response = await apiService.post(`/api/policycomments/${commentId}/unlike`) as { success: boolean; message: string; data: PolicyComment; timestamp: number }
+    return response
+  },
+
   // Get top liked comments
   async getTopLikedComments(limit: number = 10): Promise<PolicyCommentResponse> {
     const response = await apiService.get<PolicyCommentResponse>(`/api/policycomments/top/${limit}`)

@@ -619,6 +619,71 @@ public class PolicyCommentsService {
         }
     }
 
+    # Unlike a comment (decrease likes count)
+    #
+    # + commentId - Comment ID to unlike
+    # + return - Updated comment data or error
+    public function unlikeComment(int commentId) returns json|error {
+        // Validate input
+        if commentId <= 0 {
+            return error("Comment ID must be a positive integer");
+        }
+        
+        do {
+            // First get current comment data
+            json commentResult = check self.getPolicyCommentById(commentId);
+            if commentResult is map<json> {
+                json|error commentData = commentResult["data"];
+                if commentData is map<json> {
+                    json|error currentLikes = commentData["likes"];
+                    int newLikes = 0; // Default to 0 if no current likes
+                    if currentLikes is json {
+                        int|error likesInt = currentLikes.ensureType(int);
+                        if likesInt is int && likesInt > 0 {
+                            newLikes = likesInt - 1;
+                        }
+                    }
+                    
+                    // Update likes count
+                    json payload = {
+                        "likes": newLikes,
+                        "updated_at": "now()"
+                    };
+                    
+                    map<string> headers = self.getHeaders(true); // Include Prefer header
+                    string endpoint = "/rest/v1/policy_comments?comment_id=eq." + commentId.toString();
+                    http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+                    
+                    if response.statusCode != 200 {
+                        return error("Failed to unlike comment: " + response.statusCode.toString());
+                    }
+                    
+                    json result = check response.getJsonPayload();
+                    json[] comments = check result.ensureType();
+                    
+                    if comments.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Comment unliked successfully",
+                            "data": comments[0],
+                            "newLikesCount": newLikes,
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return error("Comment not found");
+                    }
+                } else {
+                    return error("Invalid comment data format");
+                }
+            } else {
+                return error("Failed to retrieve comment data");
+            }
+            
+        } on fail error e {
+            return error("Failed to unlike comment: " + e.message());
+        }
+    }
+
     # Get top liked comments
     #
     # + limit - Number of top comments to retrieve
