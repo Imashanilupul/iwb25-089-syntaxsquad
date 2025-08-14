@@ -63,6 +63,20 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [petitions, setPetitions] = useState<any[]>([])
   const [isLoadingPetitions, setIsLoadingPetitions] = useState(false)
   const [signingPetition, setSigningPetition] = useState<number | null>(null)
+  const [userSignatures, setUserSignatures] = useState<{[key: number]: boolean}>({})
+
+  // For demo purposes, create a simple user ID based on wallet address
+  // In a real app, this would come from a proper user authentication system
+  const getUserId = (walletAddress: string): number => {
+    // Simple hash of wallet address to create consistent user ID
+    let hash = 0;
+    for (let i = 0; i < walletAddress.length; i++) {
+      const char = walletAddress.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash % 10000) + 1; // Ensure positive ID between 1-10000
+  }
 
   // Web3 state
   const [isCreatingPetition, setIsCreatingPetition] = useState(false)
@@ -77,6 +91,11 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         const data = await response.json()
         if (data.success && data.data) {
           setPetitions(data.data)
+          
+          // If wallet is connected, check which petitions user has signed
+          if (walletAddress) {
+            await checkUserSignatures(data.data)
+          }
         }
       } else {
         console.error("Failed to fetch petitions:", response.statusText)
@@ -98,6 +117,29 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     }
   }
 
+  // Check which petitions the user has already signed
+  const checkUserSignatures = async (petitionList: any[]) => {
+    if (!walletAddress) return
+    
+    const userId = getUserId(walletAddress)
+    const signatures: {[key: number]: boolean} = {}
+    
+    for (const petition of petitionList) {
+      try {
+        const response = await fetch(`http://localhost:8080/api/petitions/${petition.id}/signed/${userId}`)
+        if (response.ok) {
+          const data = await response.json()
+          signatures[petition.id] = data.hasSigned || false
+        }
+      } catch (error) {
+        console.error(`Error checking signature for petition ${petition.id}:`, error)
+        signatures[petition.id] = false
+      }
+    }
+    
+    setUserSignatures(signatures)
+  }
+
   // Sign petition function
   const signPetition = async (petitionId: number) => {
     if (!walletAddress) {
@@ -109,8 +151,20 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       return
     }
 
+    // Check if user has already signed
+    if (userSignatures[petitionId]) {
+      toast({
+        title: "Already signed",
+        description: "You have already signed this petition",
+        variant: "destructive",
+      })
+      return
+    }
+
     setSigningPetition(petitionId)
     try {
+      const userId = getUserId(walletAddress)
+      
       // Create signature for petition signing
       if (!window.ethereum) {
         throw new Error("MetaMask is not installed")
@@ -125,6 +179,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
 Title: ${petition.title}
 ID: ${petition.id}
+User ID: ${userId}
 Wallet: ${walletAddress}
 Timestamp: ${new Date().toISOString()}
 
@@ -135,13 +190,14 @@ By signing this message, you confirm your signature on this petition.`
         params: [message, walletAddress],
       })
 
-      // Submit signature to backend
+      // Submit signature to backend with user ID
       const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          user_id: userId,
           wallet_address: walletAddress,
           signature: signature,
         }),
@@ -153,28 +209,31 @@ By signing this message, you confirm your signature on this petition.`
           // Update local petition data
           setPetitions(prev => prev.map(p => 
             p.id === petitionId 
-              ? { ...p, signature_count: (p.signature_count || 0) + 1 }
+              ? { ...p, signature_count: data.newSignatureCount || (p.signature_count || 0) + 1 }
               : p
           ))
           
-          // Also create petition activity
-          await fetch("http://localhost:8080/api/petition_activities", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              petition_id: petitionId,
-              activity_type: "SIGNATURE",
-              signature_count: 1,
-              user_id: 1, // You might want to get this from user context
-            }),
-          })
+          // Mark this petition as signed by the user
+          setUserSignatures(prev => ({
+            ...prev,
+            [petitionId]: true
+          }))
 
           toast({
             title: "✅ Petition signed!",
             description: `Your signature has been added to "${petition.title}"`,
           })
+        } else if (data.error === "ALREADY_SIGNED") {
+          toast({
+            title: "Already signed",
+            description: "You have already signed this petition",
+            variant: "destructive",
+          })
+          // Update local state to reflect this
+          setUserSignatures(prev => ({
+            ...prev,
+            [petitionId]: true
+          }))
         } else {
           throw new Error(data.message || "Failed to sign petition")
         }
@@ -205,6 +264,13 @@ By signing this message, you confirm your signature on this petition.`
   React.useEffect(() => {
     fetchPetitions()
   }, [])
+
+  // Check user signatures when wallet address changes
+  React.useEffect(() => {
+    if (walletAddress && petitions.length > 0) {
+      checkUserSignatures(petitions)
+    }
+  }, [walletAddress, petitions.length])
 
   // Create petition function
   const createPetition = async () => {
@@ -789,20 +855,32 @@ Timestamp: ${timestamp}
                             View Details
                           </Button>
                           {petition.status === "ACTIVE" && !isThresholdMet && (
-                            <Button 
-                              size="sm" 
-                              onClick={() => signPetition(petition.id)}
-                              disabled={!walletAddress || signingPetition === petition.id}
-                            >
-                              {signingPetition === petition.id ? (
-                                <>
-                                  <span className="animate-spin mr-2">⏳</span>
-                                  Signing...
-                                </>
+                            <>
+                              {userSignatures[petition.id] ? (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  disabled
+                                >
+                                  ✅ Already Signed
+                                </Button>
                               ) : (
-                                "Sign Petition"
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => signPetition(petition.id)}
+                                  disabled={!walletAddress || signingPetition === petition.id}
+                                >
+                                  {signingPetition === petition.id ? (
+                                    <>
+                                      <span className="animate-spin mr-2">⏳</span>
+                                      Signing...
+                                    </>
+                                  ) : (
+                                    "Sign Petition"
+                                  )}
+                                </Button>
                               )}
-                            </Button>
+                            </>
                           )}
                         </div>
                       </div>

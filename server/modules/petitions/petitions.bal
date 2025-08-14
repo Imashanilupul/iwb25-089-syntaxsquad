@@ -551,17 +551,40 @@ public class PetitionsService {
         }
     }
 
-    # Sign a petition (increment signature count)
+    # Sign a petition (increment signature count) - only once per user
     #
     # + petitionId - Petition ID to sign
+    # + userId - User ID who is signing
     # + return - Updated petition data or error
-    public function signPetition(int petitionId) returns json|error {
+    public function signPetition(int petitionId, int? userId = ()) returns json|error {
         // Validate input
         if petitionId <= 0 {
             return error("Petition ID must be a positive integer");
         }
         
         do {
+            // If userId is provided, check if user has already signed this petition
+            if userId is int {
+                // Check if user has already signed this petition
+                string checkEndpoint = "/rest/v1/petition_activities?petition_id=eq." + petitionId.toString() + "&user_id=eq." + userId.toString() + "&activity_type=eq.SIGNATURE";
+                map<string> headers = self.getHeaders();
+                http:Response checkResponse = check self.supabaseClient->get(checkEndpoint, headers);
+                
+                if checkResponse.statusCode == 200 {
+                    json checkResult = check checkResponse.getJsonPayload();
+                    json[] existingSignatures = check checkResult.ensureType();
+                    
+                    if existingSignatures.length() > 0 {
+                        return {
+                            "success": false,
+                            "message": "User has already signed this petition",
+                            "error": "ALREADY_SIGNED",
+                            "timestamp": time:utcNow()[0]
+                        };
+                    }
+                }
+            }
+            
             // First get current petition data
             json petitionResult = check self.getPetitionById(petitionId);
             if petitionResult is map<json> {
@@ -594,6 +617,25 @@ public class PetitionsService {
                     json[] petitions = check result.ensureType();
                     
                     if petitions.length() > 0 {
+                        // If userId is provided, create activity record
+                        if userId is int {
+                            // Create petition activity record
+                            json activityPayload = {
+                                "petition_id": petitionId,
+                                "user_id": userId,
+                                "activity_type": "SIGNATURE",
+                                "signature_count": 1,
+                                "activity_date": "now()"
+                            };
+                            
+                            map<string> activityHeaders = self.getHeaders(true);
+                            http:Response activityResponse = check self.supabaseClient->post("/rest/v1/petition_activities", activityPayload, activityHeaders);
+                            
+                            if activityResponse.statusCode != 201 {
+                                log:printWarn("Failed to create petition activity record: " + activityResponse.statusCode.toString());
+                            }
+                        }
+                        
                         return {
                             "success": true,
                             "message": "Petition signed successfully",
@@ -613,6 +655,30 @@ public class PetitionsService {
             
         } on fail error e {
             return error("Failed to sign petition: " + e.message());
+        }
+    }
+
+    # Check if a user has already signed a petition
+    #
+    # + petitionId - Petition ID to check
+    # + userId - User ID to check
+    # + return - True if user has already signed, false otherwise
+    public function hasUserSignedPetition(int petitionId, int userId) returns boolean|error {
+        do {
+            string endpoint = "/rest/v1/petition_activities?petition_id=eq." + petitionId.toString() + "&user_id=eq." + userId.toString() + "&activity_type=eq.SIGNATURE";
+            map<string> headers = self.getHeaders();
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode == 200 {
+                json result = check response.getJsonPayload();
+                json[] activities = check result.ensureType();
+                return activities.length() > 0;
+            } else {
+                return false;
+            }
+        } on fail error e {
+            log:printError("Error checking if user has signed petition: " + e.message());
+            return false;
         }
     }
 

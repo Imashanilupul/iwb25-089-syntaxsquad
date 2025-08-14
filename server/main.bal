@@ -1085,10 +1085,39 @@ service /api on apiListener {
     # Sign a petition
     #
     # + petitionId - Petition ID to sign
+    # + request - HTTP request containing user information (optional)
     # + return - Updated petition data or error
-    resource function post petitions/[int petitionId]/sign() returns json|error {
+    resource function post petitions/[int petitionId]/sign(http:Request request) returns json|error {
         log:printInfo("Sign petition endpoint called for ID: " + petitionId.toString());
-        return petitionsService.signPetition(petitionId);
+        
+        // Try to get user information from request body
+        int? userId = ();
+        json|error payload = request.getJsonPayload();
+        if payload is json && payload.user_id is json {
+            int|error userIdValue = payload.user_id.ensureType(int);
+            if userIdValue is int {
+                userId = userIdValue;
+            }
+        }
+        
+        return petitionsService.signPetition(petitionId, userId);
+    }
+
+    # Check if user has signed a petition
+    #
+    # + petitionId - Petition ID to check
+    # + userId - User ID to check
+    # + return - Boolean indicating if user has signed
+    resource function get petitions/[int petitionId]/signed/[int userId]() returns json|error {
+        log:printInfo("Check user signature endpoint called for petition " + petitionId.toString() + " and user " + userId.toString());
+        boolean hasSigned = check petitionsService.hasUserSignedPetition(petitionId, userId);
+        return {
+            "success": true,
+            "hasSigned": hasSigned,
+            "petitionId": petitionId,
+            "userId": userId,
+            "timestamp": time:utcNow()[0]
+        };
     }
 
     # Get all petition activities
