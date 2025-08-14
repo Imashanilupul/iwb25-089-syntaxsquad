@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Provincial Council Powers Amendment",
+    "shortDescription": "Proposal to devolve more administrative powers to Provincial Councils",
+    "descriptionInDetails": "This comprehensive proposal aims to enhance the autonomy and decision-making powers of Provincial Councils by devolving additional administrative functions. The amendment will enable Provincial Councils to have greater control over local governance, resource allocation, and policy implementation. Key areas include: 1) Healthcare administration at provincial level, 2) Education policy adaptation, 3) Infrastructure development oversight, 4) Revenue generation and management, 5) Environmental protection initiatives. This will lead to more responsive governance and better service delivery to citizens at the provincial level.",
+    "expiredDate": "2025-03-15T23:59:59Z",
+    "categoryId": 1,
+    "activeStatus": true,
+    "yesVotes": 0,
+    "noVotes": 0
+  },
+  {
+    "title": "Renewable Energy Development Act",
+    "shortDescription": "Investment in solar and wind energy infrastructure across all provinces",
+    "descriptionInDetails": "This act proposes a comprehensive framework for accelerating renewable energy development in Sri Lanka. The initiative focuses on: 1) Solar panel installation programs for households and businesses, 2) Wind farm development in suitable coastal and mountainous areas, 3) Grid modernization to accommodate renewable sources, 4) Financial incentives for renewable energy adoption, 5) Job creation in the green energy sector. The goal is to achieve 50% renewable energy by 2030, reducing dependency on fossil fuels and contributing to climate change mitigation.",
+    "expiredDate": "2025-03-30T23:59:59Z",
+    "categoryId": 2,
+    "activeStatus": true,
+    "yesVotes": 0,
+    "noVotes": 0
+  },
+  {
+    "title": "Free Education Enhancement Bill",
+    "shortDescription": "Increase funding for public schools and universities by 20%",
+    "descriptionInDetails": "This bill proposes a significant increase in education funding to improve the quality of free education in Sri Lanka. Key components include: 1) 20% increase in teacher salaries to attract quality educators, 2) Infrastructure improvements including new classrooms and laboratories, 3) Technology integration with tablets and smart boards, 4) Enhanced vocational training programs, 5) University research grants and scholarships. The bill also establishes quality monitoring systems and performance metrics to ensure effective use of additional resources.",
+    "expiredDate": "2025-04-10T23:59:59Z",
+    "categoryId": 3,
+    "activeStatus": true,
+    "yesVotes": 0,
+    "noVotes": 0
+  },
+  {
+    "title": "Digital Healthcare Initiative",
+    "shortDescription": "Modernization of healthcare system with digital records and telemedicine",
+    "descriptionInDetails": "This initiative aims to modernize Sri Lanka's healthcare system through digital transformation. Key features include: 1) Electronic Health Records (EHR) system for all citizens, 2) Telemedicine services for remote consultations, 3) AI-powered diagnostic tools in major hospitals, 4) Mobile health apps for preventive care, 5) Digital pharmacy and prescription management. The system will improve healthcare access, especially in rural areas, reduce waiting times, and enable better health data analytics for policy making.",
+    "expiredDate": "2025-02-28T23:59:59Z",
+    "categoryId": 4,
+    "activeStatus": true,
+    "yesVotes": 0,
+    "noVotes": 0
+  },
+  {
+    "title": "Youth Employment Generation Program",
+    "shortDescription": "Create 100,000 new jobs for youth through skill development and entrepreneurship",
+    "descriptionInDetails": "This comprehensive program targets youth unemployment through multi-faceted approach: 1) Skill development courses aligned with industry needs, 2) Startup incubation centers in all provinces, 3) Apprenticeship programs with private sector partnerships, 4) Low-interest loans for young entrepreneurs, 5) Technology and innovation hubs. The program includes mentorship networks, job placement assistance, and continuous monitoring to ensure sustainable employment creation and economic growth driven by youth participation.",
+    "expiredDate": "2025-05-15T23:59:59Z",
+    "categoryId": 5,
+    "activeStatus": true,
+    "yesVotes": 0,
+    "noVotes": 0
+  }
+]
