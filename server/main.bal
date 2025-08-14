@@ -1155,10 +1155,39 @@ service /api on apiListener {
     # Sign a petition
     #
     # + petitionId - Petition ID to sign
+    # + request - HTTP request containing user information (optional)
     # + return - Updated petition data or error
-    resource function post petitions/[int petitionId]/sign() returns json|error {
+    resource function post petitions/[int petitionId]/sign(http:Request request) returns json|error {
         log:printInfo("Sign petition endpoint called for ID: " + petitionId.toString());
-        return petitionsService.signPetition(petitionId);
+        
+        // Try to get user information from request body
+        int? userId = ();
+        json|error payload = request.getJsonPayload();
+        if payload is json && payload.user_id is json {
+            int|error userIdValue = payload.user_id.ensureType(int);
+            if userIdValue is int {
+                userId = userIdValue;
+            }
+        }
+        
+        return petitionsService.signPetition(petitionId, userId);
+    }
+
+    # Check if user has signed a petition
+    #
+    # + petitionId - Petition ID to check
+    # + userId - User ID to check
+    # + return - Boolean indicating if user has signed
+    resource function get petitions/[int petitionId]/signed/[int userId]() returns json|error {
+        log:printInfo("Check user signature endpoint called for petition " + petitionId.toString() + " and user " + userId.toString());
+        boolean hasSigned = check petitionsService.hasUserSignedPetition(petitionId, userId);
+        return {
+            "success": true,
+            "hasSigned": hasSigned,
+            "petitionId": petitionId,
+            "userId": userId,
+            "timestamp": time:utcNow()[0]
+        };
     }
 
     # Get all petition activities
@@ -1390,6 +1419,64 @@ service /api on apiListener {
         log:printInfo("Get top liked comments endpoint called with limit: " + 'limit.toString());
         return policyCommentsService.getTopLikedComments('limit);
     }
+
+    # Auth endpoints
+    #
+    # + request - HTTP request containing authorization data
+    # + return - Authorization response
+    resource function post auth/authorize(http:Request request) returns json|error {
+        json payload = check request.getJsonPayload();
+        json response = check web3Service->post("/auth/authorize", payload);
+        return response;
+    }
+
+    # Revoke authorization
+    #
+    # + request - HTTP request containing revocation data  
+    # + return - Revocation response
+    resource function post auth/revoke(http:Request request) returns json|error {
+        json payload = check request.getJsonPayload();
+        json response = check web3Service->post("/auth/revoke", payload);
+        return response;
+    }
+
+    # Check if address is authorized
+    #
+    # + address - Wallet address to check authorization for
+    # + return - Authorization status response
+    resource function get auth/isauthorized/[string address]() returns json|error {
+        do {
+            json response = check web3Service->get("/auth/is-authorized/" + address);
+            map<anydata> respMap = check response.cloneWithType();
+            boolean isVerified = respMap["isAuthorized"] is boolean ? <boolean>respMap["isAuthorized"] : false;
+
+            if isVerified {
+                // For now, return a simple token structure
+                // In production, you would use proper JWT encoding
+                string simpleToken = "jwt_" + address + "_" + time:utcNow()[0].toString();
+                
+                return {
+                    address: address,
+                    verified: true,
+                    token: simpleToken
+                };
+            } else {
+                return {
+                    address: address,
+                    verified: false,
+                    token: ()
+                };
+            }
+        } on fail error e {
+            // If web3Service is not available, return default response
+            log:printWarn("Web3 service not available for auth check: " + e.message());
+            return {
+                address: address,
+                verified: false,
+                token: ()
+            };
+        }
+    }
 }
 
 listener http:Listener newListener = new (petitionPort);
@@ -1424,48 +1511,6 @@ service /petitions on newListener {
         return "Ballerina service is running!";
     }
 
-}
-
-service /auth on newListener {
-    resource function post authorize(http:Caller caller, http:Request req) returns error? {
-        json payload = check req.getJsonPayload();
-        json response = check web3Service->post("/auth/authorize", payload);
-        check caller->respond(response);
-    }
-
-    resource function post revoke(http:Caller caller, http:Request req) returns error? {
-        json payload = check req.getJsonPayload();
-        json response = check web3Service->post("/auth/revoke", payload);
-        check caller->respond(response);
-    }
-
-    resource function get isauthorized/[string address](http:Caller caller, http:Request req) returns error? {
-        json response = check web3Service->get("/auth/is-authorized/" + address);
-        map<anydata> respMap = check response.cloneWithType();
-        boolean isVerified = respMap["isAuthorized"] is boolean ? <boolean>respMap["isAuthorized"] : false;
-
-        if isVerified {
-            // For now, return a simple token structure
-            // In production, you would use proper JWT encoding
-            string simpleToken = "jwt_" + address + "_" + time:utcNow()[0].toString();
-            
-            check caller->respond({
-                address: address,
-                verified: true,
-                token: simpleToken
-            });
-        } else {
-            check caller->respond({
-                address: address,
-                verified: false,
-                token: ()
-            });
-        }
-    }
-
-    resource function get health() returns string {
-        return "Auth service is running!";
-    }
 }
 
 # Get headers for HTTP requests

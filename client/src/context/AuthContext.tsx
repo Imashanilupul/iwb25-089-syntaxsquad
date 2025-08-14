@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function checkAuth() {
       if (isConnected && address) {
         try {
-          const res = await axios.get(`http://localhost:8080/auth/isauthorized/${address}`);
+          const res = await axios.get(`http://localhost:8080/api/auth/isauthorized/${address}`);
           setAuth({
             address,
             verified: res.data.verified,
