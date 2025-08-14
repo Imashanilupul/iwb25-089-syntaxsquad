@@ -430,39 +430,85 @@ Timestamp: ${timestamp}
       // Step 3: Save petition to Ballerina backend (this always happens)
       const ballerinaResponse = await fetch("http://localhost:8080/api/petitions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: petitionForm.title,
           description: petitionForm.description,
-          required_signature_count: petitionForm.targetSignatures,
-          creator_id: 1, // You might want to get this from user context
-          blockchain_petition_id: contractData?.petitionId || null,
-          title_cid: contractData?.titleCid || null,
-          description_cid: contractData?.descriptionCid || null,
-          wallet_address: walletAddress,
-          signature: signature,
+          requiredSignatures: petitionForm.targetSignatures,
+          walletAddress,
+          draftId,
+        }),
+      })
+      if (!prepRes.ok) {
+        const txt = await prepRes.text()
+        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
+      }
+      const prepJson = await prepRes.json()
+      const { titleCid, descriptionCid, contractAddress, contractAbi } = prepJson
+      if (!titleCid || !descriptionCid || !contractAddress || !contractAbi) {
+        throw new Error("Prepare endpoint did not return all required fields")
+      }
+
+      toast({ title: "Ready to sign", description: "Please confirm the transaction in your wallet" })
+
+      // 3) Send transaction from user's wallet using ethers and Sepolia network
+      const ethers = await import("ethers")
+      // Use BrowserProvider for ESM v6 in browser
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      // Request accounts (ensure connected)
+      await (window.ethereum as any).request({ method: 'eth_requestAccounts' })
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      // Send transaction
+      const tx = await contract.createPetition(titleCid, descriptionCid, petitionForm.targetSignatures)
+      toast({ title: "Transaction sent", description: tx.hash })
+
+      // 4) Wait for confirmation
+      const receipt = await tx.wait()
+      toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
+
+      // Try to decode event to get petitionId
+      let blockchainPetitionId = null
+      try {
+        const iface = new (ethers as any).Interface(contractAbi)
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log)
+            if (parsed && parsed.name && parsed.name.toLowerCase().includes("petition")) {
+              blockchainPetitionId = parsed.args?.[0]?.toString() || null
+              break
+            }
+          } catch (e) {
+            // ignore non-matching logs
+          }
+        }
+        if (!blockchainPetitionId) {
+          try {
+            const bn = await contract.petitionCount()
+            blockchainPetitionId = bn.toString()
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (e) {
+        console.warn("Could not parse event for petition id", e)
+      }
+
+      // 5) Confirm draft with Ballerina backend
+      await fetch(`http://localhost:8080/api/petitions/${draftId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          blockchainPetitionId,
+          titleCid,
+          descriptionCid,
         }),
       })
 
-      if (!ballerinaResponse.ok) {
-        const errorText = await ballerinaResponse.text();
-        console.error("Ballerina API Error:", errorText);
-        throw new Error(`Failed to save petition to database: ${ballerinaResponse.status} ${ballerinaResponse.statusText}`);
-      }
-
-      const ballerinaData = await ballerinaResponse.json();
-
-      // Check if the response indicates success
-      if (!ballerinaData.success) {
-        throw new Error(ballerinaData.message || "Failed to save petition to database");
-      }
-
-      toast({
-        title: "Petition created successfully!",
-        description: `Petition saved to database with ID: ${ballerinaData.data?.id || 'unknown'}`,
-      })
+      toast({ title: "Petition created", description: "Saved to blockchain and backend" })
 
       // Reset form
       setPetitionForm({
@@ -478,47 +524,10 @@ Timestamp: ${timestamp}
       console.log("Database data:", ballerinaData)
 
     } catch (error: any) {
-      console.error("Failed to create petition:", error)
-      
-      // Handle specific error types for better user experience
-      if (error?.code === 4001 || error.message?.includes("User rejected")) {
-        setLastError("user_rejected")
-        toast({
-          title: "❌ Request Cancelled",
-          description: "You can try again by clicking 'Create Petition' when ready.",
-          variant: "destructive",
-        })
-      } else if (error?.code === -32002 || error.message?.includes("Already processing")) {
-        setLastError("metamask_busy")
-        toast({
-          title: "❌ MetaMask Busy",
-          description: "MetaMask is processing another request. Please wait and try again.",
-          variant: "destructive",
-        })
-      } else if (error.message?.includes("Account mismatch")) {
-        setLastError("account_mismatch")
-        toast({
-          title: "❌ Wrong Account",
-          description: error.message + " Try reconnecting your wallet.",
-          variant: "destructive",
-        })
-      } else if (error.message?.includes("Invalid wallet address")) {
-        setLastError("invalid_wallet")
-        toast({
-          title: "❌ Wallet Connection Issue",
-          description: "Please disconnect and reconnect your wallet.",
-          variant: "destructive",
-        })
-      } else {
-        setLastError("unknown")
-        toast({
-          title: "❌ Failed to create petition",
-          description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
-          variant: "destructive",
-        })
-      }
+      console.error("Failed create flow:", error)
+      setLastError(error?.message || String(error))
+      toast({ title: "Failed to create petition", description: error?.message || "Unknown error", variant: "destructive" })
     } finally {
-      // Always reset the loading state so user can retry
       setIsCreatingPetition(false)
     }
   }
