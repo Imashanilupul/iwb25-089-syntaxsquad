@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -59,9 +59,152 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     targetSignatures: 10000,
   })
 
+  // Real petition data state
+  const [petitions, setPetitions] = useState<any[]>([])
+  const [isLoadingPetitions, setIsLoadingPetitions] = useState(false)
+  const [signingPetition, setSigningPetition] = useState<number | null>(null)
+
   // Web3 state
   const [isCreatingPetition, setIsCreatingPetition] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
+
+  // Fetch petitions from API
+  const fetchPetitions = async () => {
+    setIsLoadingPetitions(true)
+    try {
+      const response = await fetch("http://localhost:8080/api/petitions")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setPetitions(data.data)
+        }
+      } else {
+        console.error("Failed to fetch petitions:", response.statusText)
+        toast({
+          title: "Error",
+          description: "Failed to load petitions",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching petitions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load petitions",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingPetitions(false)
+    }
+  }
+
+  // Sign petition function
+  const signPetition = async (petitionId: number) => {
+    if (!walletAddress) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to sign petitions",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSigningPetition(petitionId)
+    try {
+      // Create signature for petition signing
+      if (!window.ethereum) {
+        throw new Error("MetaMask is not installed")
+      }
+
+      const petition = petitions.find(p => p.id === petitionId)
+      if (!petition) {
+        throw new Error("Petition not found")
+      }
+
+      const message = `🗳️ SIGN PETITION
+
+Title: ${petition.title}
+ID: ${petition.id}
+Wallet: ${walletAddress}
+Timestamp: ${new Date().toISOString()}
+
+By signing this message, you confirm your signature on this petition.`
+
+      const signature = await (window.ethereum as any).request({
+        method: "personal_sign",
+        params: [message, walletAddress],
+      })
+
+      // Submit signature to backend
+      const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          wallet_address: walletAddress,
+          signature: signature,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Update local petition data
+          setPetitions(prev => prev.map(p => 
+            p.id === petitionId 
+              ? { ...p, signature_count: (p.signature_count || 0) + 1 }
+              : p
+          ))
+          
+          // Also create petition activity
+          await fetch("http://localhost:8080/api/petition_activities", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              petition_id: petitionId,
+              activity_type: "SIGNATURE",
+              signature_count: 1,
+              user_id: 1, // You might want to get this from user context
+            }),
+          })
+
+          toast({
+            title: "✅ Petition signed!",
+            description: `Your signature has been added to "${petition.title}"`,
+          })
+        } else {
+          throw new Error(data.message || "Failed to sign petition")
+        }
+      } else {
+        throw new Error("Failed to sign petition")
+      }
+    } catch (error: any) {
+      console.error("Error signing petition:", error)
+      if (error.code === 4001) {
+        toast({
+          title: "Signature cancelled",
+          description: "You cancelled the signature request",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error signing petition",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setSigningPetition(null)
+    }
+  }
+
+  // Load petitions when component mounts
+  React.useEffect(() => {
+    fetchPetitions()
+  }, [])
 
   // Create petition function
   const createPetition = async () => {
@@ -262,6 +405,9 @@ Timestamp: ${timestamp}
         targetSignatures: 10000,
       })
 
+      // Refresh petitions list
+      fetchPetitions()
+
       console.log("Smart contract data:", contractData)
       console.log("Database data:", ballerinaData)
 
@@ -335,37 +481,6 @@ Timestamp: ${timestamp}
       anonymityLevel: "Partial",
       evidenceHash: "0x5i6j7k8l9m0n1o2p",
       investigator: "Central Environmental Authority",
-    },
-  ]
-
-  const petitions = [
-    {
-      id: "PET-LK-2024-001",
-      title: "Preserve Sinharaja Forest Reserve",
-      description: "Petition to strengthen protection measures for UNESCO World Heritage Site",
-      currentSignatures: 84560,
-      targetSignatures: 100000,
-      progress: 84.56,
-      status: "Active",
-      category: "Environment",
-      createdDate: "2024-01-20",
-      deadline: "2024-02-20",
-      blockchainHash: "0x3q4r5s6t7u8v9w0x",
-      autoExecute: true,
-    },
-    {
-      id: "PET-LK-2024-002",
-      title: "Right to Information Act Enhancement",
-      description: "Strengthen RTI implementation and reduce response times for public information requests",
-      currentSignatures: 152340,
-      targetSignatures: 120000,
-      progress: 126.95,
-      status: "Threshold Met",
-      category: "Governance",
-      createdDate: "2024-01-05",
-      deadline: "2024-02-05",
-      blockchainHash: "0x1y2z3a4b5c6d7e8f",
-      autoExecute: true,
     },
   ]
 
@@ -554,7 +669,9 @@ Timestamp: ${timestamp}
                 <FileText className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">18</div>
+                <div className="text-2xl font-bold">
+                  {petitions.filter(p => p.status === 'ACTIVE').length}
+                </div>
                 <p className="text-xs text-slate-500">Collecting signatures</p>
               </CardContent>
             </Card>
@@ -565,7 +682,9 @@ Timestamp: ${timestamp}
                 <Users className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">156K</div>
+                <div className="text-2xl font-bold">
+                  {petitions.reduce((total, p) => total + (p.signature_count || 0), 0).toLocaleString()}
+                </div>
                 <p className="text-xs text-slate-500">All time</p>
               </CardContent>
             </Card>
@@ -576,77 +695,122 @@ Timestamp: ${timestamp}
                 <TrendingUp className="h-4 w-4 text-purple-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">73%</div>
+                <div className="text-2xl font-bold">
+                  {petitions.length > 0 
+                    ? Math.round((petitions.filter(p => (p.signature_count || 0) >= p.required_signature_count).length / petitions.length) * 100)
+                    : 0}%
+                </div>
                 <p className="text-xs text-slate-500">Threshold reached</p>
               </CardContent>
             </Card>
 
             <Card className="border-0 shadow-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Auto-Executed</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Petitions</CardTitle>
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">42</div>
-                <p className="text-xs text-slate-500">Smart contracts</p>
+                <div className="text-2xl font-bold">{petitions.length}</div>
+                <p className="text-xs text-slate-500">All petitions</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Petitions List */}
           <div className="space-y-4">
-            {petitions.map((petition) => (
-              <Card key={petition.id} className="border-0 shadow-md">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{petition.title}</CardTitle>
-                        <Badge variant="outline">{petition.category}</Badge>
-                        <Badge className={getStatusColor(petition.status)}>{petition.status}</Badge>
-                      </div>
-                      <CardDescription>{petition.description}</CardDescription>
-                      <div className="flex items-center gap-4 text-sm text-slate-600">
-                        <span>Created: {petition.createdDate}</span>
-                        <span>•</span>
-                        <span>Deadline: {petition.deadline}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>
-                        Signatures: {petition.currentSignatures.toLocaleString()} /{" "}
-                        {petition.targetSignatures.toLocaleString()}
-                      </span>
-                      <span>{petition.progress.toFixed(1)}%</span>
-                    </div>
-                    <Progress value={Math.min(petition.progress, 100)} />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Hash className="h-3 w-3" />
-                      <span className="font-mono">{petition.blockchainHash}</span>
-                      {petition.autoExecute && (
-                        <Badge variant="outline" className="text-xs">
-                          Auto-Execute
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                      {petition.status === "Active" && <Button size="sm">Sign Petition</Button>}
-                    </div>
-                  </div>
+            {isLoadingPetitions ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin mr-2">⏳</div>
+                Loading petitions...
+              </div>
+            ) : petitions.length === 0 ? (
+              <Card className="border-0 shadow-md">
+                <CardContent className="py-8 text-center text-slate-500">
+                  No petitions found. Create the first petition to get started!
                 </CardContent>
               </Card>
-            ))}
+            ) : (
+              petitions.map((petition) => {
+                const progress = petition.required_signature_count > 0 
+                  ? ((petition.signature_count || 0) / petition.required_signature_count) * 100 
+                  : 0
+                const isThresholdMet = (petition.signature_count || 0) >= petition.required_signature_count
+                const status = isThresholdMet ? "Threshold Met" : petition.status || "Active"
+                
+                return (
+                  <Card key={petition.id} className="border-0 shadow-md">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg">{petition.title}</CardTitle>
+                            <Badge variant="outline">Governance</Badge>
+                            <Badge className={getStatusColor(status)}>{status}</Badge>
+                          </div>
+                          <CardDescription>{petition.description}</CardDescription>
+                          <div className="flex items-center gap-4 text-sm text-slate-600">
+                            <span>Created: {new Date(petition.created_at).toLocaleDateString()}</span>
+                            {petition.deadline && (
+                              <>
+                                <span>•</span>
+                                <span>Deadline: {new Date(petition.deadline).toLocaleDateString()}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Progress */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>
+                            Signatures: {(petition.signature_count || 0).toLocaleString()} /{" "}
+                            {petition.required_signature_count.toLocaleString()}
+                          </span>
+                          <span>{progress.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={Math.min(progress, 100)} />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Hash className="h-3 w-3" />
+                          <span>ID: {petition.id}</span>
+                          {petition.blockchain_petition_id && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono">Blockchain: {petition.blockchain_petition_id}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm">
+                            View Details
+                          </Button>
+                          {petition.status === "ACTIVE" && !isThresholdMet && (
+                            <Button 
+                              size="sm" 
+                              onClick={() => signPetition(petition.id)}
+                              disabled={!walletAddress || signingPetition === petition.id}
+                            >
+                              {signingPetition === petition.id ? (
+                                <>
+                                  <span className="animate-spin mr-2">⏳</span>
+                                  Signing...
+                                </>
+                              ) : (
+                                "Sign Petition"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
           </div>
         </TabsContent>
 
