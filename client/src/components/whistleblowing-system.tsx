@@ -28,7 +28,10 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } fro
 // Web3 types
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: {
+      request: (args: { method: string; params?: any[] }) => Promise<any>
+      isMetaMask?: boolean
+    }
   }
 }
 
@@ -54,13 +57,35 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
   // Web3 state
   const [isCreatingPetition, setIsCreatingPetition] = useState(false)
+  const [lastError, setLastError] = useState<string | null>(null)
 
   // Create petition function
   const createPetition = async () => {
-    if (!walletAddress) {
+    // Prevent multiple simultaneous requests
+    if (isCreatingPetition) {
+      toast({
+        title: "Please wait",
+        description: "Petition creation is already in progress",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Enhanced wallet address validation
+    if (!walletAddress || walletAddress.trim() === "") {
       toast({
         title: "Wallet not connected",
-        description: "Please connect your wallet first",
+        description: "Please connect your wallet first using the Connect button",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate Ethereum address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      toast({
+        title: "Invalid wallet address",
+        description: "The wallet address format is invalid. Please reconnect your wallet.",
         variant: "destructive",
       })
       return
@@ -76,24 +101,91 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     }
 
     setIsCreatingPetition(true)
+    setLastError(null) // Clear any previous errors
     try {
-      // Step 1: Request wallet signature confirmation
+      // Step 1: Check if MetaMask/wallet is available
       if (!window.ethereum) {
-        throw new Error("MetaMask not found")
+        throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
       }
 
-      // Create a message to sign
-      const message = `Create Petition: ${petitionForm.title}\n\nDescription: ${petitionForm.description}\n\nTarget Signatures: ${petitionForm.targetSignatures}\n\nBy signing this message, you confirm that you want to create this petition on the blockchain.`
+      // Step 2: Ensure we're connected to the right account
+      let accounts
+      try {
+        accounts = await (window.ethereum as any).request({ method: 'eth_accounts' })
+      } catch (accountError: any) {
+        console.error("Failed to get accounts:", accountError)
+        throw new Error("Failed to get wallet accounts. Please try again.")
+      }
+
+      if (accounts.length === 0) {
+        // Only request accounts if we don't have any
+        try {
+          toast({
+            title: "Account Access Required",
+            description: "Please approve wallet connection in MetaMask",
+          })
+          accounts = await (window.ethereum as any).request({ method: 'eth_requestAccounts' })
+        } catch (requestError: any) {
+          if (requestError.code === -32002) {
+            throw new Error("MetaMask is already processing a connection request. Please check your MetaMask extension and try again.")
+          } else if (requestError.code === 4001) {
+            throw new Error("User rejected wallet connection request")
+          }
+          throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+        }
+      }
+
+      // Double-check the current account matches our walletAddress
+      const currentAccount = accounts[0]?.toLowerCase()
+      if (!currentAccount) {
+        throw new Error("No wallet account found. Please connect your wallet first.")
+      }
       
-      // Request signature from user
-      const signature = await window.ethereum.request({
-        method: "personal_sign",
-        params: [message, walletAddress],
+      if (currentAccount !== walletAddress.toLowerCase()) {
+        throw new Error(`Account mismatch. Please switch to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} in MetaMask`)
+      }
+
+      // Step 3: Create a clear message to sign
+      const timestamp = new Date().toISOString()
+      const message = `🗳️ CREATE PETITION CONFIRMATION
+
+Title: ${petitionForm.title}
+
+Description: ${petitionForm.description}
+
+Target Signatures: ${petitionForm.targetSignatures.toLocaleString()}
+
+Wallet: ${walletAddress}
+Timestamp: ${timestamp}
+
+⚠️ By signing this message, you confirm that you want to create this petition on the blockchain. This action cannot be undone.`
+      
+      toast({
+        title: "Signature Required",
+        description: "Please check your wallet to sign the petition creation request",
       })
 
+      // Step 4: Request signature from user
+      let signature
+      try {
+        signature = await (window.ethereum as any).request({
+          method: "personal_sign",
+          params: [message, walletAddress],
+        })
+      } catch (signError: any) {
+        if (signError.code === 4001) {
+          throw new Error("User rejected the signature request")
+        }
+        throw new Error(`Signature failed: ${signError.message || signError}`)
+      }
+
+      if (!signature) {
+        throw new Error("No signature received from wallet")
+      }
+
       toast({
-        title: "Signature confirmed",
-        description: "Creating petition...",
+        title: "✅ Signature confirmed",
+        description: "Creating petition on blockchain...",
       })
 
       // Step 2: Try to create petition on smart contract backend (optional)
@@ -172,20 +264,45 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     } catch (error: any) {
       console.error("Failed to create petition:", error)
       
-      if (error?.code === 4001) {
+      // Handle specific error types for better user experience
+      if (error?.code === 4001 || error.message?.includes("User rejected")) {
+        setLastError("user_rejected")
         toast({
-          title: "Signature cancelled",
-          description: "You cancelled the signature request",
+          title: "❌ Request Cancelled",
+          description: "You can try again by clicking 'Create Petition' when ready.",
+          variant: "destructive",
+        })
+      } else if (error?.code === -32002 || error.message?.includes("Already processing")) {
+        setLastError("metamask_busy")
+        toast({
+          title: "❌ MetaMask Busy",
+          description: "MetaMask is processing another request. Please wait and try again.",
+          variant: "destructive",
+        })
+      } else if (error.message?.includes("Account mismatch")) {
+        setLastError("account_mismatch")
+        toast({
+          title: "❌ Wrong Account",
+          description: error.message + " Try reconnecting your wallet.",
+          variant: "destructive",
+        })
+      } else if (error.message?.includes("Invalid wallet address")) {
+        setLastError("invalid_wallet")
+        toast({
+          title: "❌ Wallet Connection Issue",
+          description: "Please disconnect and reconnect your wallet.",
           variant: "destructive",
         })
       } else {
+        setLastError("unknown")
         toast({
-          title: "Failed to create petition",
-          description: error instanceof Error ? error.message : "An error occurred",
+          title: "❌ Failed to create petition",
+          description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
           variant: "destructive",
         })
       }
     } finally {
+      // Always reset the loading state so user can retry
       setIsCreatingPetition(false)
     }
   }
@@ -686,12 +803,30 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
                   </div>
                 )}
 
+                {/* Debug: Show wallet address status */}
+                <div className="bg-gray-50 p-2 rounded text-xs mb-3">
+                  <strong>Debug Info:</strong><br/>
+                  Wallet Address: {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Not connected'}<br/>
+                  Valid Format: {walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress) ? 'Yes' : 'No'}
+                </div>
+
                 <Button 
                   className="w-full" 
                   onClick={createPetition}
-                  disabled={!walletAddress || isCreatingPetition}
+                  disabled={!walletAddress || isCreatingPetition || !petitionForm.title.trim() || !petitionForm.description.trim()}
                 >
-                  {isCreatingPetition ? "Creating Petition..." : "Create Petition"}
+                  {isCreatingPetition ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Creating Petition...
+                    </>
+                  ) : lastError === "user_rejected" ? (
+                    "🔄 Try Again - Create Petition"
+                  ) : lastError === "metamask_busy" ? (
+                    "⏰ Retry - Create Petition"
+                  ) : (
+                    "🗳️ Create Petition"
+                  )}
                 </Button>
               </CardContent>
             </Card>

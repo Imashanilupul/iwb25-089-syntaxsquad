@@ -25,8 +25,10 @@ import { RegistrationDialog } from "@/components/registration-dialog"
 import SignUpPage from "@/components/signup"
 import { userService } from "@/services/user"
 import { categoryService } from "@/services/category"
+import { useAuth } from "@/context/AuthContext"
 
 export default function CivicPlatform() {
+  const { address } = useAuth()
   const [activeTab, setActiveTab] = useState("overview")
   const [userCount, setUserCount] = useState<number>(0)
   const [userChangePct, setUserChangePct] = useState<number>(0)
