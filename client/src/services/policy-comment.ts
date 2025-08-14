@@ -32,12 +32,12 @@ export interface PolicyCommentStatistics {
   success: boolean
   message: string
   data: {
-    totalComments: number
-    totalLikes: number
-    avgLikesPerComment: number
-    repliesCount: number
-    userCounts: Record<string, number>
-    policyCounts: Record<string, number>
+    total_comments: number
+    total_likes: number
+    replies_count: number
+    average_likes_per_comment: number
+    user_activity_breakdown: Record<string, number>
+    policy_engagement_breakdown: Record<string, number>
   }
   timestamp: number
 }
@@ -112,6 +112,12 @@ export const policyCommentService = {
   // Like a comment
   async likeComment(commentId: number): Promise<{ success: boolean; message: string; data: PolicyComment; timestamp: number }> {
     const response = await apiService.post(`/api/policycomments/${commentId}/like`) as { success: boolean; message: string; data: PolicyComment; timestamp: number }
+    return response
+  },
+
+  // Unlike a comment
+  async unlikeComment(commentId: number): Promise<{ success: boolean; message: string; data: PolicyComment; timestamp: number }> {
+    const response = await apiService.post(`/api/policycomments/${commentId}/unlike`) as { success: boolean; message: string; data: PolicyComment; timestamp: number }
     return response
   },
 

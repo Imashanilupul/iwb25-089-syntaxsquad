@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+interface IAuthRegistry {
+    function isAuthorized(address user) external view returns (bool);
+}
+
 contract Petitions {
     struct Petition {
         string titleCid; 
@@ -12,7 +16,7 @@ contract Petitions {
         mapping(address => bool) signers;
     }
 
-
+    IAuthRegistry public authRegistry;
     uint256 public petitionCount;
     mapping(uint256 => Petition) private petitions;
     mapping(address => uint256) public lastCreatedAt;
@@ -22,6 +26,16 @@ contract Petitions {
     event PetitionSigned(uint256 indexed petitionId, address indexed signer);
     event PetitionCompleted(uint256 indexed petitionId);
 
+    constructor(address _authRegistry) {
+        require(_authRegistry != address(0), "Auth registry address cannot be zero");
+        authRegistry = IAuthRegistry(_authRegistry);
+    }
+
+    // Only authorized users can perform write operations
+    modifier onlyAuthorized() {
+        require(authRegistry.isAuthorized(msg.sender), "User not authorized");
+        _;
+    }
 
     //User can only make petition once a week
     modifier onlyOncePerWeek() {
@@ -34,7 +48,7 @@ contract Petitions {
 
 
     //Create function
-    function createPetition(string calldata titleCid,string calldata desCid, uint256 signaturesRequired) external onlyOncePerWeek returns (uint256) {
+    function createPetition(string calldata titleCid,string calldata desCid, uint256 signaturesRequired) external onlyAuthorized onlyOncePerWeek returns (uint256) {
         require(signaturesRequired > 0, "Signatures required must be greater than zero");
         petitionCount++;
         uint256 petitionId = petitionCount;
@@ -55,7 +69,7 @@ contract Petitions {
 
 
     //sign petition function
-    function signPetition(uint256 petitionId) external {
+    function signPetition(uint256 petitionId) external onlyAuthorized {
         Petition storage p = petitions[petitionId];
         require(!p.completed, "Petition already completed");
         require(p.creator != address(0), "Petition does not exist");

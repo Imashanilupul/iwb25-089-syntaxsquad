@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Loader2, Camera, CheckCircle, XCircle, AlertTriangle, Shield } from "lucide-react"
 import { useBiometricAuth } from "@/hooks/use-biometric-auth"
+import { RealFaceScanService } from "@/services/face-scan"
 
 interface BiometricVerificationProps {
   onVerificationComplete: (result: { isUnique: boolean; biometricHash: string }) => void
@@ -20,19 +21,43 @@ export function BiometricVerification({
 }: BiometricVerificationProps) {
   const { state, initializeAuth, verifyUniqueness, reset } = useBiometricAuth()
   const [currentStep, setCurrentStep] = useState<'init' | 'ready' | 'scanning' | 'complete'>('init')
+  const [cameraAvailable, setCameraAvailable] = useState<boolean>(false)
+  const faceScanServiceRef = useRef<RealFaceScanService | null>(null)
 
   useEffect(() => {
     if (isEnabled && !state.isInitialized && !state.isLoading) {
       handleInitialize()
     }
+    
+    // Check camera availability
+    checkCameraAvailability()
   }, [isEnabled])
+
+  const checkCameraAvailability = async () => {
+    try {
+      const available = await RealFaceScanService.isCameraAvailable()
+      setCameraAvailable(available)
+      
+      if (!available) {
+        onVerificationError('Camera not available. Please ensure you have a webcam connected and grant camera permissions.')
+      }
+    } catch (error) {
+      setCameraAvailable(false)
+    }
+  }
 
   const handleInitialize = async () => {
     try {
       await initializeAuth()
       setCurrentStep('ready')
     } catch (error: any) {
-      onVerificationError(error.message || 'Failed to initialize biometric verification')
+      console.warn('Biometric initialization error:', error.message)
+      // In development, we still proceed with mock service
+      if (process.env.NODE_ENV === 'development') {
+        setCurrentStep('ready')
+      } else {
+        onVerificationError(error.message || 'Failed to initialize biometric verification')
+      }
     }
   }
 
@@ -42,13 +67,37 @@ export function BiometricVerification({
       return
     }
 
+    if (!cameraAvailable) {
+      onVerificationError('Camera not available')
+      return
+    }
+
     setCurrentStep('scanning')
 
     try {
-      // Simulate FaceTec scan - in a real implementation, this would integrate with FaceTec SDK
-      const mockLivenessData = await simulateFaceScan()
+      // Request camera permission first
+      const hasPermission = await RealFaceScanService.requestCameraPermission()
+      if (!hasPermission) {
+        throw new Error('Camera permission denied')
+      }
+
+      // Initialize face scan service
+      faceScanServiceRef.current = new RealFaceScanService()
       
-      const result = await verifyUniqueness(mockLivenessData)
+      // Start real face scanning
+      const faceScanResult = await faceScanServiceRef.current.startFaceScan(
+        state.sessionToken || 'real_session'
+      )
+      
+      // Convert to format expected by Humanode service
+      const livenessData = {
+        faceScan: faceScanResult.faceScan,
+        auditTrailImage: faceScanResult.auditTrailImage,
+        lowQualityAuditTrailImage: faceScanResult.lowQualityAuditTrailImage,
+        sessionId: faceScanResult.sessionId
+      }
+      
+      const result = await verifyUniqueness(livenessData)
       
       if (result.isValid && result.isUnique) {
         setCurrentStep('complete')
@@ -57,29 +106,32 @@ export function BiometricVerification({
           biometricHash: result.biometricHash
         })
       } else {
-        onVerificationError(result.errorMessage || 'Biometric verification failed')
+        // For mock "user already registered" errors, provide helpful context
+        const errorMessage = result.errorMessage || 'Biometric verification failed'
+        if (process.env.NODE_ENV === 'development' && errorMessage.includes('Mock: User already registered')) {
+          onVerificationError(`${errorMessage} (This is a simulated error in development mode. Try again or set NEXT_PUBLIC_MOCK_BIOMETRIC_FAIL=false in .env.local to disable mock failures)`)
+        } else {
+          onVerificationError(errorMessage)
+        }
         setCurrentStep('ready')
       }
     } catch (error: any) {
-      onVerificationError(error.message || 'Biometric scan failed')
+      onVerificationError(error.message || 'Face scan failed')
       setCurrentStep('ready')
-    }
-  }
-
-  const simulateFaceScan = async (): Promise<any> => {
-    // Simulate scanning delay
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    // In a real implementation, this would be the actual FaceTec liveness data
-    return {
-      faceScan: `mock_face_scan_${Date.now()}`,
-      auditTrailImage: `mock_audit_${Date.now()}`,
-      lowQualityAuditTrailImage: `mock_low_quality_${Date.now()}`,
-      sessionId: state.sessionToken || 'mock_session'
+    } finally {
+      // Cleanup camera resources
+      if (faceScanServiceRef.current) {
+        faceScanServiceRef.current.cleanup()
+      }
     }
   }
 
   const handleReset = () => {
+    // Cleanup camera resources
+    if (faceScanServiceRef.current) {
+      faceScanServiceRef.current.cleanup()
+    }
+    
     reset()
     setCurrentStep('init')
   }
@@ -106,9 +158,17 @@ export function BiometricVerification({
         <CardTitle className="flex items-center gap-2 text-green-800">
           <Shield className="h-5 w-5" />
           Biometric Identity Verification
+          {process.env.NODE_ENV === 'development' && (
+            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">DEV MODE</span>
+          )}
         </CardTitle>
         <CardDescription className="text-green-700">
           Powered by Humanode.io - Ensures one person, one account
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-orange-600 text-sm mt-1">
+              Using mock biometric service for development
+            </div>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -140,20 +200,31 @@ export function BiometricVerification({
               <AlertTitle className="text-green-800">System Ready</AlertTitle>
               <AlertDescription className="text-green-700">
                 Biometric verification system is initialized and ready to scan.
+                {cameraAvailable ? ' Camera detected.' : ' Camera not available.'}
               </AlertDescription>
             </Alert>
+            
+            {!cameraAvailable && (
+              <Alert className="border-amber-300 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-amber-800">Camera Required</AlertTitle>
+                <AlertDescription className="text-amber-700">
+                  Please ensure you have a webcam connected and grant camera permissions to proceed with biometric verification.
+                </AlertDescription>
+              </Alert>
+            )}
             
             <Button 
               onClick={handleStartVerification}
               className="bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700"
-              disabled={state.isScanning}
+              disabled={state.isScanning || !cameraAvailable}
             >
               <Camera className="h-4 w-4 mr-2" />
-              Start Face Scan
+              {cameraAvailable ? 'Start Real Face Scan' : 'Camera Not Available'}
             </Button>
             
             <p className="text-sm text-slate-600">
-              The scan will verify that you haven't registered before using facial biometrics.
+              The scan will use your camera to verify that you haven't registered before using facial biometrics.
             </p>
           </div>
         )}
@@ -175,11 +246,14 @@ export function BiometricVerification({
               <p className="text-sm text-slate-600">
                 Please look directly at the camera and remain still
               </p>
+              <p className="text-xs text-orange-600">
+                Real camera scanning in progress - this will capture your actual face
+              </p>
             </div>
             
             <div className="flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-              <span className="text-blue-700">Processing biometric data...</span>
+              <span className="text-blue-700">Processing real biometric data...</span>
             </div>
           </div>
         )}
@@ -217,6 +291,25 @@ export function BiometricVerification({
             <AlertTitle className="text-red-800">Verification Error</AlertTitle>
             <AlertDescription className="text-red-700">
               {state.error}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Development Helper */}
+        {process.env.NODE_ENV === 'development' && (
+          <Alert className="border-orange-300 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-800">Development Mode</AlertTitle>
+            <AlertDescription className="text-orange-700 space-y-2">
+              <p>Mock biometric service is active. To test different scenarios:</p>
+              <ul className="list-disc list-inside text-xs space-y-1">
+                <li><strong>Always succeed:</strong> NEXT_PUBLIC_MOCK_BIOMETRIC_FAIL=false (current)</li>
+                <li><strong>Force failures:</strong> NEXT_PUBLIC_MOCK_BIOMETRIC_FAIL=true</li>
+                <li><strong>Use real service:</strong> Get Humanode API key & set NEXT_PUBLIC_USE_REAL_HUMANODE=true</li>
+              </ul>
+              <p className="text-xs mt-2">
+                Current setting: {process.env.NEXT_PUBLIC_MOCK_BIOMETRIC_FAIL === 'true' ? 'Forced failures enabled' : 'Normal success rate (95%)'}
+              </p>
             </AlertDescription>
           </Alert>
         )}

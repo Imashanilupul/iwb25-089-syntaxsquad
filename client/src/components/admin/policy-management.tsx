@@ -40,7 +40,7 @@ interface Policy {
 export function PolicyManagement() {
   const [policies, setPolicies] = useState<PolicyType[]>([])
   const [loading, setLoading] = useState(true)
-  const [statistics, setStatistics] = useState<PolicyStatistics["data"] | null>(null)
+  const [statistics, setStatistics] = useState<PolicyStatistics["statistics"] | null>(null)
   const [ministries, setMinistries] = useState<string[]>([])
   const [loadingMinistries, setLoadingMinistries] = useState(false)
   const { toast } = useToast()
@@ -146,7 +146,7 @@ export function PolicyManagement() {
   const loadStatistics = async () => {
     try {
       const response = await policyService.getPolicyStatistics()
-      setStatistics(response.data)
+      setStatistics(response.statistics)
     } catch (error) {
       console.error("Failed to load statistics:", error)
     }
@@ -588,7 +588,7 @@ export function PolicyManagement() {
             <FileText className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statistics?.totalPolicies || policies.length}</div>
+            <div className="text-2xl font-bold">{statistics?.total_policies || policies.length}</div>
             <p className="text-xs text-slate-500">Across all ministries</p>
           </CardContent>
         </Card>
@@ -600,7 +600,7 @@ export function PolicyManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.statusCounts?.PUBLIC_CONSULTATION || 
+              {statistics?.status_distribution?.PUBLIC_CONSULTATION || 
                policies.filter((p) => p.status.toUpperCase() === "PUBLIC_CONSULTATION").length}
             </div>
             <p className="text-xs text-slate-500">Open for comments</p>
@@ -627,7 +627,7 @@ export function PolicyManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics ? Object.keys(statistics.ministryCounts).length : 
+              {statistics ? Object.keys(statistics.ministry_distribution).length : 
                new Set(policies.map((p) => p.ministry)).size}
             </div>
             <p className="text-xs text-slate-500">With active policies</p>
