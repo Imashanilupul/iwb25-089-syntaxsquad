@@ -1,5 +1,9 @@
 const express = require("express");
 const { ethers } = require("hardhat");
+const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
+const fs = require('fs');
+const path = require('path');
+
 const router = express.Router();
 
 const contractAddress = "0x99FEe085aAC7cF2291f137Eb6f7aE25D6979c470"; // Replace with real Reports contract address
@@ -12,6 +16,77 @@ async function init() {
   signers = await ethers.getSigners();
 }
 init();
+
+function loadDeployedAddresses() {
+  try {
+    const p = path.join(__dirname, '..', 'deployed-addresses.json');
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  } catch (e) {
+    console.warn('Could not load deployed-addresses.json', e.message);
+  }
+  return null;
+}
+
+function loadContractAbi() {
+  try {
+    // Path to compiled artifact produced by Hardhat
+    const abiPath = path.join(__dirname, '..', 'artifacts', 'contracts', 'report', 'reports.sol', 'Reports.json');
+    if (fs.existsSync(abiPath)) {
+      const json = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
+      return json.abi;
+    }
+  } catch (e) {
+    console.warn('Could not load contract ABI:', e.message);
+  }
+  return null;
+}
+
+// New endpoint: prepare data for frontend-signed transaction
+router.post('/prepare-report', async (req, res) => {
+  const { title, description, evidenceHash, draftId } = req.body || {};
+  if (!title || !description || !evidenceHash) {
+    return res.status(400).json({ success: false, error: 'Missing title, description, or evidence hash' });
+  }
+
+  try {
+    console.log('📤 Uploading report data to IPFS...');
+    const titleCid = await uploadDescriptionToPinata(title);
+    console.log('✅ Uploaded title CID:', titleCid);
+
+    const descriptionCid = await uploadDescriptionToPinata(description);
+    console.log('✅ Uploaded description CID:', descriptionCid);
+
+    // Upload evidence hash to IPFS as well for additional security
+    const evidenceHashCid = await uploadDescriptionToPinata(evidenceHash);
+    console.log('✅ Uploaded evidence hash CID:', evidenceHashCid);
+
+    const addresses = loadDeployedAddresses();
+    const deployedContractAddress = addresses && addresses.Reports ? addresses.Reports : contractAddress;
+    const contractAbi = loadContractAbi();
+
+    if (!deployedContractAddress) {
+      console.warn('No deployed Reports contract address found');
+    }
+    if (!contractAbi) {
+      console.warn('No Reports contract ABI found in artifacts');
+    }
+
+    return res.json({
+      success: true,
+      draftId: draftId || null,
+      titleCid,
+      descriptionCid,
+      evidenceHashCid,
+      contractAddress: deployedContractAddress,
+      contractAbi,
+    });
+  } catch (err) {
+    console.error('❌ Error preparing report:', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
 
 router.post("/create-report", async (req, res) => {
   const { titleCid, descriptionCid, evidenceHashCid, signerIndex } = req.body;

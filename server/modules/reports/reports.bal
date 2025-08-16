@@ -117,8 +117,9 @@ public class ReportsService {
     # + priority - Report priority (LOW, MEDIUM, HIGH, CRITICAL)
     # + assignedTo - Person assigned to handle the report
     # + userId - User ID who created the report
+    # + walletAddress - Wallet address of the user who created the report
     # + return - Created report data or error
-    public function createReport(string reportTitle, string evidenceHash, string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = ()) returns json|error {
+    public function createReport(string reportTitle, string evidenceHash, string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = (), string? walletAddress = ()) returns json|error {
         do {
             // Validate input
             if reportTitle.trim().length() == 0 {
@@ -159,6 +160,10 @@ public class ReportsService {
             
             if userId is int {
                 payload = check payload.mergeJson({"user_id": userId});
+            }
+            
+            if walletAddress is string && walletAddress.trim().length() > 0 {
+                payload = check payload.mergeJson({"wallet_address": walletAddress});
             }
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
@@ -760,5 +765,70 @@ public class ReportsService {
             "valid": errors.length() == 0,
             "errors": errors
         };
+    }
+
+    # Confirm report draft with blockchain data
+    #
+    # + reportId - Report ID to confirm
+    # + txHash - Blockchain transaction hash
+    # + blockNumber - Block number
+    # + blockchainReportId - Blockchain report ID
+    # + titleCid - IPFS CID for title
+    # + descriptionCid - IPFS CID for description
+    # + evidenceHashCid - IPFS CID for evidence hash
+    # + return - Confirmed report data or error
+    public function confirmReportDraft(int reportId, string? txHash, int? blockNumber, string? blockchainReportId, string? titleCid, string? descriptionCid, string? evidenceHashCid) returns json|error {
+        do {
+            map<string> headers = self.getHeaders(true);
+            
+            // Prepare update data
+            map<json> updateData = {};
+            
+            if txHash is string {
+                updateData["blockchain_tx_hash"] = txHash;
+            }
+            if blockNumber is int {
+                updateData["blockchain_block_number"] = blockNumber;
+            }
+            if blockchainReportId is string {
+                updateData["blockchain_report_id"] = blockchainReportId;
+            }
+            if titleCid is string {
+                updateData["title_cid"] = titleCid;
+            }
+            if descriptionCid is string {
+                updateData["description_cid"] = descriptionCid;
+            }
+            if evidenceHashCid is string {
+                updateData["evidence_hash_cid"] = evidenceHashCid;
+            }
+            
+            updateData["status"] = "CONFIRMED";
+            updateData["confirmed_at"] = time:utcToString(time:utcNow());
+            
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, updateData, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to confirm report draft: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] reports = check result.ensureType();
+            
+            if reports.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Report draft confirmed successfully",
+                    "data": reports[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Report not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to confirm report draft: " + e.message());
+        }
     }
 }

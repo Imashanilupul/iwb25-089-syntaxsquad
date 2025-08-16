@@ -1,6 +1,7 @@
 const express = require("express");
 const petitionRouter = require("./petition");
 const authRouter = require("./auth");
+const reportsRouter = require("./reports");
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.json());
 // Mount routers
 app.use("/petition", petitionRouter);
 app.use("/auth", authRouter);
+app.use("/report", reportsRouter);
 
 const PORT = 3001;
 app.listen(PORT, () => {

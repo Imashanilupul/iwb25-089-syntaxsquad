@@ -732,4 +732,65 @@ public class PetitionsService {
             "errors": errors
         };
     }
+
+    # Confirm petition draft with blockchain data
+    #
+    # + petitionId - Petition ID to confirm
+    # + txHash - Blockchain transaction hash
+    # + blockNumber - Block number
+    # + blockchainPetitionId - Blockchain petition ID
+    # + titleCid - IPFS CID for title
+    # + descriptionCid - IPFS CID for description
+    # + return - Confirmed petition data or error
+    public function confirmPetitionDraft(int petitionId, string? txHash, int? blockNumber, string? blockchainPetitionId, string? titleCid, string? descriptionCid) returns json|error {
+        do {
+            map<string> headers = self.getHeaders(true);
+            
+            // Prepare update data
+            map<json> updateData = {};
+            
+            if txHash is string {
+                updateData["blockchain_tx_hash"] = txHash;
+            }
+            if blockNumber is int {
+                updateData["blockchain_block_number"] = blockNumber;
+            }
+            if blockchainPetitionId is string {
+                updateData["blockchain_petition_id"] = blockchainPetitionId;
+            }
+            if titleCid is string {
+                updateData["title_cid"] = titleCid;
+            }
+            if descriptionCid is string {
+                updateData["description_cid"] = descriptionCid;
+            }
+            
+            updateData["status"] = "ACTIVE";
+            updateData["confirmed_at"] = time:utcToString(time:utcNow());
+            
+            string endpoint = "/rest/v1/petitions?id=eq." + petitionId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, updateData, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to confirm petition draft: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] petitions = check result.ensureType();
+            
+            if petitions.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Petition draft confirmed successfully",
+                    "data": petitions[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Petition not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to confirm petition draft: " + e.message());
+        }
+    }
 }
