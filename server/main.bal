@@ -809,6 +809,24 @@ service /api on apiListener {
         return usersService.getUserByNic(nic);
     }
 
+    # Get user by mobile number
+    #
+    # + mobile - Mobile number to search for
+    # + return - User data or error
+    resource function get users/mobile/[string mobile]() returns json|error {
+        log:printInfo("Get user by mobile endpoint called for mobile: " + mobile);
+        return usersService.getUserByMobile(mobile);
+    }
+
+    # Get user by EVM address
+    #
+    # + evm - EVM address to search for
+    # + return - User data or error
+    resource function get users/evm/[string evm]() returns json|error {
+        log:printInfo("Get user by EVM endpoint called for EVM: " + evm);
+        return usersService.getUserByEvm(evm);
+    }
+
     # Search users by keyword
     #
     # + keyword - Keyword to search for

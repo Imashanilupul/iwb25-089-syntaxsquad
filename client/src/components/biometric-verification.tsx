@@ -296,7 +296,7 @@ export function BiometricVerification({
         )}
 
         {/* Development Helper */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* {process.env.NODE_ENV === 'development' && (
           <Alert className="border-orange-300 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
             <AlertTitle className="text-orange-800">Development Mode</AlertTitle>
@@ -312,7 +312,7 @@ export function BiometricVerification({
               </p>
             </AlertDescription>
           </Alert>
-        )}
+        )} */}
 
         {/* Security Notice */}
         <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
