@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserPlus } from "lucide-react"
+import { UserPlus, ChevronLeft, ChevronRight, User, Phone, Shield } from "lucide-react"
 import { BiometricVerification } from "@/components/biometric-verification"
 import { useAppKitAccount } from "@reown/appkit/react"
 import { registerUser } from "@/services/registration"
@@ -190,6 +190,8 @@ const calculateOldNICChecksum = (digits: string): number => {
 export function RegistrationDialog() {
   const { address, isConnected } = useAppKitAccount()
   const [open, setOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1)
+  const totalSteps = 3
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [nicValidation, setNicValidation] = useState<NICValidationResult | null>(null)
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
@@ -207,6 +209,75 @@ export function RegistrationDialog() {
     mobileNumber: "",
     province: "",
   })
+
+  // Step navigation
+  const nextStep = () => {
+    if (currentStep < totalSteps && isStepValid(currentStep)) {
+      setCurrentStep(prev => prev + 1)
+    }
+  }
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(prev => prev - 1)
+    }
+  }
+
+  // Step validation
+  const isStepValid = (step: number) => {
+    switch (step) {
+      case 1:
+        return (
+          formData.firstName.trim() &&
+          formData.lastName.trim() &&
+          formData.email.trim() &&
+          formData.nicNumber.trim() &&
+          nicValidation?.isValid &&
+          !validationErrors.email &&
+          !validationErrors.nicNumber
+        )
+      case 2:
+        return (
+          formData.mobileNumber.trim() &&
+          formData.province.trim() &&
+          !validationErrors.mobileNumber
+        )
+      case 3:
+        return (
+          isConnected &&
+          (!enableBiometric || (biometricData.isVerified && biometricData.isUnique)) &&
+          !validationErrors.evm
+        )
+      default:
+        return false
+    }
+  }
+
+  const getStepTitle = (step: number) => {
+    switch (step) {
+      case 1:
+        return "Personal Information"
+      case 2:
+        return "Contact & Location"
+      case 3:
+        return "Identity Verification"
+      default:
+        return ""
+    }
+  }
+
+  const getStepIcon = (step: number) => {
+    switch (step) {
+      case 1:
+        return User
+      case 2:
+        return Phone
+      case 3:
+        return Shield
+      default:
+        return User
+    }
+  }
 
   // Clear EVM validation error when wallet address changes
   useEffect(() => {
@@ -477,6 +548,7 @@ export function RegistrationDialog() {
       isUnique: false,
       biometricHash: ''
     })
+    setCurrentStep(1)
     setOpen(false)
   }
 
@@ -493,188 +565,256 @@ export function RegistrationDialog() {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-amber-50 to-green-50">
         <DialogHeader>
-          <DialogTitle className="text-blue-800">Citizen Registration</DialogTitle>
+          <DialogTitle className="text-blue-800 flex items-center gap-2">
+            {(() => {
+              const IconComponent = getStepIcon(currentStep)
+              return <IconComponent className="h-5 w-5" />
+            })()}
+            Citizen Registration - {getStepTitle(currentStep)}
+          </DialogTitle>
           <DialogDescription className="text-slate-600">
-            Register to participate in Sri Lanka's transparent governance platform.
+            Step {currentStep} of {totalSteps}: Complete your registration to participate in Sri Lanka's transparent governance platform.
           </DialogDescription>
         </DialogHeader>
-        
-        {/* Wallet Connection Status */}
-        <div className={`flex items-center gap-2 p-3 rounded-lg ${isConnected ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'}`}>
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className={`text-sm font-medium ${isConnected ? 'text-green-800' : 'text-red-800'}`}>
-            {isConnected ? `Wallet Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Wallet Not Connected'}
-          </span>
+
+        {/* Progress indicator */}
+        <div className="flex items-center justify-between mb-6">
+          {[1, 2, 3].map((step) => (
+            <div key={step} className="flex items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  step === currentStep
+                    ? 'bg-blue-600 text-white'
+                    : step < currentStep
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-200 text-gray-500'
+                }`}
+              >
+                {step < currentStep ? '✓' : step}
+              </div>
+              {step < totalSteps && (
+                <div
+                  className={`w-16 h-1 mx-2 ${
+                    step < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                  }`}
+                />
+              )}
+            </div>
+          ))}
         </div>
-        
-        {/* EVM Address Validation Error */}
-        {validationErrors.evm && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 border border-red-300">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-            <span className="text-sm font-medium text-red-800">{validationErrors.evm}</span>
-          </div>
-        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
-              <Input
-                id="firstName"
-                type="text"
-                value={formData.firstName}
-                onChange={(e) => handleInputChange("firstName", e.target.value)}
-                placeholder="Enter first name"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input
-                id="lastName"
-                type="text"
-                value={formData.lastName}
-                onChange={(e) => handleInputChange("lastName", e.target.value)}
-                placeholder="Enter last name"
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange("email", e.target.value)}
-              placeholder="Enter email address"
-              className={validationErrors.email ? "border-red-500 focus:border-red-600" : ""}
-              required
-            />
-            {validationErrors.email && (
-              <div className="text-sm text-red-600 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-                {validationErrors.email}
+          {/* Step 1: Personal Information */}
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange("firstName", e.target.value)}
+                    placeholder="Enter first name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange("lastName", e.target.value)}
+                    placeholder="Enter last name"
+                    required
+                  />
+                </div>
               </div>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="nicNumber">NIC Number</Label>
-            <Input
-              id="nicNumber"
-              type="text"
-              value={formData.nicNumber}
-              onChange={(e) => handleInputChange("nicNumber", e.target.value)}
-              placeholder="Enter NIC number (e.g., 123456789V or 123456789012)"
-              className={`${
-                validationErrors.nicNumber
-                  ? "border-red-500 focus:border-red-600"
-                  : nicValidation === null 
-                    ? "" 
-                    : nicValidation.isValid 
-                      ? "border-green-500 focus:border-green-600" 
-                      : "border-red-500 focus:border-red-600"
-              }`}
-              required
-            />
-            {validationErrors.nicNumber && (
-              <div className="text-sm text-red-600 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-                {validationErrors.nicNumber}
-              </div>
-            )}
-            {!validationErrors.nicNumber && nicValidation && (
-              <div className={`text-sm flex items-center gap-2 ${
-                nicValidation.isValid ? "text-green-600" : "text-red-600"
-              }`}>
-                <span className={`inline-block w-2 h-2 rounded-full ${
-                  nicValidation.isValid ? "bg-green-500" : "bg-red-500"
-                }`}></span>
-                {nicValidation.message}
-                {nicValidation.isValid && nicValidation.birthYear && (
-                  <span className="text-blue-600 text-xs ml-2">
-                    (Born: {nicValidation.birthYear}, {nicValidation.gender})
-                  </span>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  placeholder="Enter email address"
+                  className={validationErrors.email ? "border-red-500 focus:border-red-600" : ""}
+                  required
+                />
+                {validationErrors.email && (
+                  <div className="text-sm text-red-600 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                    {validationErrors.email}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-          
-          {/* Biometric Verification Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-slate-700">Identity Verification</h3>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={enableBiometric}
-                  onChange={(e) => setEnableBiometric(e.target.checked)}
-                  className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+              
+              <div className="space-y-2">
+                <Label htmlFor="nicNumber">NIC Number</Label>
+                <Input
+                  id="nicNumber"
+                  type="text"
+                  value={formData.nicNumber}
+                  onChange={(e) => handleInputChange("nicNumber", e.target.value)}
+                  placeholder="Enter NIC number (e.g., 123456789V or 123456789012)"
+                  className={`${
+                    validationErrors.nicNumber
+                      ? "border-red-500 focus:border-red-600"
+                      : nicValidation === null 
+                        ? "" 
+                        : nicValidation.isValid 
+                          ? "border-green-500 focus:border-green-600" 
+                          : "border-red-500 focus:border-red-600"
+                  }`}
+                  required
                 />
-                <span className="text-xs text-slate-600">Enable biometric verification</span>
-              </label>
-            </div>
-            
-            <BiometricVerification
-              onVerificationComplete={handleBiometricVerification}
-              onVerificationError={handleBiometricError}
-              isEnabled={enableBiometric}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="mobileNumber">Mobile Number</Label>
-            <Input
-              id="mobileNumber"
-              type="tel"
-              value={formData.mobileNumber}
-              onChange={(e) => handleInputChange("mobileNumber", e.target.value)}
-              placeholder="Enter mobile number (e.g., 0771234567)"
-              className={validationErrors.mobileNumber ? "border-red-500 focus:border-red-600" : ""}
-              required
-            />
-            {validationErrors.mobileNumber && (
-              <div className="text-sm text-red-600 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-                {validationErrors.mobileNumber}
+                {validationErrors.nicNumber && (
+                  <div className="text-sm text-red-600 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                    {validationErrors.nicNumber}
+                  </div>
+                )}
+                {!validationErrors.nicNumber && nicValidation && (
+                  <div className={`text-sm flex items-center gap-2 ${
+                    nicValidation.isValid ? "text-green-600" : "text-red-600"
+                  }`}>
+                    <span className={`inline-block w-2 h-2 rounded-full ${
+                      nicValidation.isValid ? "bg-green-500" : "bg-red-500"
+                    }`}></span>
+                    {nicValidation.message}
+                    {nicValidation.isValid && nicValidation.birthYear && (
+                      <span className="text-blue-600 text-xs ml-2">
+                        (Born: {nicValidation.birthYear}, {nicValidation.gender})
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="province">Province</Label>
-            <select
-              id="province"
-              value={formData.province}
-              onChange={(e) => handleInputChange("province", e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              required
-            >
-              <option value="">Select your province</option>
-              <option value="Western">Western</option>
-              <option value="Central">Central</option>
-              <option value="Southern">Southern</option>
-              <option value="Northern">Northern</option>
-              <option value="Eastern">Eastern</option>
-              <option value="North Western">North Western</option>
-              <option value="North Central">North Central</option>
-              <option value="Uva">Uva</option>
-              <option value="Sabaragamuwa">Sabaragamuwa</option>
-            </select>
-          </div>
-          
+            </div>
+          )}
+
+          {/* Step 2: Contact & Location */}
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="mobileNumber">Mobile Number</Label>
+                <Input
+                  id="mobileNumber"
+                  type="tel"
+                  value={formData.mobileNumber}
+                  onChange={(e) => handleInputChange("mobileNumber", e.target.value)}
+                  placeholder="Enter mobile number (e.g., 0771234567)"
+                  className={validationErrors.mobileNumber ? "border-red-500 focus:border-red-600" : ""}
+                  required
+                />
+                {validationErrors.mobileNumber && (
+                  <div className="text-sm text-red-600 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                    {validationErrors.mobileNumber}
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="province">Province</Label>
+                <select
+                  id="province"
+                  value={formData.province}
+                  onChange={(e) => handleInputChange("province", e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  required
+                >
+                  <option value="">Select your province</option>
+                  <option value="Western">Western</option>
+                  <option value="Central">Central</option>
+                  <option value="Southern">Southern</option>
+                  <option value="Northern">Northern</option>
+                  <option value="Eastern">Eastern</option>
+                  <option value="North Western">North Western</option>
+                  <option value="North Central">North Central</option>
+                  <option value="Uva">Uva</option>
+                  <option value="Sabaragamuwa">Sabaragamuwa</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Identity Verification */}
+          {currentStep === 3 && (
+            <div className="space-y-4">
+              {/* Wallet Connection Status */}
+              <div className={`flex items-center gap-2 p-3 rounded-lg ${isConnected ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'}`}>
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className={`text-sm font-medium ${isConnected ? 'text-green-800' : 'text-red-800'}`}>
+                  {isConnected ? `Wallet Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Wallet Not Connected'}
+                </span>
+              </div>
+              
+              {/* EVM Address Validation Error */}
+              {validationErrors.evm && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 border border-red-300">
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                  <span className="text-sm font-medium text-red-800">{validationErrors.evm}</span>
+                </div>
+              )}
+
+              {/* Biometric Verification Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-slate-700">Identity Verification</h3>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={enableBiometric}
+                      onChange={(e) => setEnableBiometric(e.target.checked)}
+                      className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-slate-600">Enable biometric verification</span>
+                  </label>
+                </div>
+                
+                <BiometricVerification
+                  onVerificationComplete={handleBiometricVerification}
+                  onVerificationError={handleBiometricError}
+                  isEnabled={enableBiometric}
+                />
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="gap-2">
+            {currentStep > 1 && (
+              <Button type="button" variant="outline" onClick={prevStep}>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+            )}
+            
             <Button type="button" variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              disabled={!isConnected || isSubmitting}
-              className={!isConnected ? "bg-gray-400 cursor-not-allowed" : ""}
-            >
-              {!isConnected ? "Connect Wallet First" : isSubmitting ? "Registering..." : "Register"}
-            </Button>
+            
+            {currentStep < totalSteps ? (
+              <Button 
+                type="button" 
+                onClick={nextStep}
+                disabled={!isStepValid(currentStep)}
+                className={!isStepValid(currentStep) ? "bg-gray-400 cursor-not-allowed" : ""}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button 
+                type="submit" 
+                disabled={!isStepValid(currentStep) || isSubmitting}
+                className={!isStepValid(currentStep) ? "bg-gray-400 cursor-not-allowed" : ""}
+              >
+                {isSubmitting ? "Registering..." : "Register"}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>
