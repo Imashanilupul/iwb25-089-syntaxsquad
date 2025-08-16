@@ -73,20 +73,20 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [petitions, setPetitions] = useState<any[]>([])
   const [isLoadingPetitions, setIsLoadingPetitions] = useState(false)
   const [signingPetition, setSigningPetition] = useState<number | null>(null)
-  const [userSignatures, setUserSignatures] = useState<{[key: number]: boolean}>({})
+  const [userSignatures, setUserSignatures] = useState<{ [key: number]: boolean }>({})
   const [categories, setCategories] = useState<any[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
 
   // Get user ID from wallet address (consistent with petition signing)
   const getUserId = (walletAddress: string): number => {
     // Simple hash of wallet address to create consistent user ID
-    let hash = 0;
+    let hash = 0
     for (let i = 0; i < walletAddress.length; i++) {
-      const char = walletAddress.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      const char = walletAddress.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash // Convert to 32-bit integer
     }
-    return Math.abs(hash % 10000) + 1; // Ensure positive ID between 1-10000
+    return Math.abs(hash % 10000) + 1 // Ensure positive ID between 1-10000
   }
 
   // Submit anonymous report function
@@ -119,9 +119,9 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         title: reportForm.title,
         description: reportForm.description,
         timestamp: new Date().toISOString(),
-        userAddress: address // For hashing only, not stored directly
+        userAddress: address, // For hashing only, not stored directly
       }
-      
+
       // If evidence file is provided, include it in hash
       if (reportForm.evidence) {
         const fileContent = await readFileAsText(reportForm.evidence)
@@ -129,16 +129,16 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
           name: reportForm.evidence.name,
           size: reportForm.evidence.size,
           type: reportForm.evidence.type,
-          content: fileContent.substring(0, 1000) // Only hash first 1000 chars for privacy
+          content: fileContent.substring(0, 1000), // Only hash first 1000 chars for privacy
         }
       }
-      
+
       // Generate evidence hash from report data
       const evidenceHash = await generateEvidenceHash(JSON.stringify(evidenceData))
-      
+
       // Get user ID from wallet address
       const userId = getUserId(address)
-      
+
       // Prepare report payload for backend
       const reportPayload = {
         report_title: reportForm.title,
@@ -163,9 +163,9 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         if (data.success) {
           toast({
             title: "✅ Report Submitted",
-            description: `Your anonymous report has been submitted successfully. Report ID: ${data.data?.report_id || 'Generated'}`,
+            description: `Your anonymous report has been submitted successfully. Report ID: ${data.data?.report_id || "Generated"}`,
           })
-          
+
           // Reset form
           setReportForm({
             category: "",
@@ -195,11 +195,11 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target?.result as string || '')
+      reader.onload = (e) => resolve((e.target?.result as string) || "")
       reader.onerror = (e) => reject(e)
-      
+
       // For binary files, convert to base64 for hashing
-      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      if (file.type.startsWith("image/") || file.type === "application/pdf") {
         reader.readAsDataURL(file)
       } else {
         reader.readAsText(file)
@@ -207,13 +207,85 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     })
   }
 
+  // Normalize an Ethereum address (ensure 0x prefix and proper format)
+  const normalizeAddress = (addr?: string | null) => {
+    if (!addr) return null
+    let a = String(addr).trim()
+    
+    // Ensure 0x prefix
+    if (!a.startsWith("0x")) {
+      if (/^[a-fA-F0-9]{40}$/.test(a)) {
+        a = `0x${a}`
+      } else {
+        return null // Invalid format
+      }
+    }
+    
+    // Validate Ethereum address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(a)) {
+      return null
+    }
+    
+    return a.toLowerCase() // Return lowercase for consistency
+  }
+
+  // Robust personal_sign helper: some providers expect [message, address], others [address, message]
+  const requestPersonalSign = async (message: string, account?: string | null) => {
+    if (!window.ethereum) throw new Error("No web3 provider available")
+    
+    // Normalize and validate the account address
+    const normalizedAccount = normalizeAddress(account)
+    if (!normalizedAccount) {
+      throw new Error(`Invalid Ethereum address: ${account}`)
+    }
+
+    // Get current accounts to ensure we're using the right one
+    let currentAccounts: string[] = []
+    try {
+      currentAccounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+    } catch (err) {
+      console.warn("Could not get current accounts:", err)
+    }
+
+    // Use the first current account if available, otherwise use normalized account
+    const addressToUse = currentAccounts.length > 0 
+      ? normalizeAddress(currentAccounts[0]) || normalizedAccount
+      : normalizedAccount
+
+    console.log("Requesting personal_sign with address:", addressToUse)
+
+    // Try the common (message, address) order first
+    try {
+      return await (window.ethereum as any).request({
+        method: "personal_sign",
+        params: [message, addressToUse],
+      })
+    } catch (err: any) {
+      console.log("First attempt failed:", err)
+      // If provider complains about invalid params, try the reversed order
+      if (err?.code === -32602 || /invalid params/i.test(String(err?.message || ""))) {
+        console.log("Trying reversed parameter order...")
+        try {
+          return await (window.ethereum as any).request({
+            method: "personal_sign",
+            params: [addressToUse, message],
+          })
+        } catch (err2: any) {
+          console.log("Second attempt also failed:", err2)
+          throw new Error(`Personal sign failed: ${err2.message || err2}`)
+        }
+      }
+      throw new Error(`Personal sign failed: ${err.message || err}`)
+    }
+  }
+
   // Generate evidence hash for anonymity
   const generateEvidenceHash = async (data: string): Promise<string> => {
     const encoder = new TextEncoder()
     const dataBuffer = encoder.encode(data)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer)
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
     return `0x${hashHex.substring(0, 16)}` // Truncate for display
   }
 
@@ -221,20 +293,33 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const getCategoryPriority = (category: string): string => {
     // Map database categories to priorities
     switch (category.toLowerCase()) {
-      case "health": return "HIGH"
-      case "defense": return "CRITICAL" 
-      case "infrastructure": return "HIGH"
-      case "agriculture": return "MEDIUM"
-      case "education": return "MEDIUM"
-      case "finance": return "HIGH"
-      case "security": return "CRITICAL"
-      case "environment": return "HIGH"
+      case "health":
+        return "HIGH"
+      case "defense":
+        return "CRITICAL"
+      case "infrastructure":
+        return "HIGH"
+      case "agriculture":
+        return "MEDIUM"
+      case "education":
+        return "MEDIUM"
+      case "finance":
+        return "HIGH"
+      case "security":
+        return "CRITICAL"
+      case "environment":
+        return "HIGH"
       // Legacy categories for backward compatibility
-      case "financial": return "HIGH"
-      case "safety": return "CRITICAL" 
-      case "regulatory": return "HIGH"
-      case "ethical": return "MEDIUM"
-      default: return "MEDIUM"
+      case "financial":
+        return "HIGH"
+      case "safety":
+        return "CRITICAL"
+      case "regulatory":
+        return "HIGH"
+      case "ethical":
+        return "MEDIUM"
+      default:
+        return "MEDIUM"
     }
   }
 
@@ -251,7 +336,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         const data = await response.json()
         if (data.success && data.data) {
           setPetitions(data.data)
-          
+
           // If wallet is connected, check which petitions user has signed
           if (walletAddress) {
             await checkUserSignatures(data.data)
@@ -310,13 +395,15 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   // Check which petitions the user has already signed
   const checkUserSignatures = async (petitionList: any[]) => {
     if (!walletAddress) return
-    
+
     const userId = getUserId(walletAddress)
-    const signatures: {[key: number]: boolean} = {}
-    
+    const signatures: { [key: number]: boolean } = {}
+
     for (const petition of petitionList) {
       try {
-        const response = await fetch(`http://localhost:8080/api/petitions/${petition.id}/signed/${userId}`)
+        const response = await fetch(
+          `http://localhost:8080/api/petitions/${petition.id}/signed/${userId}`
+        )
         if (response.ok) {
           const data = await response.json()
           signatures[petition.id] = data.hasSigned || false
@@ -326,7 +413,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         signatures[petition.id] = false
       }
     }
-    
+
     setUserSignatures(signatures)
   }
 
@@ -341,25 +428,49 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
       return
     }
 
-    // Check if user has already signed
-    if (userSignatures[petitionId]) {
-      toast({
-        title: "Already signed",
-        description: "You have already signed this petition",
-        variant: "destructive",
-      })
-      return
-    }
+  // Do not pre-check whether the user already signed; let the blockchain
+  // reject duplicate signatures and surface the error to the user.
 
     setSigningPetition(petitionId)
     try {
-      const userId = getUserId(walletAddress)
-      
-      // Create signature for petition signing
+      // Check if MetaMask/wallet is available
       if (!window.ethereum) {
         throw new Error("MetaMask is not installed")
       }
 
+      // Get current accounts to ensure we're connected
+      let accounts
+      try {
+        accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+      } catch (accountError: any) {
+        console.error("Failed to get accounts:", accountError)
+        throw new Error("Failed to get wallet accounts. Please try again.")
+      }
+
+      if (accounts.length === 0) {
+        try {
+          accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+        } catch (requestError: any) {
+          if (requestError.code === 4001) {
+            throw new Error("User rejected wallet connection request")
+          }
+          throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+        }
+      }
+
+      // Validate the current account matches our walletAddress
+      const currentAccount = accounts[0]?.toLowerCase()
+      if (!currentAccount) {
+        throw new Error("No wallet account found. Please connect your wallet first.")
+      }
+
+      if (currentAccount !== walletAddress.toLowerCase()) {
+        throw new Error(
+          `Account mismatch. Please switch to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} in MetaMask`
+        )
+      }
+
+      const userId = getUserId(walletAddress)
       const petition = petitions.find((p) => p.id === petitionId)
       if (!petition) {
         throw new Error("Petition not found")
@@ -375,10 +486,131 @@ Timestamp: ${new Date().toISOString()}
 
 By signing this message, you confirm your signature on this petition.`
 
-      const signature = await (window.ethereum as any).request({
-        method: "personal_sign",
-        params: [message, walletAddress],
+      // Use the same direct approach as createPetition
+      let signature
+      try {
+        signature = await (window.ethereum as any).request({
+          method: "personal_sign",
+          params: [message, walletAddress],
+        })
+      } catch (signError: any) {
+        if (signError.code === 4001) {
+          throw new Error("User rejected the signature request")
+        }
+        throw new Error(`Signature failed: ${signError.message || signError}`)
+      }
+
+      if (!signature) {
+        throw new Error("No signature received from wallet")
+      }
+
+      toast({
+        title: "✅ Signature confirmed",
+        description: "Submitting signature to blockchain...",
       })
+
+      // Get contract address and ABI from the prepare service (same as petition creation)
+      let blockchainSigningSuccess = false
+      try {
+        const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "dummy", // We just need contract info
+            description: "dummy",
+          }),
+        })
+
+        if (prepRes.ok) {
+          const prepJson = await prepRes.json()
+          const { contractAddress, contractAbi } = prepJson
+          
+          if (contractAddress && contractAbi) {
+            toast({
+              title: "Signing on blockchain",
+              description: "Please confirm the transaction in your wallet",
+            })
+
+            // Send transaction to blockchain using ethers
+            const ethers = await import("ethers")
+            const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+            await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+            const signer = await provider.getSigner()
+            const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+            // Get the blockchain petition ID - try multiple approaches
+            let blockchainPetitionId = petition.blockchain_petition_id || petition.blockchainPetitionId || petition.blockchain_id
+
+            // If we don't have the stored blockchain ID, we might need to find it
+            if (!blockchainPetitionId) {
+              // As a fallback, we could try using the database ID 
+              // This assumes petition IDs are sequential and match
+              // But this is not guaranteed - ideally we should store the mapping
+              blockchainPetitionId = petitionId
+              console.warn(`No blockchain petition ID found for petition ${petitionId}, using database ID as fallback`)
+              
+              toast({
+                title: "Warning",
+                description: "Blockchain petition ID not found, using fallback method",
+                variant: "destructive",
+              })
+            }
+
+            console.log(`Signing petition - DB ID: ${petitionId}, Blockchain ID: ${blockchainPetitionId}`)
+
+            // Send transaction to sign petition on blockchain
+            const tx = await contract.signPetition(blockchainPetitionId)
+            toast({ title: "Transaction sent", description: `Hash: ${tx.hash.slice(0, 10)}...` })
+
+            // Wait for confirmation
+            const receipt = await tx.wait()
+            toast({ 
+              title: "Blockchain signature confirmed", 
+              description: `Block: ${receipt.blockNumber}` 
+            })
+
+            console.log("✅ Petition signed on blockchain:", receipt)
+            blockchainSigningSuccess = true
+          }
+        }
+      } catch (blockchainError: any) {
+        console.warn("⚠️ Blockchain signing failed:", blockchainError)
+        
+        // Check for specific authorization error
+        if (blockchainError.message && blockchainError.message.includes("User not authorized")) {
+          toast({
+            title: "❌ Not Authorized",
+            description: "Your wallet address is not authorized to sign petitions. Please contact an administrator to get your address authorized in the system.",
+            variant: "destructive",
+          })
+          return // Don't continue with database signing if not authorized
+        } else if (blockchainError.message && blockchainError.message.includes("execution reverted")) {
+          // Other contract revert errors
+          const revertReason = blockchainError.reason || blockchainError.message.match(/execution reverted: "?([^"]*)"?/)?.[1] || "Unknown contract error"
+          toast({
+            title: "❌ Transaction Failed",
+            description: `Blockchain error: ${revertReason}`,
+            variant: "destructive",
+          })
+          return
+        } else if (blockchainError.code === 4001) {
+          // User rejected transaction
+          toast({
+            title: "Transaction Cancelled",
+            description: "You cancelled the blockchain transaction",
+            variant: "destructive",
+          })
+          return
+        } else {
+          // Other blockchain errors (network issues, etc.)
+          toast({
+            title: "⚠️ Blockchain Error",
+            description: "Failed to sign on blockchain. Your signature will only be recorded in the database.",
+            variant: "destructive",
+          })
+          console.log("⚠️ Continuing with database-only signing due to blockchain error")
+        }
+      }
 
       // Submit signature to backend with user ID
       const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
@@ -418,14 +650,16 @@ By signing this message, you confirm your signature on this petition.`
           })
 
           // Update user signatures state
-          setUserSignatures(prev => ({
+          setUserSignatures((prev) => ({
             ...prev,
-            [petitionId]: true
+            [petitionId]: true,
           }))
 
           toast({
             title: "✅ Petition signed!",
-            description: `Your signature has been added to "${petition.title}"`,
+            description: blockchainSigningSuccess 
+              ? `Your signature has been added to "${petition.title}" on blockchain and database`
+              : `Your signature has been added to "${petition.title}" in database (blockchain signing failed)`,
           })
         } else if (data.error === "ALREADY_SIGNED") {
           toast({
@@ -434,9 +668,9 @@ By signing this message, you confirm your signature on this petition.`
             variant: "destructive",
           })
           // Update local state to reflect this
-          setUserSignatures(prev => ({
+          setUserSignatures((prev) => ({
             ...prev,
-            [petitionId]: true
+            [petitionId]: true,
           }))
         } else {
           throw new Error(data.message || "Failed to sign petition")
@@ -653,7 +887,7 @@ Timestamp: ${timestamp}
           title: petitionForm.title,
           description: petitionForm.description,
           required_signature_count: petitionForm.targetSignatures,
-          wallet_address: walletAddress
+          wallet_address: walletAddress,
         }),
       })
 
@@ -1141,7 +1375,11 @@ Timestamp: ${timestamp}
                             <Button
                               size="sm"
                               onClick={() => signPetition(petition.id)}
-                              disabled={!walletAddress || signingPetition === petition.id || userSignatures[petition.id]}
+                              disabled={
+                                !walletAddress ||
+                                signingPetition === petition.id ||
+                                userSignatures[petition.id]
+                              }
                             >
                               {signingPetition === petition.id ? (
                                 <>
@@ -1187,7 +1425,11 @@ Timestamp: ${timestamp}
                     disabled={isLoadingCategories}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select category"} />
+                      <SelectValue
+                        placeholder={
+                          isLoadingCategories ? "Loading categories..." : "Select category"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((category) => (
@@ -1225,20 +1467,20 @@ Timestamp: ${timestamp}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Evidence (Optional)</label>
-                  <div 
-                    className="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center cursor-pointer hover:border-slate-400 transition-colors"
-                    onClick={() => document.getElementById('evidence-upload')?.click()}
+                  <div
+                    className="cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-4 text-center transition-colors hover:border-slate-400"
+                    onClick={() => document.getElementById("evidence-upload")?.click()}
                     onDragOver={(e) => {
                       e.preventDefault()
-                      e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                      e.currentTarget.classList.add("border-blue-400", "bg-blue-50")
                     }}
                     onDragLeave={(e) => {
                       e.preventDefault()
-                      e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                      e.currentTarget.classList.remove("border-blue-400", "bg-blue-50")
                     }}
                     onDrop={(e) => {
                       e.preventDefault()
-                      e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                      e.currentTarget.classList.remove("border-blue-400", "bg-blue-50")
                       const files = e.dataTransfer.files
                       if (files.length > 0) {
                         const file = files[0]
@@ -1258,11 +1500,13 @@ Timestamp: ${timestamp}
                     <Upload className="mx-auto mb-2 h-8 w-8 text-slate-400" />
                     {reportForm.evidence ? (
                       <div>
-                        <p className="text-sm text-slate-600">Selected: {reportForm.evidence.name}</p>
+                        <p className="text-sm text-slate-600">
+                          Selected: {reportForm.evidence.name}
+                        </p>
                         <p className="text-xs text-slate-500">
                           Size: {(reportForm.evidence.size / 1024 / 1024).toFixed(2)} MB
                         </p>
-                        <button 
+                        <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation()
@@ -1286,6 +1530,8 @@ Timestamp: ${timestamp}
                       type="file"
                       className="hidden"
                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                      title="Upload evidence file"
+                      aria-label="Upload evidence file"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (file) {
@@ -1318,51 +1564,59 @@ Timestamp: ${timestamp}
 
                 {/* Wallet Status Display */}
                 {address && verified ? (
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-800 text-sm">
+                  <div className="rounded-lg bg-green-50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-green-800">
                       <CheckCircle className="h-4 w-4" />
                       <span className="font-medium">Wallet Connected & Verified</span>
                     </div>
-                    <p className="text-xs text-green-700 mt-1">
-                      {address.slice(0, 6)}...{address.slice(-4)} - Ready to submit anonymous reports
+                    <p className="mt-1 text-xs text-green-700">
+                      {address.slice(0, 6)}...{address.slice(-4)} - Ready to submit anonymous
+                      reports
                     </p>
                   </div>
                 ) : address && !verified ? (
-                  <div className="bg-yellow-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                  <div className="rounded-lg bg-yellow-50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-yellow-800">
                       <AlertTriangle className="h-4 w-4" />
                       <span className="font-medium">Wallet Verification Required</span>
                     </div>
-                    <p className="text-xs text-yellow-700 mt-1">
+                    <p className="mt-1 text-xs text-yellow-700">
                       Your wallet is connected but needs verification to submit reports.
                     </p>
                   </div>
                 ) : (
-                  <div className="bg-yellow-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                  <div className="rounded-lg bg-yellow-50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-yellow-800">
                       <AlertTriangle className="h-4 w-4" />
                       <span className="font-medium">Wallet Required</span>
                     </div>
-                    <p className="text-xs text-yellow-700 mt-1">
+                    <p className="mt-1 text-xs text-yellow-700">
                       Please connect your wallet to submit anonymous reports securely.
                     </p>
                   </div>
                 )}
 
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   onClick={submitReport}
-                  disabled={!address || !verified || isSubmittingReport || !reportForm.title.trim() || !reportForm.description.trim() || !reportForm.category}
+                  disabled={
+                    !address ||
+                    !verified ||
+                    isSubmittingReport ||
+                    !reportForm.title.trim() ||
+                    !reportForm.description.trim() ||
+                    !reportForm.category
+                  }
                 >
                   {isSubmittingReport ? (
                     <>
-                      <span className="animate-spin mr-2">⏳</span>
+                      <span className="mr-2 animate-spin">⏳</span>
                       Submitting Report...
                     </>
                   ) : !address ? (
                     "🔐 Connect Wallet to Submit"
                   ) : !verified ? (
-                    "🔑 Verify Wallet to Submit"  
+                    "🔑 Verify Wallet to Submit"
                   ) : (
                     "🛡️ Submit Anonymous Report"
                   )}
