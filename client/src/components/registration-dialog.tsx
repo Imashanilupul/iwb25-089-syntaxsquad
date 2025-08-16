@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,6 +25,13 @@ interface RegistrationFormData {
   nicNumber: string
   mobileNumber: string
   province: string
+}
+
+interface ValidationErrors {
+  email?: string
+  nicNumber?: string
+  mobileNumber?: string
+  evm?: string
 }
 
 interface BiometricData {
@@ -185,6 +192,7 @@ export function RegistrationDialog() {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [nicValidation, setNicValidation] = useState<NICValidationResult | null>(null)
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
   const [biometricData, setBiometricData] = useState<BiometricData>({
     isVerified: false,
     isUnique: false,
@@ -200,11 +208,29 @@ export function RegistrationDialog() {
     province: "",
   })
 
+  // Clear EVM validation error when wallet address changes
+  useEffect(() => {
+    if (validationErrors.evm) {
+      setValidationErrors(prev => ({
+        ...prev,
+        evm: undefined
+      }))
+    }
+  }, [address])
+
   const handleInputChange = (field: keyof RegistrationFormData, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }))
+    
+    // Clear validation error for this field when user starts typing
+    if (validationErrors[field as keyof ValidationErrors]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: undefined
+      }))
+    }
     
     // Real-time NIC validation
     if (field === 'nicNumber') {
@@ -215,6 +241,80 @@ export function RegistrationDialog() {
         setNicValidation(validation)
       }
     }
+
+    // Check for duplicates after a short delay
+    if (field === 'email' || field === 'nicNumber' || field === 'mobileNumber') {
+      setTimeout(() => checkForDuplicates(field, value), 500)
+    }
+  }
+
+  // Check for duplicates in the database
+  const checkForDuplicates = async (field: string, value: string) => {
+    if (!value.trim()) return
+
+    try {
+      const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
+      let endpoint = ''
+      
+      switch (field) {
+        case 'email':
+          endpoint = `/api/users/email/${encodeURIComponent(value)}`
+          break
+        case 'nicNumber':
+          endpoint = `/api/users/nic/${encodeURIComponent(value)}`
+          break
+        case 'mobileNumber':
+          endpoint = `/api/users/mobile/${encodeURIComponent(value)}`
+          break
+        default:
+          return
+      }
+
+      const response = await fetch(`${BACKEND_API_BASE}${endpoint}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        // If user found, set validation error
+        if (data.success && data.data) {
+          const errorMessages = {
+            email: "Email already registered",
+            nicNumber: "NIC already registered",
+            mobileNumber: "Mobile number already registered"
+          }
+          setValidationErrors(prev => ({
+            ...prev,
+            [field]: errorMessages[field as keyof typeof errorMessages]
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for duplicates:', error)
+    }
+  }
+
+  // Check EVM address for duplicates
+  const checkEvmDuplicate = async (evmAddress: string) => {
+    if (!evmAddress.trim()) return false
+
+    try {
+      const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
+      const response = await fetch(`${BACKEND_API_BASE}/api/users/evm/${encodeURIComponent(evmAddress)}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setValidationErrors(prev => ({
+            ...prev,
+            evm: "Wallet address already registered"
+          }))
+          return true
+        }
+      }
+    } catch (error) {
+      console.error('Error checking EVM duplicate:', error)
+    }
+    return false
   }
 
   const handleBiometricVerification = (result: { isUnique: boolean; biometricHash: string }) => {
@@ -270,6 +370,12 @@ export function RegistrationDialog() {
       return
     }
 
+    // Check for validation errors
+    if (Object.values(validationErrors).some(error => error)) {
+      alert("Please fix the validation errors before submitting")
+      return
+    }
+
     // Biometric verification check (if enabled)
     if (enableBiometric && !biometricData.isVerified) {
       alert("Please complete biometric verification to ensure unique registration")
@@ -283,6 +389,29 @@ export function RegistrationDialog() {
 
     try {
       setIsSubmitting(true)
+
+      // Final duplicate check for EVM address
+      const evmDuplicate = await checkEvmDuplicate(address)
+      if (evmDuplicate) {
+        alert("This wallet address is already registered to another user")
+        return
+      }
+
+      // Perform final duplicate checks for all fields
+      await Promise.all([
+        checkForDuplicates('email', formData.email),
+        checkForDuplicates('nicNumber', formData.nicNumber),
+        checkForDuplicates('mobileNumber', formData.mobileNumber)
+      ])
+
+      // Wait a moment for state updates
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Check again if any validation errors were set
+      if (Object.values(validationErrors).some(error => error)) {
+        alert("Registration failed: Duplicate data detected. Please check the error messages below the fields.")
+        return
+      }
 
       const registrationData = {
         ...formData,
@@ -310,6 +439,7 @@ export function RegistrationDialog() {
           province: "",
         })
         setNicValidation(null)
+        setValidationErrors({})
         setBiometricData({
           isVerified: false,
           isUnique: false,
@@ -341,6 +471,7 @@ export function RegistrationDialog() {
       province: "",
     })
     setNicValidation(null)
+    setValidationErrors({})
     setBiometricData({
       isVerified: false,
       isUnique: false,
@@ -375,6 +506,14 @@ export function RegistrationDialog() {
             {isConnected ? `Wallet Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Wallet Not Connected'}
           </span>
         </div>
+        
+        {/* EVM Address Validation Error */}
+        {validationErrors.evm && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 border border-red-300">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+            <span className="text-sm font-medium text-red-800">{validationErrors.evm}</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -409,8 +548,15 @@ export function RegistrationDialog() {
               value={formData.email}
               onChange={(e) => handleInputChange("email", e.target.value)}
               placeholder="Enter email address"
+              className={validationErrors.email ? "border-red-500 focus:border-red-600" : ""}
               required
             />
+            {validationErrors.email && (
+              <div className="text-sm text-red-600 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                {validationErrors.email}
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
@@ -422,15 +568,23 @@ export function RegistrationDialog() {
               onChange={(e) => handleInputChange("nicNumber", e.target.value)}
               placeholder="Enter NIC number (e.g., 123456789V or 123456789012)"
               className={`${
-                nicValidation === null 
-                  ? "" 
-                  : nicValidation.isValid 
-                    ? "border-green-500 focus:border-green-600" 
-                    : "border-red-500 focus:border-red-600"
+                validationErrors.nicNumber
+                  ? "border-red-500 focus:border-red-600"
+                  : nicValidation === null 
+                    ? "" 
+                    : nicValidation.isValid 
+                      ? "border-green-500 focus:border-green-600" 
+                      : "border-red-500 focus:border-red-600"
               }`}
               required
             />
-            {nicValidation && (
+            {validationErrors.nicNumber && (
+              <div className="text-sm text-red-600 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                {validationErrors.nicNumber}
+              </div>
+            )}
+            {!validationErrors.nicNumber && nicValidation && (
               <div className={`text-sm flex items-center gap-2 ${
                 nicValidation.isValid ? "text-green-600" : "text-red-600"
               }`}>
@@ -477,8 +631,15 @@ export function RegistrationDialog() {
               value={formData.mobileNumber}
               onChange={(e) => handleInputChange("mobileNumber", e.target.value)}
               placeholder="Enter mobile number (e.g., 0771234567)"
+              className={validationErrors.mobileNumber ? "border-red-500 focus:border-red-600" : ""}
               required
             />
+            {validationErrors.mobileNumber && (
+              <div className="text-sm text-red-600 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                {validationErrors.mobileNumber}
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">

@@ -415,6 +415,82 @@ public class UsersService {
         }
     }
 
+    # Get user by mobile number
+    #
+    # + mobileNo - Mobile number to search for
+    # + return - User data or error
+    public function getUserByMobile(string mobileNo) returns json|error {
+        // Validate input
+        if mobileNo.trim().length() == 0 {
+            return error("Mobile number cannot be empty");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/users?mobile_no=eq." + mobileNo + "&select=*";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get user by mobile number: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] users = check result.ensureType();
+            
+            if users.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "User retrieved successfully",
+                    "data": users[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("User not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to get user by mobile number: " + e.message());
+        }
+    }
+
+    # Get user by EVM address
+    #
+    # + evm - EVM address to search for
+    # + return - User data or error
+    public function getUserByEvm(string evm) returns json|error {
+        // Validate input
+        if evm.trim().length() == 0 {
+            return error("EVM address cannot be empty");
+        }
+        
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/users?evm=eq." + evm + "&select=*";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get user by EVM address: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] users = check result.ensureType();
+            
+            if users.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "User retrieved successfully",
+                    "data": users[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("User not found");
+            }
+            
+        } on fail error e {
+            return error("Failed to get user by EVM address: " + e.message());
+        }
+    }
+
     # Search users by keyword
     #
     # + keyword - Keyword to search for in user name or email
