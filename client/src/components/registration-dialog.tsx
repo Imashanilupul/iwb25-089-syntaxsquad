@@ -24,6 +24,7 @@ interface RegistrationFormData {
   email: string
   nicNumber: string
   mobileNumber: string
+  province: string
 }
 
 interface BiometricData {
@@ -196,6 +197,7 @@ export function RegistrationDialog() {
     email: "",
     nicNumber: "",
     mobileNumber: "",
+    province: "",
   })
 
   const handleInputChange = (field: keyof RegistrationFormData, value: string) => {
@@ -242,7 +244,7 @@ export function RegistrationDialog() {
     }
 
     // Basic validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.nicNumber || !formData.mobileNumber) {
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.nicNumber || !formData.mobileNumber || !formData.province) {
       alert("Please fill in all fields")
       return
     }
@@ -305,6 +307,7 @@ export function RegistrationDialog() {
           email: "",
           nicNumber: "",
           mobileNumber: "",
+          province: "",
         })
         setNicValidation(null)
         setBiometricData({
@@ -316,7 +319,7 @@ export function RegistrationDialog() {
         
         const verificationMessage = enableBiometric ? "NIC and biometric identity verified and validated." : "NIC verified and validated."
         const txMessage = result.transactionHash ? ` Transaction hash: ${result.transactionHash}` : ""
-        alert(`Registration successful! ${verificationMessage} Your wallet has been authorized.${txMessage}`)
+        alert(`Registration successful! ${verificationMessage} Your wallet has been authorized and data saved to database.${txMessage}`)
       } else {
         alert(`Registration failed: ${result.message}`)
       }
@@ -335,6 +338,7 @@ export function RegistrationDialog() {
       email: "",
       nicNumber: "",
       mobileNumber: "",
+      province: "",
     })
     setNicValidation(null)
     setBiometricData({
@@ -475,6 +479,28 @@ export function RegistrationDialog() {
               placeholder="Enter mobile number (e.g., 0771234567)"
               required
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="province">Province</Label>
+            <select
+              id="province"
+              value={formData.province}
+              onChange={(e) => handleInputChange("province", e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              required
+            >
+              <option value="">Select your province</option>
+              <option value="Western">Western</option>
+              <option value="Central">Central</option>
+              <option value="Southern">Southern</option>
+              <option value="Northern">Northern</option>
+              <option value="Eastern">Eastern</option>
+              <option value="North Western">North Western</option>
+              <option value="North Central">North Central</option>
+              <option value="Uva">Uva</option>
+              <option value="Sabaragamuwa">Sabaragamuwa</option>
+            </select>
           </div>
           
           <DialogFooter className="gap-2">
