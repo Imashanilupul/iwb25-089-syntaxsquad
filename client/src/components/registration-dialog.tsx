@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserPlus, ChevronLeft, ChevronRight, User, Phone, Shield } from "lucide-react"
+import { UserPlus, ChevronLeft, ChevronRight, User, Phone, Shield, CheckCircle, AlertCircle, Copy } from "lucide-react"
 import { BiometricVerification } from "@/components/biometric-verification"
 import { useAppKitAccount } from "@reown/appkit/react"
 import { registerUser } from "@/services/registration"
+import { LoadingOverlay } from "@/components/ui/loading-spinner"
+import { toast } from "sonner"
 
 interface RegistrationFormData {
   firstName: string
@@ -402,7 +404,10 @@ export function RegistrationDialog() {
       isUnique: false,
       biometricHash: ''
     })
-    alert(`Biometric Verification Error: ${error}`)
+    toast.error("Biometric Verification Failed", {
+      description: error,
+      duration: 5000
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -410,61 +415,95 @@ export function RegistrationDialog() {
     
     // Check wallet connection
     if (!isConnected || !address) {
-      alert("Please connect your wallet first to register")
+      toast.error("Wallet Connection Required", {
+        description: "Please connect your wallet first to register",
+        duration: 4000
+      })
       return
     }
 
     // Basic validation
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.nicNumber || !formData.mobileNumber || !formData.province) {
-      alert("Please fill in all fields")
+      toast.error("Incomplete Information", {
+        description: "Please fill in all fields",
+        duration: 4000
+      })
       return
     }
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
-      alert("Please enter a valid email address")
+      toast.error("Invalid Email", {
+        description: "Please enter a valid email address",
+        duration: 4000
+      })
       return
     }
 
     // Comprehensive NIC validation
     const nicValidationResult = validateSriLankanNIC(formData.nicNumber)
     if (!nicValidationResult.isValid) {
-      alert(`NIC Validation Error: ${nicValidationResult.message}`)
+      toast.error("NIC Validation Failed", {
+        description: nicValidationResult.message,
+        duration: 5000
+      })
       return
     }
 
     // Mobile number validation (Sri Lankan format)
     const mobileRegex = /^(\+94|0)?[0-9]{9}$/
     if (!mobileRegex.test(formData.mobileNumber)) {
-      alert("Please enter a valid mobile number")
+      toast.error("Invalid Mobile Number", {
+        description: "Please enter a valid Sri Lankan mobile number",
+        duration: 4000
+      })
       return
     }
 
     // Check for validation errors
     if (Object.values(validationErrors).some(error => error)) {
-      alert("Please fix the validation errors before submitting")
+      toast.error("Validation Errors Found", {
+        description: "Please fix the validation errors before submitting",
+        duration: 4000
+      })
       return
     }
 
     // Biometric verification check (if enabled)
     if (enableBiometric && !biometricData.isVerified) {
-      alert("Please complete biometric verification to ensure unique registration")
+      toast.error("Biometric Verification Required", {
+        description: "Please complete biometric verification to ensure unique registration",
+        duration: 5000
+      })
       return
     }
 
     if (enableBiometric && !biometricData.isUnique) {
-      alert("Biometric verification indicates this identity is already registered. Each person can only register once.")
+      toast.error("Duplicate Identity Detected", {
+        description: "Biometric verification indicates this identity is already registered. Each person can only register once.",
+        duration: 6000
+      })
       return
     }
 
     try {
       setIsSubmitting(true)
 
+      // Show loading toast
+      const loadingToast = toast.loading("Registering your account...", {
+        description: "Please wait while we verify your information and process your registration",
+        duration: Infinity
+      })
+
       // Final duplicate check for EVM address
       const evmDuplicate = await checkEvmDuplicate(address)
       if (evmDuplicate) {
-        alert("This wallet address is already registered to another user")
+        toast.dismiss(loadingToast)
+        toast.error("Wallet Already Registered", {
+          description: "This wallet address is already registered to another user",
+          duration: 5000
+        })
         return
       }
 
@@ -480,7 +519,11 @@ export function RegistrationDialog() {
 
       // Check again if any validation errors were set
       if (Object.values(validationErrors).some(error => error)) {
-        alert("Registration failed: Duplicate data detected. Please check the error messages below the fields.")
+        toast.dismiss(loadingToast)
+        toast.error("Registration Failed", {
+          description: "Duplicate data detected. Please check the error messages below the fields.",
+          duration: 5000
+        })
         return
       }
 
@@ -499,6 +542,8 @@ export function RegistrationDialog() {
       
       const result = await registerUser(registrationData)
       
+      toast.dismiss(loadingToast)
+      
       if (result.success) {
         // Reset form and close dialog
         setFormData({
@@ -516,17 +561,60 @@ export function RegistrationDialog() {
           isUnique: false,
           biometricHash: ''
         })
+        setCurrentStep(1)
         setOpen(false)
         
         const verificationMessage = enableBiometric ? "NIC and biometric identity verified and validated." : "NIC verified and validated."
-        const txMessage = result.transactionHash ? ` Transaction hash: ${result.transactionHash}` : ""
-        alert(`Registration successful! ${verificationMessage} Your wallet has been authorized and data saved to database.${txMessage}`)
+        
+        // Create a custom success toast with transaction hash if available
+        toast.success("Registration Successful! 🎉", {
+          description: (
+            <div className="space-y-2">
+              <p className="text-sm">{verificationMessage}</p>
+              <p className="text-sm">Your wallet has been authorized and data saved to database.</p>
+              {result.transactionHash && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                  <span className="text-xs text-blue-700 font-mono break-all">
+                    Transaction: {result.transactionHash}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (result.transactionHash) {
+                        navigator.clipboard.writeText(result.transactionHash)
+                        toast.success("Transaction hash copied to clipboard!")
+                      }
+                    }}
+                    className="p-1 hover:bg-blue-100 rounded"
+                  >
+                    <Copy className="h-3 w-3 text-blue-600" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ),
+          duration: 8000,
+          action: result.transactionHash ? {
+            label: "View Transaction",
+            onClick: () => {
+              if (result.transactionHash) {
+                // You can customize this URL based on your blockchain network
+                window.open(`https://etherscan.io/tx/${result.transactionHash}`, '_blank')
+              }
+            }
+          } : undefined
+        })
       } else {
-        alert(`Registration failed: ${result.message}`)
+        toast.error("Registration Failed", {
+          description: result.message,
+          duration: 5000
+        })
       }
     } catch (error: any) {
       console.error("Registration error:", error)
-      alert(`Registration failed: ${error.message || 'Unknown error occurred'}`)
+      toast.error("Registration Error", {
+        description: error.message || 'An unknown error occurred during registration',
+        duration: 5000
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -564,6 +652,12 @@ export function RegistrationDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-amber-50 to-green-50">
+        {/* Loading Overlay */}
+        <LoadingOverlay 
+          isVisible={isSubmitting} 
+          text="Processing your registration..."
+          className="rounded-2xl"
+        />
         <DialogHeader>
           <DialogTitle className="text-blue-800 flex items-center gap-2">
             {(() => {
@@ -644,8 +738,8 @@ export function RegistrationDialog() {
                   required
                 />
                 {validationErrors.email && (
-                  <div className="text-sm text-red-600 flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                  <div className="text-sm text-red-600 flex items-center gap-2 p-2 bg-red-50 rounded-md border border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
                     {validationErrors.email}
                   </div>
                 )}
@@ -671,22 +765,26 @@ export function RegistrationDialog() {
                   required
                 />
                 {validationErrors.nicNumber && (
-                  <div className="text-sm text-red-600 flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                  <div className="text-sm text-red-600 flex items-center gap-2 p-2 bg-red-50 rounded-md border border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
                     {validationErrors.nicNumber}
                   </div>
                 )}
                 {!validationErrors.nicNumber && nicValidation && (
-                  <div className={`text-sm flex items-center gap-2 ${
-                    nicValidation.isValid ? "text-green-600" : "text-red-600"
+                  <div className={`text-sm flex items-center gap-2 p-2 rounded-md border ${
+                    nicValidation.isValid 
+                      ? "text-green-600 bg-green-50 border-green-200" 
+                      : "text-red-600 bg-red-50 border-red-200"
                   }`}>
-                    <span className={`inline-block w-2 h-2 rounded-full ${
-                      nicValidation.isValid ? "bg-green-500" : "bg-red-500"
-                    }`}></span>
-                    {nicValidation.message}
+                    {nicValidation.isValid ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span>{nicValidation.message}</span>
                     {nicValidation.isValid && nicValidation.birthYear && (
-                      <span className="text-blue-600 text-xs ml-2">
-                        (Born: {nicValidation.birthYear}, {nicValidation.gender})
+                      <span className="text-blue-600 text-xs ml-2 px-2 py-1 bg-blue-100 rounded-full">
+                        Born: {nicValidation.birthYear}, {nicValidation.gender}
                       </span>
                     )}
                   </div>
@@ -710,8 +808,8 @@ export function RegistrationDialog() {
                   required
                 />
                 {validationErrors.mobileNumber && (
-                  <div className="text-sm text-red-600 flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                  <div className="text-sm text-red-600 flex items-center gap-2 p-2 bg-red-50 rounded-md border border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
                     {validationErrors.mobileNumber}
                   </div>
                 )}
@@ -745,8 +843,12 @@ export function RegistrationDialog() {
           {currentStep === 3 && (
             <div className="space-y-4">
               {/* Wallet Connection Status */}
-              <div className={`flex items-center gap-2 p-3 rounded-lg ${isConnected ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'}`}>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className={`flex items-center gap-2 p-3 rounded-lg border ${isConnected ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                {isConnected ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                )}
                 <span className={`text-sm font-medium ${isConnected ? 'text-green-800' : 'text-red-800'}`}>
                   {isConnected ? `Wallet Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Wallet Not Connected'}
                 </span>
@@ -754,8 +856,8 @@ export function RegistrationDialog() {
               
               {/* EVM Address Validation Error */}
               {validationErrors.evm && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 border border-red-300">
-                  <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-300">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
                   <span className="text-sm font-medium text-red-800">{validationErrors.evm}</span>
                 </div>
               )}
