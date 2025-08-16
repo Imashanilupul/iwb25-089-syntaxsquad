@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { UserPlus } from "lucide-react"
 import { BiometricVerification } from "@/components/biometric-verification"
+import { useAppKitAccount } from "@reown/appkit/react"
+import { registerUser } from "@/services/registration"
 
 interface RegistrationFormData {
   firstName: string
@@ -178,7 +180,9 @@ const calculateOldNICChecksum = (digits: string): number => {
 }
 
 export function RegistrationDialog() {
+  const { address, isConnected } = useAppKitAccount()
   const [open, setOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [nicValidation, setNicValidation] = useState<NICValidationResult | null>(null)
   const [biometricData, setBiometricData] = useState<BiometricData>({
     isVerified: false,
@@ -228,9 +232,15 @@ export function RegistrationDialog() {
     alert(`Biometric Verification Error: ${error}`)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    // Check wallet connection
+    if (!isConnected || !address) {
+      alert("Please connect your wallet first to register")
+      return
+    }
+
     // Basic validation
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.nicNumber || !formData.mobileNumber) {
       alert("Please fill in all fields")
@@ -269,36 +279,53 @@ export function RegistrationDialog() {
       return
     }
 
-    console.log("Registration data:", {
-      ...formData,
-      nicInfo: {
-        birthYear: nicValidationResult.birthYear,
-        dayOfYear: nicValidationResult.dayOfYear,
-        gender: nicValidationResult.gender
-      },
-      biometricData: enableBiometric ? biometricData : null
-    })
-    
-    // Here you would typically send the data to your backend API
-    // The backend should also perform server-side NIC validation
-    
-    // Reset form and close dialog
-    setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      nicNumber: "",
-      mobileNumber: "",
-    })
-    setNicValidation(null)
-    setBiometricData({
-      isVerified: false,
-      isUnique: false,
-      biometricHash: ''
-    })
-    setOpen(false)
-    const verificationMessage = enableBiometric ? "NIC and biometric identity verified and validated." : "NIC verified and validated."
-    alert(`Registration successful! ${verificationMessage}`)
+    try {
+      setIsSubmitting(true)
+
+      const registrationData = {
+        ...formData,
+        walletAddress: address,
+        nicInfo: {
+          birthYear: nicValidationResult.birthYear,
+          dayOfYear: nicValidationResult.dayOfYear,
+          gender: nicValidationResult.gender
+        },
+        biometricData: enableBiometric ? biometricData : null
+      }
+
+      console.log("Registering user with data:", registrationData)
+      
+      const result = await registerUser(registrationData)
+      
+      if (result.success) {
+        // Reset form and close dialog
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          nicNumber: "",
+          mobileNumber: "",
+        })
+        setNicValidation(null)
+        setBiometricData({
+          isVerified: false,
+          isUnique: false,
+          biometricHash: ''
+        })
+        setOpen(false)
+        
+        const verificationMessage = enableBiometric ? "NIC and biometric identity verified and validated." : "NIC verified and validated."
+        const txMessage = result.transactionHash ? ` Transaction hash: ${result.transactionHash}` : ""
+        alert(`Registration successful! ${verificationMessage} Your wallet has been authorized.${txMessage}`)
+      } else {
+        alert(`Registration failed: ${result.message}`)
+      }
+    } catch (error: any) {
+      console.error("Registration error:", error)
+      alert(`Registration failed: ${error.message || 'Unknown error occurred'}`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleCancel = () => {
@@ -336,6 +363,14 @@ export function RegistrationDialog() {
             Register to participate in Sri Lanka's transparent governance platform.
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Wallet Connection Status */}
+        <div className={`flex items-center gap-2 p-3 rounded-lg ${isConnected ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'}`}>
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className={`text-sm font-medium ${isConnected ? 'text-green-800' : 'text-red-800'}`}>
+            {isConnected ? `Wallet Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Wallet Not Connected'}
+          </span>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -446,7 +481,13 @@ export function RegistrationDialog() {
             <Button type="button" variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
-            <Button type="submit">Register</Button>
+            <Button 
+              type="submit" 
+              disabled={!isConnected || isSubmitting}
+              className={!isConnected ? "bg-gray-400 cursor-not-allowed" : ""}
+            >
+              {!isConnected ? "Connect Wallet First" : isSubmitting ? "Registering..." : "Register"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

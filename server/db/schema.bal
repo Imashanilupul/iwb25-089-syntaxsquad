@@ -217,6 +217,7 @@ function createReportsTable(postgresql:Client dbClient) returns error? {
                 CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
             assigned_to VARCHAR(255),
             evidence_hash VARCHAR(255) NOT NULL,
+            wallet_address VARCHAR(255),
             resolved_status BOOLEAN DEFAULT false,
             user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
