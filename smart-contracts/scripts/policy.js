@@ -1,384 +1,205 @@
+const express = require("express");
 const { ethers } = require("hardhat");
-const { storeOnPinata } = require("./ipfs.js");
+const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const fs = require('fs');
 const path = require('path');
 
-// Contract addresses for different networks
-const CONTRACT_ADDRESSES = {
-  sepolia: "0x0000000000000000000000000000000000000000", // Will be updated after deployment
-  localhost: "0x0000000000000000000000000000000000000000",
-};
+const router = express.Router();
 
-function getContractAddress() {
-  // Try to get from deployed-addresses.json first
+const contractAddress = "0xeB575D4DC4C239E04A0dc09630f4E0A45d405Ced"; // Your specified contract address
+let policies;
+let signers;
+
+async function init() {
+  const Policies = await ethers.getContractFactory("Policies");
+  policies = await Policies.attach(contractAddress);
+  signers = await ethers.getSigners();
+}
+init();
+
+function loadDeployedAddresses() {
   try {
-    const deployedAddressesPath = path.join(__dirname, '..', 'deployed-addresses.json');
-    if (fs.existsSync(deployedAddressesPath)) {
-      const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, 'utf8'));
-      if (deployedAddresses.Policy) {
-        console.log("📍 Using Policy contract from deployed-addresses.json");
-        return deployedAddresses.Policy;
-      }
+    const p = path.join(__dirname, '..', 'deployed-addresses.json');
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
     }
-  } catch (error) {
-    console.warn("Could not load from deployed-addresses.json:", error.message);
+  } catch (e) {
+    console.warn('Could not load deployed-addresses.json', e.message);
   }
-
-  // Force Sepolia network - this script should only run on Sepolia
-  const networkName = 'sepolia';
-  
-  console.log("🌐 Forcing Sepolia network usage");
-  console.log("📍 Using Sepolia contract address");
-  return CONTRACT_ADDRESSES.sepolia;
+  return null;
 }
 
-/**
- * Create a new policy on the blockchain
- */
-async function createPolicy({
-  name,
-  description,
-  viewFullPolicy,
-  ministry,
-  effectiveDate = 0 // Default to 0 if not specified
-}) {
+function loadContractAbi() {
   try {
-    console.log("🏛️ Creating new policy on blockchain...");
-    console.log("📋 Policy details:", { name, ministry, effectiveDate });
-
-    const contractAddress = getContractAddress();
-    if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") {
-      throw new Error("Policy contract not deployed. Please deploy first with: npx hardhat run scripts/deploy-policy.js --network sepolia");
+    // Path to compiled artifact produced by Hardhat
+    const abiPath = path.join(__dirname, '..', 'artifacts', 'contracts', 'policy', 'policy.sol', 'Policies.json');
+    if (fs.existsSync(abiPath)) {
+      const json = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
+      return json.abi;
     }
+  } catch (e) {
+    console.warn('Could not load contract ABI:', e.message);
+  }
+  return null;
+}
 
-    // Get signer
-    const [signer] = await ethers.getSigners();
-    console.log("👤 Using account:", signer.address);
+// New endpoint: prepare data for frontend-signed transaction
+router.post('/prepare-policy', async (req, res) => {
+  const { name, description, viewFullPolicy, ministry, effectiveDate, walletAddress, draftId } = req.body || {};
+  if (!name || !description || !viewFullPolicy || !ministry) {
+    return res.status(400).json({ success: false, error: 'Missing required fields: name, description, viewFullPolicy, or ministry' });
+  }
 
-    // Store description on IPFS (only description)
-    console.log("📦 Storing description on IPFS...");
-    
-    const descriptionCid = await storeOnPinata(JSON.stringify({
+  try {
+    console.log('📤 Uploading description to IPFS...');
+    const descriptionCid = await uploadDescriptionToPinata(JSON.stringify({
       type: "policy_description", 
       content: description,
       timestamp: Date.now()
     }), `policy_description_${Date.now()}.json`);
-    console.log("📄 Description CID:", descriptionCid);
+    console.log('✅ Uploaded description CID:', descriptionCid);
 
-    // Connect to contract
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
+    const addresses = loadDeployedAddresses();
+    const deployedContractAddress = addresses && addresses.Policies ? addresses.Policies : contractAddress;
+    const contractAbi = loadContractAbi();
 
-    // Convert effectiveDate to timestamp if it's a date string
-    let effectiveTimestamp = effectiveDate;
+    if (!deployedContractAddress) {
+      console.warn('No deployed contract address found');
+    }
+    if (!contractAbi) {
+      console.warn('No contract ABI found in artifacts');
+    }
+
+    return res.json({
+      success: true,
+      draftId: draftId || null,
+      descriptionCid,
+      contractAddress: deployedContractAddress,
+      contractAbi,
+    });
+  } catch (err) {
+    console.error('❌ Error preparing policy:', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// Change this route from /create to /create-policy
+router.post("/create-policy", async (req, res) => {
+  const { name, description, viewFullPolicy, ministry, effectiveDate, signerIndex } = req.body;
+  try {
+    // Upload description to IPFS via Pinata
+    console.log("📤 Uploading description to IPFS...");
+    const descriptionCid = await uploadDescriptionToPinata(JSON.stringify({
+      type: "policy_description", 
+      content: description,
+      timestamp: Date.now()
+    }), `policy_description_${Date.now()}.json`);
+
+    // Convert effectiveDate to timestamp if needed
+    let effectiveTimestamp = effectiveDate || Math.floor(Date.now() / 1000);
     if (typeof effectiveDate === 'string' && effectiveDate) {
       effectiveTimestamp = Math.floor(new Date(effectiveDate).getTime() / 1000);
-    } else if (effectiveDate === 0) {
-      effectiveTimestamp = Math.floor(Date.now() / 1000); // Default to now
     }
 
-    console.log("⏳ Submitting policy to blockchain...");
-    const tx = await policy.createPolicy(
-      name,                    // name (stored directly as string)
-      descriptionCid,          // descriptionCid (IPFS CID)
-      viewFullPolicy,          // viewFullPolicy (stored directly as string)
-      ministry,                // ministry (stored directly as string)
+    // Store data on blockchain
+    console.log("🔗 Storing policy on blockchain...");
+    const tx = await policies.connect(signers[signerIndex]).createPolicy(
+      name,
+      descriptionCid,
+      viewFullPolicy,
+      ministry,
       effectiveTimestamp
     );
-
-    console.log("📝 Transaction submitted:", tx.hash);
-    console.log("⏳ Waiting for confirmation...");
     
-    const receipt = await tx.wait();
-    console.log("✅ Transaction confirmed in block:", receipt.blockNumber);
+    await tx.wait(); // Wait for transaction confirmation
+    console.log("✅ Transaction confirmed:", tx.hash);
 
-    // Extract policy ID from events
-    const policyCreatedEvent = receipt.logs.find(
-      log => {
-        try {
-          const decoded = policy.interface.parseLog(log);
-          return decoded && decoded.name === 'PolicyCreated';
-        } catch {
-          return false;
-        }
-      }
-    );
-
-    let policyId;
-    if (policyCreatedEvent) {
-      const decoded = policy.interface.parseLog(policyCreatedEvent);
-      policyId = decoded.args.policyId.toString();
-      console.log("🆔 Policy ID:", policyId);
-    } else {
-      // Fallback: get current policy count
-      policyId = await policy.policyCount();
-      console.log("🆔 Policy ID (from count):", policyId.toString());
-    }
-
-    return {
+    res.json({ 
       success: true,
-      policyId: policyId.toString(),
+      descriptionCid,
       transactionHash: tx.hash,
-      blockNumber: receipt.blockNumber,
-      contractAddress,
-      ipfs: {
-        descriptionCid
-      }
-    };
-
-  } catch (error) {
-    console.error("❌ Failed to create policy:", error.message);
-    throw error;
+      message: "Policy created successfully with IPFS storage"
+    });
+  } catch (err) {
+    console.error("❌ Error creating policy:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
-}
+});
 
-/**
- * Get policy details from blockchain
- */
-async function getPolicy(policyId) {
+// Change this route from /update-status to /update-policy-status
+router.post("/update-policy-status", async (req, res) => {
+  const { policyId, newStatus, newEffectiveDate, signerIndex } = req.body;
   try {
-    console.log(`🔍 Fetching policy #${policyId}...`);
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const policyData = await policy.getPolicy(policyId);
-    
-    console.log(`📋 Policy #${policyId} details:`);
-    console.log("- Name:", policyData.name);
-    console.log("- Description CID:", policyData.descriptionCid);
-    console.log("- Full Policy URL:", policyData.viewFullPolicy);
-    console.log("- Ministry:", policyData.ministry);
-    console.log("- Status:", policyData.status);
-    console.log("- Creator:", policyData.creator);
-    console.log("- Created At:", new Date(Number(policyData.createdAt) * 1000).toLocaleString());
-    console.log("- Effective Date:", new Date(Number(policyData.effectiveDate) * 1000).toLocaleString());
-    console.log("- Support Count:", policyData.supportCount.toString());
-    console.log("- Is Active:", policyData.isActive);
-
-    return {
-      id: policyId,
-      name: policyData.name,
-      descriptionCid: policyData.descriptionCid,
-      viewFullPolicy: policyData.viewFullPolicy,
-      ministry: policyData.ministry,
-      status: policyData.status,
-      creator: policyData.creator,
-      createdAt: Number(policyData.createdAt),
-      effectiveDate: Number(policyData.effectiveDate),
-      lastUpdated: Number(policyData.lastUpdated),
-      supportCount: Number(policyData.supportCount),
-      isActive: policyData.isActive
-    };
-
-  } catch (error) {
-    console.error(`❌ Failed to get policy #${policyId}:`, error.message);
-    throw error;
-  }
-}
-
-/**
- * Support a policy
- */
-async function supportPolicy(policyId) {
-  try {
-    console.log(`👍 Supporting policy #${policyId}...`);
-
-    const contractAddress = getContractAddress();
-    const [signer] = await ethers.getSigners();
-    
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    console.log("⏳ Submitting support transaction...");
-    const tx = await policy.supportPolicy(policyId);
-    
-    console.log("📝 Transaction submitted:", tx.hash);
-    const receipt = await tx.wait();
-    console.log("✅ Support recorded in block:", receipt.blockNumber);
-
-    return {
-      success: true,
-      transactionHash: tx.hash,
-      blockNumber: receipt.blockNumber
-    };
-
-  } catch (error) {
-    console.error(`❌ Failed to support policy #${policyId}:`, error.message);
-    throw error;
-  }
-}
-
-/**
- * Update policy status (only creator)
- */
-async function updatePolicyStatus(policyId, newStatus, newEffectiveDate = 0) {
-  try {
-    console.log(`📝 Updating policy #${policyId} status to: ${newStatus}`);
-
-    const contractAddress = getContractAddress();
-    const [signer] = await ethers.getSigners();
-    
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    let effectiveTimestamp = newEffectiveDate;
+    let effectiveTimestamp = newEffectiveDate || 0;
     if (typeof newEffectiveDate === 'string' && newEffectiveDate) {
       effectiveTimestamp = Math.floor(new Date(newEffectiveDate).getTime() / 1000);
     }
 
-    console.log("⏳ Submitting status update...");
-    const tx = await policy.updatePolicyStatus(policyId, newStatus, effectiveTimestamp);
+    const tx = await policies.connect(signers[signerIndex]).updatePolicyStatus(policyId, newStatus, effectiveTimestamp);
+    await tx.wait();
     
-    console.log("📝 Transaction submitted:", tx.hash);
-    const receipt = await tx.wait();
-    console.log("✅ Status updated in block:", receipt.blockNumber);
-
-    return {
+    res.json({ 
       success: true,
-      transactionHash: tx.hash,
-      blockNumber: receipt.blockNumber
-    };
-
-  } catch (error) {
-    console.error(`❌ Failed to update policy #${policyId}:`, error.message);
-    throw error;
+      message: "Policy status updated successfully!",
+      transactionHash: tx.hash
+    });
+  } catch (err) {
+    console.error("❌ Error updating policy status:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
-}
+});
 
-/**
- * Get policies by ministry
- */
-async function getPoliciesByMinistry(ministry) {
+router.get("/:id", async (req, res) => {
   try {
-    console.log(`🔍 Fetching policies for ministry: ${ministry}`);
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const policyIds = await policy.getPoliciesByMinistry(ministry);
-    console.log(`📋 Found ${policyIds.length} policies for ${ministry}`);
-
-    return policyIds.map(id => id.toString());
-
-  } catch (error) {
-    console.error(`❌ Failed to get policies for ministry ${ministry}:`, error.message);
-    throw error;
-  }
-}
-
-/**
- * Get policies by status
- */
-async function getPoliciesByStatus(status) {
-  try {
-    console.log(`🔍 Fetching policies with status: ${status}`);
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const policyIds = await policy.getPoliciesByStatus(status);
-    console.log(`📋 Found ${policyIds.length} policies with status ${status}`);
-
-    return policyIds.map(id => id.toString());
-
-  } catch (error) {
-    console.error(`❌ Failed to get policies with status ${status}:`, error.message);
-    throw error;
-  }
-}
-
-/**
- * Get policies created by user
- */
-async function getPoliciesByUser(userAddress) {
-  try {
-    console.log(`🔍 Fetching policies created by: ${userAddress}`);
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const policyIds = await policy.getPoliciesByUser(userAddress);
-    console.log(`📋 Found ${policyIds.length} policies created by ${userAddress}`);
-
-    return policyIds.map(id => id.toString());
-
-  } catch (error) {
-    console.error(`❌ Failed to get policies for user ${userAddress}:`, error.message);
-    throw error;
-  }
-}
-
-/**
- * Get active policies
- */
-async function getActivePolicies() {
-  try {
-    console.log("🔍 Fetching active policies...");
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const policyIds = await policy.getActivePolicies();
-    console.log(`📋 Found ${policyIds.length} active policies`);
-
-    return policyIds.map(id => id.toString());
-
-  } catch (error) {
-    console.error("❌ Failed to get active policies:", error.message);
-    throw error;
-  }
-}
-
-/**
- * Get policy statistics
- */
-async function getPolicyStatistics() {
-  try {
-    console.log("📊 Fetching policy statistics...");
-
-    const contractAddress = getContractAddress();
-    const Policy = await ethers.getContractFactory("Policies");
-    const policy = Policy.attach(contractAddress);
-
-    const stats = await policy.getPolicyStatistics();
+    console.log(`� Getting policy ${req.params.id} from blockchain...`);
+    const policy = await policies.getPolicy(req.params.id);
     
-    const statistics = {
-      totalPolicies: Number(stats.totalPolicies),
-      activePolicies: Number(stats.activePolicies),
-      draftPolicies: Number(stats.draftPolicies),
-      archivedPolicies: Number(stats.archivedPolicies)
+    // Get the description CID from blockchain
+    const descriptionCid = policy[1]; // descriptionCid is at index 1
+    
+    console.log("📥 Retrieving description from IPFS using CID:", descriptionCid);
+    
+    // Retrieve actual description from IPFS using CID
+    let actualDescription = "Description unavailable";
+    try {
+      const ipfsData = await getFromPinata(descriptionCid);
+      if (ipfsData && typeof ipfsData === 'object') {
+        actualDescription = ipfsData.content || ipfsData.description || "Description unavailable";
+      } else if (typeof ipfsData === 'string') {
+        try {
+          const parsedData = JSON.parse(ipfsData);
+          actualDescription = parsedData.content || parsedData.description || ipfsData;
+        } catch {
+          actualDescription = ipfsData;
+        }
+      }
+    } catch (ipfsError) {
+      console.warn("⚠️ Failed to fetch description from IPFS:", ipfsError.message);
+    }
+    
+    // Convert BigInt values to strings for JSON serialization
+    // Based on Solidity contract getPolicy function return order:
+    const serializedPolicy = {
+      id: req.params.id,
+      name: policy[0],                    // string
+      description: actualDescription,      // from IPFS
+      descriptionCid: policy[1],          // string
+      viewFullPolicy: policy[2],          // string
+      ministry: policy[3],                // string
+      status: policy[4],                  // string (no need to convert)
+      creator: policy[5],                 // address (string)
+      createdAt: policy[6].toString(),    // uint256 -> string
+      effectiveDate: policy[7].toString(), // uint256 -> string
+      lastUpdated: policy[8].toString(),  // uint256 -> string
+      supportCount: policy[9].toString(), // uint256 -> string
+      isActive: policy[10]                // bool
     };
-
-    console.log("📊 Policy Statistics:");
-    console.log(`- Total Policies: ${statistics.totalPolicies}`);
-    console.log(`- Active Policies: ${statistics.activePolicies}`);
-    console.log(`- Draft Policies: ${statistics.draftPolicies}`);
-    console.log(`- Archived Policies: ${statistics.archivedPolicies}`);
-
-    return statistics;
-
-  } catch (error) {
-    console.error("❌ Failed to get policy statistics:", error.message);
-    throw error;
+    
+    res.json(serializedPolicy);
+  } catch (err) {
+    console.error("❌ Error retrieving policy:", err);
+    res.status(500).json({ error: err.message });
   }
-}
+});
 
-// Export functions
-module.exports = {
-  createPolicy,
-  getPolicy,
-  supportPolicy,
-  updatePolicyStatus,
-  getPoliciesByMinistry,
-  getPoliciesByStatus,
-  getPoliciesByUser,
-  getActivePolicies,
-  getPolicyStatistics,
-  getContractAddress
-};
+module.exports = router;

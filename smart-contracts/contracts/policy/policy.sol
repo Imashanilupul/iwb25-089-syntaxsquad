@@ -45,10 +45,6 @@ contract Policies {
         uint256 effectiveDate
     );
     
-    event PolicySupported(
-        uint256 indexed policyId,
-        address indexed supporter
-    );
     
     event PolicyStatusChanged(
         uint256 indexed policyId,
@@ -57,16 +53,6 @@ contract Policies {
         address indexed changer
     );
     
-    event PolicyActivated(
-        uint256 indexed policyId,
-        address indexed activator,
-        uint256 effectiveDate
-    );
-    
-    event PolicyDeactivated(
-        uint256 indexed policyId,
-        address indexed deactivator
-    );
 
     constructor(address _authRegistry) {
         require(_authRegistry != address(0), "Auth registry address cannot be zero");
@@ -79,20 +65,7 @@ contract Policies {
         _;
     }
 
-    // Prevent spam - one policy per day per user
-    modifier onlyOncePerDay() {
-        require(
-            block.timestamp >= lastCreatedAt[msg.sender] + 1 days,
-            "You can only create one policy per day"
-        );
-        _;
-    }
 
-    // Only policy creator can update
-    modifier onlyCreator(uint256 policyId) {
-        require(policies[policyId].creator == msg.sender, "Only creator can update policy");
-        _;
-    }
 
     // Check if policy exists
     modifier policyExists(uint256 policyId) {
@@ -116,7 +89,7 @@ contract Policies {
         string calldata viewFullPolicy,
         string calldata ministry,
         uint256 effectiveDate
-    ) external onlyAuthorized onlyOncePerDay returns (uint256) {
+    ) external onlyAuthorized returns (uint256) {
         require(bytes(name).length > 0, "Name cannot be empty");
         require(bytes(descriptionCid).length > 0, "Description CID cannot be empty");
         require(bytes(viewFullPolicy).length > 0, "Full policy URL cannot be empty");
@@ -135,7 +108,6 @@ contract Policies {
         p.createdAt = block.timestamp;
         p.effectiveDate = effectiveDate;
         p.lastUpdated = block.timestamp;
-        p.supportCount = 0;
         p.isActive = false;
 
         // Add to ministry and status mappings
@@ -158,7 +130,7 @@ contract Policies {
         uint256 policyId,
         string calldata newStatus,
         uint256 newEffectiveDate
-    ) external onlyAuthorized onlyCreator(policyId) policyExists(policyId) {
+    ) external onlyAuthorized policyExists(policyId) {
         Policy storage p = policies[policyId];
         string memory oldStatus = p.status;
         
@@ -180,35 +152,15 @@ contract Policies {
         if (keccak256(bytes(newStatus)) == keccak256(bytes("ACTIVE")) && 
             p.effectiveDate <= block.timestamp) {
             p.isActive = true;
-            emit PolicyActivated(policyId, msg.sender, p.effectiveDate);
         } else if (keccak256(bytes(newStatus)) == keccak256(bytes("INACTIVE")) || 
                    keccak256(bytes(newStatus)) == keccak256(bytes("ARCHIVED"))) {
             p.isActive = false;
-            emit PolicyDeactivated(policyId, msg.sender);
         }
 
         emit PolicyStatusChanged(policyId, oldStatus, newStatus, msg.sender);
         emit PolicyUpdated(policyId, msg.sender, newStatus, p.effectiveDate);
     }
 
-    /**
-     * Support a policy
-     * @param policyId The policy to support
-     */
-    function supportPolicy(uint256 policyId) external onlyAuthorized policyExists(policyId) {
-        Policy storage p = policies[policyId];
-        require(!p.supporters[msg.sender], "You have already supported this policy");
-        require(p.creator != msg.sender, "Cannot support your own policy");
-
-        p.supporters[msg.sender] = true;
-        p.supportCount++;
-
-        emit PolicySupported(policyId, msg.sender);
-    }
-
-    /**
-     * Get policy details
-     */
     function getPolicy(uint256 policyId) external view policyExists(policyId) returns (
         string memory name,
         string memory descriptionCid,
@@ -238,99 +190,6 @@ contract Policies {
         );
     }
 
-    /**
-     * Check if user has supported a policy
-     */
-    function hasSupported(uint256 policyId, address user) external view policyExists(policyId) returns (bool) {
-        return policies[policyId].supporters[user];
-    }
-
-    /**
-     * Get policies by ministry
-     */
-    function getPoliciesByMinistry(string calldata ministry) external view returns (uint256[] memory) {
-        return policiesByMinistry[ministry];
-    }
-
-    /**
-     * Get policies by status
-     */
-    function getPoliciesByStatus(string calldata status) external view returns (uint256[] memory) {
-        return policiesByStatus[status];
-    }
-
-    /**
-     * Get policies created by a user
-     */
-    function getPoliciesByUser(address user) external view returns (uint256[] memory) {
-        uint256[] memory userPolicies = new uint256[](policyCount);
-        uint256 count = 0;
-
-        for (uint256 i = 1; i <= policyCount; i++) {
-            if (policies[i].creator == user) {
-                userPolicies[count] = i;
-                count++;
-            }
-        }
-
-        // Create array with exact size
-        uint256[] memory result = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            result[i] = userPolicies[i];
-        }
-
-        return result;
-    }
-
-    /**
-     * Get active policies
-     */
-    function getActivePolicies() external view returns (uint256[] memory) {
-        uint256[] memory activePolicies = new uint256[](policyCount);
-        uint256 count = 0;
-
-        for (uint256 i = 1; i <= policyCount; i++) {
-            if (policies[i].isActive && policies[i].creator != address(0)) {
-                activePolicies[count] = i;
-                count++;
-            }
-        }
-
-        // Create array with exact size
-        uint256[] memory result = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            result[i] = activePolicies[i];
-        }
-
-        return result;
-    }
-
-    /**
-     * Check if policy is effective (active and past effective date)
-     */
-    function isPolicyEffective(uint256 policyId) external view policyExists(policyId) returns (bool) {
-        Policy storage p = policies[policyId];
-        return p.isActive && p.effectiveDate <= block.timestamp;
-    }
-
-    /**
-     * Get policy statistics
-     */
-    function getPolicyStatistics() external view returns (
-        uint256 totalPolicies,
-        uint256 activePolicies,
-        uint256 draftPolicies,
-        uint256 archivedPolicies
-    ) {
-        totalPolicies = policyCount;
-        activePolicies = policiesByStatus["ACTIVE"].length;
-        draftPolicies = policiesByStatus["DRAFT"].length;
-        archivedPolicies = policiesByStatus["ARCHIVED"].length;
-    }
-
-    /**
-     * Internal function to remove policy from status mapping
-     */
     function _removeFromStatusMapping(string memory status, uint256 policyId) internal {
         uint256[] storage statusPolicies = policiesByStatus[status];
         for (uint256 i = 0; i < statusPolicies.length; i++) {

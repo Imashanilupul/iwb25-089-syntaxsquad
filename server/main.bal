@@ -8,7 +8,6 @@ import server_bal.users;
 import server_bal.petitions;
 import server_bal.petition_activities;
 import server_bal.policy_comments;
-
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;

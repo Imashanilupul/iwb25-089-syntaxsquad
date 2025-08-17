@@ -1,4 +1,5 @@
 import { apiService } from './api'
+import { createPolicyOnBlockchain, updatePolicyStatusOnBlockchain, type BlockchainPolicyData } from './blockchain-policy'
 
 export interface PaginationMeta {
   page: number
@@ -90,6 +91,73 @@ export const policyService = {
   async createPolicy(data: CreatePolicyData): Promise<SinglePolicyResponse> {
     const response = await apiService.post<SinglePolicyResponse>('/api/policies', data)
     return response
+  },
+
+  // Create new policy with blockchain integration
+  async createPolicyWithBlockchain(data: CreatePolicyData): Promise<SinglePolicyResponse & { blockchain?: any }> {
+    try {
+      console.log("🏛️ Creating policy with blockchain integration...");
+      
+      // Step 1: Create policy in database via Ballerina backend
+      console.log("💾 Step 1: Creating policy in database...");
+      const dbResponse = await apiService.post<SinglePolicyResponse>('/api/policies', data)
+      
+      if (!dbResponse.success) {
+        throw new Error(dbResponse.message || 'Failed to create policy in database')
+      }
+
+      // Step 2: Prepare blockchain data
+      const blockchainData: BlockchainPolicyData = {
+        name: data.name,
+        description: data.description,
+        viewFullPolicy: data.view_full_policy,
+        ministry: data.ministry,
+        effectiveDate: data.effective_date
+      }
+
+      // Step 3: Create policy on blockchain
+      console.log("⛓️ Step 2: Creating policy on blockchain...");
+      const blockchainResponse = await createPolicyOnBlockchain(blockchainData)
+      
+      if (blockchainResponse.success && blockchainResponse.data) {
+        console.log("✅ Policy created on blockchain successfully!");
+        
+        // Step 4: Update database with blockchain data if needed
+        try {
+          const confirmPayload = {
+            txHash: blockchainResponse.data.transactionHash,
+            blockNumber: blockchainResponse.data.blockNumber,
+            policyId: blockchainResponse.data.policyId,
+            descriptionCid: blockchainResponse.data.ipfs?.descriptionCid
+          }
+          
+          // Call confirm endpoint to update database with blockchain data
+          await apiService.post(`/api/policies/${dbResponse.data.id}/confirm`, confirmPayload)
+          console.log("✅ Database updated with blockchain confirmation!");
+          
+        } catch (confirmError) {
+          console.warn("⚠️ Failed to update database with blockchain data:", confirmError);
+          // Don't fail the entire operation for this
+        }
+
+        return {
+          ...dbResponse,
+          blockchain: blockchainResponse.data,
+          message: "Policy created successfully on database and blockchain!"
+        }
+      } else {
+        console.warn("⚠️ Blockchain creation failed, but database entry exists");
+        return {
+          ...dbResponse,
+          blockchain: null,
+          message: "Policy created in database (blockchain creation failed)"
+        }
+      }
+      
+    } catch (error) {
+      console.error("❌ Failed to create policy:", error);
+      throw error;
+    }
   },
 
   // Update policy
