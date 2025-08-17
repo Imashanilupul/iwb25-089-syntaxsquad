@@ -333,7 +333,7 @@ public class ProjectsService {
                     payloadMap["status"] = statusStr;
                 }
             }
-            
+
             // Validate that spent doesn't exceed allocated if both are provided
             if payloadMap.hasKey("allocated_budget") && payloadMap.hasKey("spent_budget") {
                 decimal allocated = check payloadMap["allocated_budget"].ensureType(decimal);

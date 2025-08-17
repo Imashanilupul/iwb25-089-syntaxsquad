@@ -35,11 +35,14 @@ async function getFromPinata(cid) {
   try {
     const url = `https://gateway.pinata.cloud/ipfs/${cid}`;
     const response = await axios.get(url);
+    console.log("✅ Retrieved from IPFS:", response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Error retrieving from Pinata:", error.response?.data || error.message);
     throw error;
   }
 }
+
+getFromPinata("Qmd3BftiZ81NniGXSjWViEFdaamAFyKV5PTLYnSDRDYFJN")
 
 module.exports = { uploadDescriptionToPinata, getFromPinata };

@@ -1,0 +1,102 @@
+[
+  {
+    "projectName": "Highway Development Project A1",
+    "categoryName": "Infrastructure",
+    "allocatedBudget": "50.5",
+    "state": "Western Province",
+    "province": "Western",
+    "ministry": "Ministry of Highways",
+    "viewDetails": "Comprehensive highway development project covering 150km of road network improvement, including bridge construction and traffic management systems.",
+    "status": "IN_PROGRESS"
+  },
+  {
+    "projectName": "Education Technology Initiative",
+    "categoryName": "Education",
+    "allocatedBudget": "25.0",
+    "state": "Central Province",
+    "province": "Central",
+    "ministry": "Ministry of Education",
+    "viewDetails": "Digital transformation project for schools including computer labs, smart boards, and teacher training programs across 200 schools.",
+    "status": "PLANNED"
+  },
+  {
+    "projectName": "Rural Healthcare Expansion",
+    "categoryName": "Healthcare",
+    "allocatedBudget": "75.25",
+    "state": "Northern Province",
+    "province": "Northern",
+    "ministry": "Ministry of Health",
+    "viewDetails": "Establishment of 50 new healthcare centers and mobile clinic services to improve healthcare access in rural communities.",
+    "status": "APPROVED"
+  },
+  {
+    "projectName": "Clean Water Access Program",
+    "categoryName": "Public Utilities",
+    "allocatedBudget": "40.0",
+    "state": "Eastern Province",
+    "province": "Eastern",
+    "ministry": "Ministry of Water Supply",
+    "viewDetails": "Installation of water purification systems and distribution networks to provide clean drinking water to 100,000 residents.",
+    "status": "IN_PROGRESS"
+  },
+  {
+    "projectName": "Renewable Energy Park",
+    "categoryName": "Environment",
+    "allocatedBudget": "120.0",
+    "state": "Southern Province",
+    "province": "Southern",
+    "ministry": "Ministry of Energy",
+    "viewDetails": "Construction of solar and wind energy facilities with 500MW total capacity to reduce carbon emissions and provide sustainable energy.",
+    "status": "PLANNED"
+  },
+  {
+    "projectName": "Digital Governance Platform",
+    "categoryName": "Technology",
+    "allocatedBudget": "30.75",
+    "state": "Western Province",
+    "province": "Western",
+    "ministry": "Ministry of Digital Infrastructure",
+    "viewDetails": "Development of comprehensive e-governance platform for citizen services, document management, and transparent governance processes.",
+    "status": "IN_PROGRESS"
+  },
+  {
+    "projectName": "Agricultural Modernization Scheme",
+    "categoryName": "Agriculture",
+    "allocatedBudget": "60.5",
+    "state": "North Central Province",
+    "province": "North Central",
+    "ministry": "Ministry of Agriculture",
+    "viewDetails": "Introduction of modern farming techniques, irrigation systems, and crop management technologies to increase agricultural productivity.",
+    "status": "APPROVED"
+  },
+  {
+    "projectName": "Urban Housing Development",
+    "categoryName": "Housing",
+    "allocatedBudget": "85.0",
+    "state": "Western Province",
+    "province": "Western",
+    "ministry": "Ministry of Urban Development",
+    "viewDetails": "Construction of affordable housing units for low-income families with modern amenities and sustainable design features.",
+    "status": "COMPLETED"
+  },
+  {
+    "projectName": "Tourism Infrastructure Enhancement",
+    "categoryName": "Tourism",
+    "allocatedBudget": "45.25",
+    "state": "Southern Province",
+    "province": "Southern",
+    "ministry": "Ministry of Tourism",
+    "viewDetails": "Development of tourist facilities, heritage site preservation, and eco-tourism infrastructure to boost local economy.",
+    "status": "PLANNED"
+  },
+  {
+    "projectName": "Public Transportation Upgrade",
+    "categoryName": "Transportation",
+    "allocatedBudget": "95.0",
+    "state": "Western Province",
+    "province": "Western",
+    "ministry": "Ministry of Transport",
+    "viewDetails": "Modernization of public bus fleet with electric vehicles, improved bus stops, and integrated ticketing system for better urban mobility.",
+    "status": "IN_PROGRESS"
+  }
+]

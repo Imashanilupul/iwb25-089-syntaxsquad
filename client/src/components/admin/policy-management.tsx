@@ -20,22 +20,14 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X } from "lucide-react"
+import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X, Wallet, AlertCircle } from "lucide-react"
 import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics, type PaginationMeta } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 import { useToast } from "@/hooks/use-toast"
 import { MinistryInput } from "@/components/ui/ministry-input"
-
-interface Policy {
-  id: number
-  name: string
-  description: string
-  viewFullPolicy: string
-  ministry: string
-  createdTime: string
-  commentCount: number
-  status: string
-}
+import { useAuth } from "@/context/AuthContext"
+import { useAppKitAccount } from "@reown/appkit/react"
+import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 
 export function PolicyManagement() {
   const [policies, setPolicies] = useState<PolicyType[]>([])
@@ -44,6 +36,8 @@ export function PolicyManagement() {
   const [ministries, setMinistries] = useState<string[]>([])
   const [loadingMinistries, setLoadingMinistries] = useState(false)
   const { toast } = useToast()
+  const { address, isConnected } = useAppKitAccount()
+  const { verified } = useAuth()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -62,6 +56,10 @@ export function PolicyManagement() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
   const [commentCounts, setCommentCounts] = useState<Record<number, number>>({})
+
+  // Blockchain integration state
+  const [isCreatingPolicy, setIsCreatingPolicy] = useState(false)
+  const [lastError, setLastError] = useState<string | null>(null)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -260,33 +258,300 @@ export function PolicyManagement() {
     loadPolicies(1, pageSize)
   }
 
+  // Wallet validation helper
+  const validateWallet = async (walletAddress: string) => {
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
+    }
+
+    let accounts
+    try {
+      accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+    } catch (accountError: any) {
+      console.error("Failed to get accounts:", accountError)
+      throw new Error("Failed to get wallet accounts. Please try again.")
+    }
+
+    if (accounts.length === 0) {
+      try {
+        toast({
+          title: "Account Access Required",
+          description: "Please approve wallet connection in MetaMask"
+        })
+        accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      } catch (requestError: any) {
+        if (requestError.code === -32002) {
+          throw new Error("MetaMask is already processing a connection request. Please check your MetaMask extension and try again.")
+        } else if (requestError.code === 4001) {
+          throw new Error("User rejected wallet connection request")
+        }
+        throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+      }
+    }
+
+    const currentAccount = accounts[0]?.toLowerCase()
+    if (!currentAccount) {
+      throw new Error("No wallet account found. Please connect your wallet first.")
+    }
+
+    if (currentAccount !== walletAddress.toLowerCase()) {
+      throw new Error(`Account mismatch. Please switch to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} in MetaMask`)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    try {
-      const policyData: CreatePolicyData = {
-        name: formData.name,
-        description: formData.description,
-        view_full_policy: formData.view_full_policy,
-        ministry: formData.ministry,
-        status: formData.status,
-      }
+    // Prevent multiple simultaneous requests for policy creation
+    if (!editingId && isCreatingPolicy) {
+      toast({
+        title: "⏳ Policy creation is already in progress",
+        description: "Please wait for the current process to complete"
+      })
+      return
+    }
 
-      if (editingId) {
-        // Update existing policy
+    // Check wallet connection for new policy creation
+    if (!editingId && !isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first using the Connect button",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!editingId && isConnected && !verified) {
+      toast({
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to create new policies.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate wallet address format for new policies
+    if (!editingId && address && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      toast({
+        title: "❌ Invalid wallet address format",
+        description: "Please reconnect your wallet.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate form data
+    if (!formData.name || !formData.description || !formData.view_full_policy || !formData.ministry) {
+      toast({
+        title: "📝 Please fill in all required fields",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (editingId) {
+      // Handle policy update (existing logic)
+      try {
+        const policyData: CreatePolicyData = {
+          name: formData.name,
+          description: formData.description,
+          view_full_policy: formData.view_full_policy,
+          ministry: formData.ministry,
+          status: formData.status,
+        }
+
         await policyService.updatePolicy(editingId, policyData)
         toast({
-          title: "Success",
-          description: "Policy updated successfully.",
+          title: "✅ Success",
+          description: "Policy updated successfully."
         })
-      } else {
-        // Create new policy
-        await policyService.createPolicy(policyData)
+
+        // Reset form and reload data
+        setFormData({
+          name: "",
+          description: "",
+          view_full_policy: "",
+          ministry: "",
+          status: "DRAFT",
+        })
+        setEditingId(null)
+        setIsDialogOpen(false)
+        loadPolicies(currentPage, pageSize)
+        loadStatistics()
+        loadMinistries()
+      } catch (error) {
+        console.error("Update failed:", error)
         toast({
-          title: "Success",
-          description: "Policy created successfully.",
+          title: "❌ Failed to update policy",
+          variant: "destructive"
         })
       }
+      return
+    }
+
+    // Handle new policy creation with blockchain integration
+    setIsCreatingPolicy(true)
+    setLastError(null)
+    
+    try {
+      await validateWallet(address!)
+
+      const timestamp = new Date().toISOString()
+      const effectiveDate = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 days from now
+      
+      const message = `� CREATE POLICY CONFIRMATION
+
+Name: ${formData.name}
+
+Description: ${formData.description}
+
+Ministry: ${formData.ministry}
+
+Status: ${formData.status}
+
+Wallet: ${address}
+Timestamp: ${timestamp}
+
+⚠️ By signing this message, you confirm that you want to create this policy on the blockchain. This action cannot be undone.`
+
+      toast({
+        title: "🔐 Please check your wallet to sign the policy creation request"
+      })
+
+      let signature
+      try {
+        signature = await (window.ethereum as any).request({
+          method: "personal_sign",
+          params: [message, address]
+        })
+      } catch (error: any) {
+        if (error.code === 4001) throw new Error("User rejected the signature request")
+        throw new Error(`Signature failed: ${error.message || error}`)
+      }
+
+      if (!signature) throw new Error("No signature received from wallet")
+
+      toast({
+        title: "✅ Signature confirmed - creating policy on blockchain..."
+      })
+
+      // Save to Ballerina backend first to get draft ID
+      const ballerinaResp = await fetch("http://localhost:8080/api/policies", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name, 
+          description: formData.description,
+          view_full_policy: formData.view_full_policy,
+          ministry: formData.ministry,
+          status: formData.status,
+          creator_address: address
+        })
+      })
+
+      if (!ballerinaResp.ok) {
+        const txt = await ballerinaResp.text()
+        throw new Error(`Failed to create draft: ${ballerinaResp.status} ${txt}`)
+      }
+
+      const ballerinaData = await ballerinaResp.json()
+      const draftId = ballerinaData?.data?.id || ballerinaData?.id || ballerinaData?.policy?.id
+      if (!draftId) throw new Error("Could not determine draftId from Ballerina response")
+
+      // Prepare IPFS + contract info
+      const prepRes = await fetch("http://localhost:3001/policy/prepare-policy", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          name: formData.name, 
+          description: formData.description,
+          viewFullPolicy: formData.view_full_policy,
+          ministry: formData.ministry,
+          effectiveDate: effectiveDate,
+          walletAddress: address,
+          draftId: draftId
+        })
+      })
+
+      if (!prepRes.ok) {
+        const txt = await prepRes.text()
+        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
+      }
+
+      const prepJson = await prepRes.json()
+      const { descriptionCid, contractAddress, contractAbi } = prepJson
+      if (!descriptionCid || !contractAddress || !contractAbi) {
+        throw new Error("Prepare endpoint did not return all required fields")
+      }
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet"
+      })
+
+      // Send blockchain transaction
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      const tx = await contract.createPolicy(
+        formData.name,
+        descriptionCid,
+        formData.view_full_policy,
+        formData.ministry,
+        effectiveDate
+      )
+      toast({
+        title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...`
+      })
+
+      const receipt = await tx.wait()
+      toast({
+        title: `✅ Transaction confirmed in block ${receipt.blockNumber}`
+      })
+
+      // Try to get blockchain policy ID
+      let blockchainPolicyId = null
+      try {
+        const iface = new (ethers as any).Interface(contractAbi)
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log)
+            if (parsed && parsed.name && parsed.name.toLowerCase().includes("policy")) {
+              blockchainPolicyId = parsed.args?.[0]?.toString() || null
+              break
+            }
+          } catch (e) {}
+        }
+        if (!blockchainPolicyId) {
+          try {
+            const bn = await contract.policyCount()
+            blockchainPolicyId = bn.toString()
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.warn("Could not parse event for policy id", e)
+      }
+
+      // Confirm with backend
+      try {
+        await fetch(`http://localhost:8080/api/policies/${draftId}/confirm`, {
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            txHash: tx.hash, 
+            blockNumber: receipt.blockNumber, 
+            blockchainPolicyId,
+            descriptionCid
+          })
+        })
+      } catch (err) {
+        console.log(err)
+      }
+
+      toast({
+        title: "🎉 Policy created: Saved to blockchain and backend"
+      })
 
       // Reset form and reload data
       setFormData({
@@ -300,14 +565,17 @@ export function PolicyManagement() {
       setIsDialogOpen(false)
       loadPolicies(currentPage, pageSize)
       loadStatistics()
-      loadMinistries() // Refresh ministries in case a new one was added
-    } catch (error) {
-      console.error("Submit failed:", error)
+      loadMinistries()
+
+    } catch (error: any) {
+      console.error("Failed create flow:", error)
+      setLastError(error?.message || String(error))
       toast({
-        title: "Error",
-        description: editingId ? "Failed to update policy." : "Failed to create policy.",
-        variant: "destructive",
+        title: `❌ Failed to create policy: ${error?.message || "Unknown error"}`,
+        variant: "destructive"
       })
+    } finally {
+      setIsCreatingPolicy(false)
     }
   }
 
@@ -397,109 +665,195 @@ export function PolicyManagement() {
           <h2 className="text-2xl font-bold text-slate-900">National Policy Management</h2>
           <p className="text-slate-600">Manage government policies across all ministries and provinces</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                setFormData({
-                  name: "",
-                  description: "",
-                  view_full_policy: "",
-                  ministry: "",
-                  status: "DRAFT",
-                })
-                setEditingId(null)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Policy
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
-              <DialogDescription>
-                {editingId ? "Update the policy details" : "Create a new government policy"}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Policy Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Digital Sri Lanka Strategy 2030"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Wallet Status */}
+          {isConnected ? (
+            <div className="flex items-center gap-2 text-sm">
+              <Wallet className="h-4 w-4 text-blue-600" />
+              <span className="text-slate-700">
+                {address?.slice(0, 6)}...{address?.slice(-4)}
+              </span>
+              <Badge variant={verified ? "default" : "secondary"} className="text-xs">
+                {verified ? "Verified" : "Unverified"}
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <ConnectButton />
+            </div>
+          )}
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                disabled={!isConnected || !verified}
+                onClick={() => {
+                  setFormData({
+                    name: "",
+                    description: "",
+                    view_full_policy: "",
+                    ministry: "",
+                    status: "DRAFT",
+                  })
+                  setEditingId(null)
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Policy
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
+                <DialogDescription>
+                  {editingId ? "Update the policy details" : "Create a new government policy"}
+                </DialogDescription>
+              </DialogHeader>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Comprehensive description of the policy..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  required
-                />
-              </div>
+              {/* Wallet Connection Alerts inside Dialog */}
+              {!isConnected && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-amber-800">Wallet Connection Required</h3>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Connect your wallet to create and manage policies on the blockchain.
+                      </p>
+                    </div>
+                    <div className="ml-4">
+                      <ConnectButton />
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-4">
+              {isConnected && !verified && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-blue-800">Wallet Verification Required</h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Your wallet is connected but needs verification to create policies. 
+                        Please complete the verification process.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="ministry">Ministry</Label>
-                  <MinistryInput
-                    value={formData.ministry}
-                    onChange={(value) => setFormData({ ...formData, ministry: value })}
-                    ministries={ministries}
-                    placeholder="Type or select ministry..."
+                  <Label htmlFor="name">Policy Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g., Digital Sri Lanka Strategy 2030"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {policyStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {formatStatus(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Comprehensive description of the policy..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    required
+                  />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="view_full_policy">Policy Document URL</Label>
-                <Input
-                  id="view_full_policy"
-                  placeholder="https://gov.lk/policies/policy-document.pdf"
-                  value={formData.view_full_policy}
-                  onChange={(e) => setFormData({ ...formData, view_full_policy: e.target.value })}
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ministry">Ministry</Label>
+                    <MinistryInput
+                      value={formData.ministry}
+                      onChange={(value) => setFormData({ ...formData, ministry: value })}
+                      ministries={ministries}
+                      placeholder="Type or select ministry..."
+                      required
+                    />
+                  </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                  {editingId ? "Update Policy" : "Add Policy"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) => setFormData({ ...formData, status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {policyStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {formatStatus(status)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="view_full_policy">Policy Document URL</Label>
+                  <Input
+                    id="view_full_policy"
+                    placeholder="https://gov.lk/policies/policy-document.pdf"
+                    value={formData.view_full_policy}
+                    onChange={(e) => setFormData({ ...formData, view_full_policy: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* Error Display */}
+                {lastError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h3 className="font-medium text-red-800">Policy Creation Failed</h3>
+                        <p className="text-sm text-red-700 mt-1">{lastError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button 
+                    type="submit" 
+                    className="flex-1"
+                    disabled={isCreatingPolicy || (!editingId && (!isConnected || !verified))}
+                  >
+                    {isCreatingPolicy ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating Policy...
+                      </>
+                    ) : editingId ? (
+                      "Update Policy"
+                    ) : (
+                      "Add Policy"
+                    )}
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsDialogOpen(false)}
+                    disabled={isCreatingPolicy}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -713,3 +1067,4 @@ export function PolicyManagement() {
     </div>
   )
 }
+

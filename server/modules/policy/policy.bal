@@ -717,4 +717,56 @@ public class PoliciesService {
             return error("Failed to get future effective policies: " + e.message());
         }
     }
+
+    # Confirm policy draft with blockchain data
+    #
+    # + policyId - Policy ID to confirm
+    # + txHash - Blockchain transaction hash
+    # + blockNumber - Block number
+    # + blockchainPolicyId - Blockchain policy ID
+    # + descriptionCid - IPFS CID for description
+    # + return - Updated policy data or error
+    public function confirmPolicyDraft(int policyId, string? txHash, int? blockNumber, string? blockchainPolicyId, string? descriptionCid) returns json|error {
+        do {
+            map<json> updateData = {};
+            
+            if txHash is string {
+                updateData["blockchain_tx_hash"] = txHash;
+            }
+            if blockNumber is int {
+                updateData["blockchain_block_number"] = blockNumber;
+            }
+            if blockchainPolicyId is string {
+                updateData["blockchain_policy_id"] = blockchainPolicyId;
+            }
+            if descriptionCid is string {
+                updateData["description_cid"] = descriptionCid;
+            }
+            
+            // Update status to confirmed if it was draft
+            updateData["status"] = "UNDER_REVIEW";
+            updateData["updated_time"] = time:utcNow()[0];
+            
+            map<string> headers = self.getHeaders(true);
+            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
+            
+            http:Response response = check self.supabaseClient->patch(endpoint, updateData, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to confirm policy draft: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            
+            return {
+                "success": true,
+                "message": "Policy draft confirmed with blockchain data successfully",
+                "data": result,
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to confirm policy draft: " + e.message());
+        }
+    }
 }
