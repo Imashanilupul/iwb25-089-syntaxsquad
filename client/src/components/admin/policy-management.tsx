@@ -20,22 +20,14 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X } from "lucide-react"
+import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X, Wallet, AlertCircle } from "lucide-react"
 import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics, type PaginationMeta } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 import { useToast } from "@/hooks/use-toast"
 import { MinistryInput } from "@/components/ui/ministry-input"
-
-interface Policy {
-  id: number
-  name: string
-  description: string
-  viewFullPolicy: string
-  ministry: string
-  createdTime: string
-  commentCount: number
-  status: string
-}
+import { useAuth } from "@/context/AuthContext"
+import { useAppKitAccount } from "@reown/appkit/react"
+import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 
 export function PolicyManagement() {
   const [policies, setPolicies] = useState<PolicyType[]>([])
@@ -44,6 +36,8 @@ export function PolicyManagement() {
   const [ministries, setMinistries] = useState<string[]>([])
   const [loadingMinistries, setLoadingMinistries] = useState(false)
   const { toast } = useToast()
+  const { address, isConnected } = useAppKitAccount()
+  const { verified } = useAuth()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -263,6 +257,25 @@ export function PolicyManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Check wallet connection for new policy creation
+    if (!editingId && !isConnected) {
+      toast({
+        title: "Wallet Required",
+        description: "Please connect your wallet to create new policies.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!editingId && isConnected && !verified) {
+      toast({
+        title: "Verification Required",
+        description: "Please verify your wallet to create new policies.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       const policyData: CreatePolicyData = {
         name: formData.name,
@@ -280,11 +293,16 @@ export function PolicyManagement() {
           description: "Policy updated successfully.",
         })
       } else {
-        // Create new policy
-        await policyService.createPolicy(policyData)
+        // Create new policy with wallet verification
+        const policyWithWallet = {
+          ...policyData,
+          creator_address: address, // Add wallet address to policy creation
+        }
+        
+        await policyService.createPolicy(policyWithWallet as CreatePolicyData)
         toast({
           title: "Success",
-          description: "Policy created successfully.",
+          description: "Policy created successfully with blockchain verification.",
         })
       }
 
@@ -397,109 +415,164 @@ export function PolicyManagement() {
           <h2 className="text-2xl font-bold text-slate-900">National Policy Management</h2>
           <p className="text-slate-600">Manage government policies across all ministries and provinces</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                setFormData({
-                  name: "",
-                  description: "",
-                  view_full_policy: "",
-                  ministry: "",
-                  status: "DRAFT",
-                })
-                setEditingId(null)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Policy
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
-              <DialogDescription>
-                {editingId ? "Update the policy details" : "Create a new government policy"}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Policy Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Digital Sri Lanka Strategy 2030"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Wallet Status */}
+          {isConnected ? (
+            <div className="flex items-center gap-2 text-sm">
+              <Wallet className="h-4 w-4 text-blue-600" />
+              <span className="text-slate-700">
+                {address?.slice(0, 6)}...{address?.slice(-4)}
+              </span>
+              <Badge variant={verified ? "default" : "secondary"} className="text-xs">
+                {verified ? "Verified" : "Unverified"}
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <ConnectButton />
+            </div>
+          )}
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                disabled={!isConnected || !verified}
+                onClick={() => {
+                  setFormData({
+                    name: "",
+                    description: "",
+                    view_full_policy: "",
+                    ministry: "",
+                    status: "DRAFT",
+                  })
+                  setEditingId(null)
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Policy
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
+                <DialogDescription>
+                  {editingId ? "Update the policy details" : "Create a new government policy"}
+                </DialogDescription>
+              </DialogHeader>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Comprehensive description of the policy..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  required
-                />
-              </div>
+              {/* Wallet Connection Alerts inside Dialog */}
+              {!isConnected && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-amber-800">Wallet Connection Required</h3>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Connect your wallet to create and manage policies on the blockchain.
+                      </p>
+                    </div>
+                    <div className="ml-4">
+                      <ConnectButton />
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-4">
+              {isConnected && !verified && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-blue-800">Wallet Verification Required</h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Your wallet is connected but needs verification to create policies. 
+                        Please complete the verification process.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="ministry">Ministry</Label>
-                  <MinistryInput
-                    value={formData.ministry}
-                    onChange={(value) => setFormData({ ...formData, ministry: value })}
-                    ministries={ministries}
-                    placeholder="Type or select ministry..."
+                  <Label htmlFor="name">Policy Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g., Digital Sri Lanka Strategy 2030"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {policyStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {formatStatus(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Comprehensive description of the policy..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    required
+                  />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="view_full_policy">Policy Document URL</Label>
-                <Input
-                  id="view_full_policy"
-                  placeholder="https://gov.lk/policies/policy-document.pdf"
-                  value={formData.view_full_policy}
-                  onChange={(e) => setFormData({ ...formData, view_full_policy: e.target.value })}
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ministry">Ministry</Label>
+                    <MinistryInput
+                      value={formData.ministry}
+                      onChange={(value) => setFormData({ ...formData, ministry: value })}
+                      ministries={ministries}
+                      placeholder="Type or select ministry..."
+                      required
+                    />
+                  </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                  {editingId ? "Update Policy" : "Add Policy"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) => setFormData({ ...formData, status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {policyStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {formatStatus(status)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="view_full_policy">Policy Document URL</Label>
+                  <Input
+                    id="view_full_policy"
+                    placeholder="https://gov.lk/policies/policy-document.pdf"
+                    value={formData.view_full_policy}
+                    onChange={(e) => setFormData({ ...formData, view_full_policy: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button type="submit" className="flex-1">
+                    {editingId ? "Update Policy" : "Add Policy"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -713,3 +786,4 @@ export function PolicyManagement() {
     </div>
   )
 }
+
