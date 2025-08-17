@@ -3,6 +3,8 @@ const petitionRouter = require("./petition");
 const authRouter = require("./auth");
 const reportsRouter = require("./reports");
 const policyRouter = require("./policy");
+const proposalsRouter = require("./proposals");
+const projectRouter=require("./project")
 
 const app = express();
 
@@ -26,6 +28,10 @@ app.use("/petition", petitionRouter);
 app.use("/auth", authRouter);
 app.use("/report", reportsRouter);
 app.use("/policy", policyRouter);
+app.use("/proposal", proposalsRouter);
+app.use("/project", projectRouter);
+
+
 
 const PORT = 3001;
 app.listen(PORT, () => {
