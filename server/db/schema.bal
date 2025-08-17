@@ -18,6 +18,7 @@ public function setupTables(postgresql:Client dbClient) returns error? {
     check createPoliciesTable(dbClient);
     check createPolicyCommentsTable(dbClient);
     check createReportsTable(dbClient);
+    check createUserVotesTable(dbClient);
     check createPetitionsTable(dbClient);
     check createPetitionActivitiesTable(dbClient);
     
@@ -31,7 +32,7 @@ public function setupTables(postgresql:Client dbClient) returns error? {
 public function tablesExist(postgresql:Client dbClient) returns boolean|error {
     string[] requiredTables = ["users", "categories", "projects", "transactions", 
                                "proposals", "policies", "policy_comments", 
-                               "reports", "petitions", "petition_activities"];
+                               "reports", "user_votes", "petitions", "petition_activities"];
     
     foreach string tableName in requiredTables {
         stream<record {|boolean exists;|}, sql:Error?> resultStream = dbClient->query(`
@@ -220,13 +221,47 @@ function createReportsTable(postgresql:Client dbClient) returns error? {
             wallet_address VARCHAR(255),
             resolved_status BOOLEAN DEFAULT false,
             user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            likes INTEGER DEFAULT 0,
+            dislikes INTEGER DEFAULT 0,
             created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             resolved_time TIMESTAMP,
-            CHECK (resolved_time IS NULL OR resolved_time >= created_time)
+            CHECK (resolved_time IS NULL OR resolved_time >= created_time),
+            CHECK (likes >= 0),
+            CHECK (dislikes >= 0)
         )
     `);
     log:printInfo("Reports table ready");
+}
+
+# Create user votes table for tracking report votes
+#
+# + dbClient - Database client connection
+# + return - Error if table creation fails
+function createUserVotesTable(postgresql:Client dbClient) returns error? {
+    _ = check dbClient->execute(`
+        CREATE TABLE IF NOT EXISTS user_votes (
+            vote_id SERIAL PRIMARY KEY,
+            report_id INTEGER NOT NULL REFERENCES reports(report_id) ON DELETE CASCADE,
+            wallet_address VARCHAR(255) NOT NULL,
+            vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('upvote', 'downvote')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(report_id, wallet_address)
+        )
+    `);
+    
+    // Create indexes for better performance
+    _ = check dbClient->execute(`
+        CREATE INDEX IF NOT EXISTS idx_user_votes_report_id 
+        ON user_votes(report_id)
+    `);
+    
+    _ = check dbClient->execute(`
+        CREATE INDEX IF NOT EXISTS idx_user_votes_wallet 
+        ON user_votes(wallet_address)
+    `);
+    
+    log:printInfo("User votes table and indexes ready");
 }
 
 # Create petitions table

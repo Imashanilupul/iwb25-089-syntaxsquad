@@ -999,6 +999,123 @@ service /api on apiListener {
         return reportsService.unresolveReport(reportId);
     }
 
+    # Like a report
+    #
+    # + reportId - Report ID to like
+    # + request - HTTP request containing wallet address
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/like(http:Request request) returns json|error {
+        log:printInfo("Like report endpoint called for ID: " + reportId.toString());
+        
+        json|error maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            return {
+                "success": false,
+                "message": "Invalid JSON payload",
+                "error": maybePayload.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        if maybePayload is map<json> {
+            map<json> payload = maybePayload;
+            
+            if !payload.hasKey("wallet_address") {
+                return {
+                    "success": false,
+                    "message": "Missing required field: wallet_address",
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+            
+            string|error walletAddress = payload["wallet_address"].ensureType(string);
+            if walletAddress is error {
+                return {
+                    "success": false,
+                    "message": "Invalid 'wallet_address' field: must be a string",
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+            
+            return reportsService.likeReport(reportId, walletAddress);
+        }
+        
+        return {
+            "success": false,
+            "message": "Invalid request payload",
+            "timestamp": time:utcNow()[0]
+        };
+    }
+
+    # Dislike a report
+    #
+    # + reportId - Report ID to dislike
+    # + request - HTTP request containing wallet address
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/dislike(http:Request request) returns json|error {
+        log:printInfo("Dislike report endpoint called for ID: " + reportId.toString());
+        
+        json|error maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            return {
+                "success": false,
+                "message": "Invalid JSON payload",
+                "error": maybePayload.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        if maybePayload is map<json> {
+            map<json> payload = maybePayload;
+            
+            if !payload.hasKey("wallet_address") {
+                return {
+                    "success": false,
+                    "message": "Missing required field: wallet_address",
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+            
+            string|error walletAddress = payload["wallet_address"].ensureType(string);
+            if walletAddress is error {
+                return {
+                    "success": false,
+                    "message": "Invalid 'wallet_address' field: must be a string",
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+            
+            return reportsService.dislikeReport(reportId, walletAddress);
+        }
+        
+        return {
+            "success": false,
+            "message": "Invalid request payload",
+            "timestamp": time:utcNow()[0]
+        };
+    }
+
+    # Check user vote on a report
+    #
+    # + reportId - Report ID to check
+    # + walletAddress - User's wallet address
+    # + return - User's vote or null if no vote
+    resource function get reports/[int reportId]/vote/[string walletAddress]() returns json|error {
+        log:printInfo("Check user vote endpoint called for report ID: " + reportId.toString() + ", wallet: " + walletAddress);
+        
+        string? vote = check reportsService.checkUserVote(reportId, walletAddress);
+        
+        return {
+            "success": true,
+            "data": {
+                "report_id": reportId,
+                "wallet_address": walletAddress,
+                "vote": vote
+            },
+            "timestamp": time:utcNow()[0]
+        };
+    }
+
     # Get all petitions
     #
     # + return - Petitions list or error

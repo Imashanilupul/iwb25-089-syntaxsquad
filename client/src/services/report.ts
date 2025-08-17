@@ -13,6 +13,8 @@ export interface Report {
   created_time: string
   last_updated_time?: string
   resolved_time?: string
+  likes?: number
+  dislikes?: number
 }
 
 export interface ReportStatistics {
@@ -201,5 +203,62 @@ export const reportService = {
       console.error('Error fetching recent reports:', error)
       throw error
     }
-  }
+  },
+
+  // Like a report
+  async likeReport(reportId: number, walletAddress: string): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/like`, {
+        wallet_address: walletAddress
+      });
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to like report');
+    } catch (error) {
+      console.error('Error liking report:', error);
+      throw error;
+    }
+  },
+
+  // Dislike a report
+  async dislikeReport(reportId: number, walletAddress: string): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/dislike`, {
+        wallet_address: walletAddress
+      });
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to dislike report');
+    } catch (error) {
+      console.error('Error disliking report:', error);
+      throw error;
+    }
+  },
+
+  // Check user vote on a report
+  async checkUserVote(reportId: number, walletAddress: string): Promise<string | null> {
+    try {
+      const response = await apiService.get<{ success: boolean; data: { vote: string | null } }>(
+        `/api/reports/${reportId}/vote/${walletAddress}`
+      );
+      if (response.success) {
+        return response.data.vote;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error checking user vote:', error);
+      return null;
+    }
+  },
+
+  // Utility: Determine priority from likes/dislikes
+  getPriorityFromVotes(likes: number = 0, dislikes: number = 0): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+    const net = likes - dislikes;
+    if (net > 50) return 'CRITICAL';
+    if (net > 20) return 'HIGH';
+    if (net > 0) return 'MEDIUM';
+    return 'LOW';
+  },
 }

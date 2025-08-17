@@ -28,10 +28,13 @@ import {
   Upload,
   Hash,
   TrendingUp,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
 import axios from 'axios';
+import { Report, reportService } from "@/services/report"
 
 // Web3 types
 declare global {
@@ -77,6 +80,88 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [userSignatures, setUserSignatures] = useState<{ [key: number]: boolean }>({})
   const [categories, setCategories] = useState<any[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+
+  // Add upvote/downvote state for reports
+  const [reportVotes, setReportVotes] = useState<{ [id: number]: 'upvote' | 'downvote' | null }>({});
+  const [reportCounts, setReportCounts] = useState<{ [id: string]: { upvote: number, downvote: number } }>({
+    'LK-2024-001': { upvote: 50, downvote: 5 },
+    'LK-2024-002': { upvote: 120, downvote: 10 },
+  });
+  const [priorityChanges, setPriorityChanges] = useState<{ [id: number]: string }>({});
+
+  // Handler for upvote/downvote
+  const handleReportVote = async (id: number, type: 'upvote' | 'downvote') => {
+    if (!address) {
+      toast({
+        title: "Wallet Required",
+        description: "Please connect your wallet to vote on reports",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      let updatedReport: Report;
+      
+      if (type === 'upvote') {
+        updatedReport = await reportService.likeReport(id, address);
+      } else {
+        updatedReport = await reportService.dislikeReport(id, address);
+      }
+
+      // Update local state with new data from backend
+      setReports((prev) => prev.map(r => 
+        r.report_id === id ? updatedReport : r
+      ));
+
+      // Check if priority changed
+      const currentReport = reports.find(r => r.report_id === id);
+      if (currentReport && currentReport.priority !== updatedReport.priority) {
+        setPriorityChanges(prev => ({
+          ...prev,
+          [id]: `${currentReport.priority} → ${updatedReport.priority}`
+        }));
+        
+        // Clear the priority change indicator after 5 seconds
+        setTimeout(() => {
+          setPriorityChanges(prev => {
+            const newChanges = { ...prev };
+            delete newChanges[id];
+            return newChanges;
+          });
+        }, 5000);
+      }
+
+      // Update local vote state
+      setReportVotes((prev) => ({ ...prev, [id]: type }));
+
+      // Refresh report statistics to reflect the new vote
+      await refreshReportStatistics();
+
+      toast({
+        title: "Vote recorded!",
+        description: `Your ${type} has been recorded. Priority updated to ${updatedReport.priority}`,
+      });
+
+    } catch (error: any) {
+      console.error(`Failed to ${type} report:`, error);
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes("already")) {
+        toast({
+          title: "Already voted",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Vote failed",
+          description: error.message || `Failed to ${type} report`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   // Get user ID from wallet address (consistent with petition signing)
   const getUserId = (walletAddress: string): number => {
@@ -366,6 +451,9 @@ Timestamp: ${timestamp}
         title: "✅ Report submitted successfully!",
         description: "Your anonymous report has been saved to blockchain and backend",
       })
+
+      // Refresh report statistics to include the new report
+      await refreshReportStatistics();
 
       // Reset form
       setReportForm({
@@ -1277,32 +1365,133 @@ Timestamp: ${timestamp}
     }
   }
 
-  const reports = [
-    {
-      id: "LK-2024-001",
-      title: "Irregular Tender Process - Highway Project",
-      category: "Procurement Irregularities",
-      status: "Under Investigation",
-      priority: "High",
-      submittedDate: "2024-01-15",
-      lastUpdate: "2 days ago",
-      anonymityLevel: "Full",
-      evidenceHash: "0x7a8b9c0d1e2f3g4h",
-      investigator: "Commission to Investigate Allegations of Bribery or Corruption",
-    },
-    {
-      id: "LK-2024-002",
-      title: "Environmental Violation - Industrial Zone",
-      category: "Environmental Breach",
-      status: "Resolved",
-      priority: "Medium",
-      submittedDate: "2024-01-10",
-      lastUpdate: "1 week ago",
-      anonymityLevel: "Partial",
-      evidenceHash: "0x5i6j7k8l9m0n1o2p",
-      investigator: "Central Environmental Authority",
-    },
-  ]
+  // Reports state from backend
+  const [reports, setReports] = useState<Report[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  
+  // Report statistics state
+  const [reportStatistics, setReportStatistics] = useState({
+    total_reports: 0,
+    resolved_reports: 0,
+    unresolved_reports: 0,
+    resolution_rate_percentage: 0,
+    priority_breakdown: {} as Record<string, number>
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
+
+  // Fetch reports from backend
+  React.useEffect(() => {
+    const fetchReports = async () => {
+      setIsLoadingReports(true);
+      try {
+        const data = await reportService.getAllReports();
+        setReports(data);
+        
+        // Check user votes if wallet is connected
+        if (address) {
+          await checkUserReportVotes(data);
+        }
+        
+        // Refresh statistics after fetching reports
+        await refreshReportStatistics();
+      } catch (e) {
+        // Optionally show a toast
+        console.error('Failed to fetch reports:', e);
+      } finally {
+        setIsLoadingReports(false);
+      }
+    };
+    fetchReports();
+  }, [address]);
+
+  // Fetch report statistics from backend
+  React.useEffect(() => {
+    const fetchReportStatistics = async () => {
+      setIsLoadingStats(true);
+      try {
+        const stats = await reportService.getReportStatistics();
+        setReportStatistics(stats);
+      } catch (e) {
+        console.error('Failed to fetch report statistics:', e);
+        // Fallback to calculating from current reports
+        if (reports.length > 0) {
+          const resolved = reports.filter(r => r.resolved_status).length;
+          const unresolved = reports.filter(r => !r.resolved_status).length;
+          const total = reports.length;
+          const rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+          
+          setReportStatistics({
+            total_reports: total,
+            resolved_reports: resolved,
+            unresolved_reports: unresolved,
+            resolution_rate_percentage: rate,
+            priority_breakdown: getDynamicPriorityStats()
+          });
+        }
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+    fetchReportStatistics();
+  }, [reports.length, statsRefreshTrigger]);
+
+  // Function to refresh report statistics
+  const refreshReportStatistics = async () => {
+    setStatsRefreshTrigger(prev => prev + 1);
+  };
+
+  // Calculate average resolution time from resolved reports
+  const getAverageResolutionTime = () => {
+    const resolvedReports = reports.filter(r => r.resolved_status && r.resolved_time);
+    if (resolvedReports.length === 0) return null;
+    
+    const totalDays = resolvedReports.reduce((sum, report) => {
+      const created = new Date(report.created_time);
+      const resolved = new Date(report.resolved_time!);
+      const diffTime = Math.abs(resolved.getTime() - created.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return sum + diffDays;
+    }, 0);
+    
+    return Math.round(totalDays / resolvedReports.length);
+  };
+
+  // Check which reports the user has already voted on
+  const checkUserReportVotes = async (reportList: Report[]) => {
+    if (!address) return;
+
+    const votes: { [key: number]: "upvote" | "downvote" | null } = {};
+    
+    // Check user votes using the API
+    for (const report of reportList) {
+      try {
+        const voteType = await reportService.checkUserVote(report.report_id, address);
+        if (voteType === 'upvote' || voteType === 'downvote') {
+          votes[report.report_id] = voteType;
+        } else {
+          votes[report.report_id] = null;
+        }
+      } catch (error) {
+        console.error(`Error checking vote for report ${report.report_id}:`, error);
+        votes[report.report_id] = null;
+      }
+    }
+    
+    setReportVotes(votes);
+  };
+
+  // Allow users to change their vote
+  const changeVote = async (reportId: number, newVoteType: 'upvote' | 'downvote') => {
+    if (!address) return;
+
+    try {
+      // Call the new vote
+      await handleReportVote(reportId, newVoteType);
+    } catch (error) {
+      console.error('Failed to change vote:', error);
+    }
+  };
 
   const reportStats = [
     { month: "Jan", reports: 23, resolved: 18 },
@@ -1342,18 +1531,32 @@ Timestamp: ${timestamp}
     }
   }
 
+  // Get priority color based on priority level
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "High":
+      case "CRITICAL":
         return "text-red-600"
-      case "Medium":
+      case "HIGH":
+        return "text-orange-600"
+      case "MEDIUM":
         return "text-yellow-600"
-      case "Low":
+      case "LOW":
         return "text-green-600"
       default:
         return "text-gray-600"
     }
   }
+
+  // Calculate dynamic priority statistics from current reports
+  const getDynamicPriorityStats = () => {
+    const stats = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    reports.forEach(report => {
+      if (stats.hasOwnProperty(report.priority)) {
+        stats[report.priority as keyof typeof stats]++;
+      }
+    });
+    return stats;
+  };
 
   return (
     <div className="space-y-6">
@@ -1374,107 +1577,254 @@ Timestamp: ${timestamp}
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">
+          {/* Stats Header with Refresh */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Report Overview</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshReportStatistics}
+              disabled={isLoadingStats}
+              className="flex items-center gap-2"
+            >
+              {isLoadingStats ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></div>
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="h-4 w-4" />
+                  Refresh Stats
+                </>
+              )}
+            </Button>
+          </div>
+
           {/* Report Stats */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">47</div>
-                <p className="text-xs text-slate-500">Under investigation</p>
-              </CardContent>
-            </Card>
+            {isLoadingStats && reports.length === 0 ? (
+              // Show loading skeleton when initially loading
+              Array.from({ length: 4 }).map((_, index) => (
+                <Card key={index} className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-4 bg-slate-200 rounded animate-pulse"></div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-8 w-16 bg-slate-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-3 w-20 bg-slate-200 rounded animate-pulse"></div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingStats ? (
+                      <div className="text-2xl font-bold animate-pulse">...</div>
+                    ) : (
+                      <div className="text-2xl font-bold">{reportStatistics.unresolved_reports}</div>
+                    )}
+                    <p className="text-xs text-slate-500">Under investigation</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">234</div>
-                <p className="text-xs text-slate-500">This year</p>
-              </CardContent>
-            </Card>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingStats ? (
+                      <div className="text-2xl font-bold animate-pulse">...</div>
+                    ) : (
+                      <div className="text-2xl font-bold">{reportStatistics.resolved_reports}</div>
+                    )}
+                    <p className="text-xs text-slate-500">This year</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Anonymity Rate</CardTitle>
-                <Shield className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">98.7%</div>
-                <p className="text-xs text-slate-500">Full protection</p>
-              </CardContent>
-            </Card>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+                    <FileText className="h-4 w-4 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingStats ? (
+                      <div className="text-2xl font-bold animate-pulse">...</div>
+                    ) : (
+                      <div className="text-2xl font-bold">{reportStatistics.total_reports}</div>
+                    )}
+                    <p className="text-xs text-slate-500">All time</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg. Resolution</CardTitle>
-                <Clock className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">12 days</div>
-                <p className="text-xs text-slate-500">Processing time</p>
-              </CardContent>
-            </Card>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-purple-600" />
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingStats ? (
+                      <div className="text-2xl font-bold animate-pulse">...</div>
+                    ) : (
+                      <div className="text-2xl font-bold">{reportStatistics.resolution_rate_percentage}%</div>
+                    )}
+                    <p className="text-xs text-slate-500">Success rate</p>
+                    {!isLoadingStats && getAverageResolutionTime() && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Avg. time: {getAverageResolutionTime()} days
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
+
+          {/* Dynamic Priority System Explanation */}
+          <Card className="border-0 shadow-md bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                  🎯 Dynamic Priority System
+                </h3>
+                <p className="text-sm text-blue-700 mb-4">
+                  Report priorities automatically adjust based on community votes. Your votes help determine which issues need immediate attention.
+                </p>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 text-xs">
+                  <div className="bg-white p-2 rounded">
+                    <div className="font-bold text-red-600">CRITICAL</div>
+                    <div>50+ net votes</div>
+                  </div>
+                  <div className="bg-white p-2 rounded">
+                    <div className="font-bold text-orange-600">HIGH</div>
+                    <div>20+ net votes</div>
+                  </div>
+                  <div className="bg-white p-2 rounded">
+                    <div className="font-bold text-yellow-600">MEDIUM</div>
+                    <div>5+ net votes</div>
+                  </div>
+                  <div className="bg-white p-2 rounded">
+                    <div className="font-bold text-green-600">LOW</div>
+                    <div>0+ net votes</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Reports List */}
           <div className="space-y-4">
-            {reports.map((report) => (
-              <Card key={report.id} className="border-0 shadow-md">
+            {isLoadingReports ? (
+              <div className="flex justify-center py-8">Loading reports...</div>
+            ) : reports.map((report) => (
+              <Card key={report.report_id} className="border-0 shadow-md">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{report.title}</CardTitle>
-                        <Badge variant="outline">{report.category}</Badge>
-                        <Badge className={getStatusColor(report.status)}>{report.status}</Badge>
+                        <CardTitle className="text-lg">{report.report_title}</CardTitle>
+                        <Badge variant="outline">{report.priority}</Badge>
+                        <Badge className={getStatusColor(report.resolved_status ? 'Resolved' : 'Under Investigation')}>
+                          {report.resolved_status ? 'Resolved' : 'Under Investigation'}
+                        </Badge>
+                        {/* Priority change indicator */}
+                        {priorityChanges[report.report_id] && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 animate-pulse">
+                            <TrendingUp className="h-3 w-3 mr-1" />
+                            {priorityChanges[report.report_id]}
+                          </Badge>
+                        )}
+                        <div className="text-xs text-slate-500">
+                          {report.likes && report.dislikes && (
+                            <span className="inline-flex items-center gap-1">
+                              <TrendingUp className="h-3 w-3" />
+                              Vote-based priority
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-slate-600">
-                        <span>ID: {report.id}</span>
+                        <span>ID: {report.report_id}</span>
                         <span>•</span>
-                        <span>Submitted: {report.submittedDate}</span>
-                        <span>•</span>
-                        <span>Updated: {report.lastUpdate}</span>
+                        <span>Submitted: {new Date(report.created_time).toLocaleDateString()}</span>
+                        {report.last_updated_time && <><span>•</span><span>Updated: {new Date(report.last_updated_time).toLocaleDateString()}</span></>}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className={`text-sm font-medium ${getPriorityColor(report.priority)}`}>
                         {report.priority} Priority
                       </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        Net votes: {(report.likes || 0) - (report.dislikes || 0)}
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div>
-                      <p className="text-sm text-slate-600">Anonymity Level</p>
-                      <div className="flex items-center gap-2">
-                        <Lock className="h-4 w-4 text-green-600" />
-                        <span className="font-medium">{report.anonymityLevel}</span>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <p className="text-sm text-slate-600">Evidence Hash</p>
-                      <p className="font-mono text-sm">{report.evidenceHash}</p>
+                      <p className="font-mono text-sm">{report.evidence_hash}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Assigned To</p>
-                      <p className="font-medium">{report.investigator}</p>
+                      <p className="font-medium">{report.assigned_to || 'Unassigned'}</p>
                     </div>
                   </div>
-
                   <div className="flex items-center justify-between border-t pt-2">
                     <div className="flex items-center gap-2 text-xs text-slate-500">
                       <Hash className="h-3 w-3" />
                       <span>Blockchain verified</span>
                     </div>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                      {/* Upvote/Downvote Buttons for Reports */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => changeVote(report.report_id, "upvote")}
+                          disabled={reportVotes[report.report_id] === "upvote"}
+                          className={
+                            reportVotes[report.report_id] === "upvote"
+                              ? "text-green-600 hover:text-green-700 bg-green-50"
+                              : "text-slate-500 hover:text-slate-700"
+                          }
+                          title="Upvote this report"
+                        >
+                          <ThumbsUp className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm text-slate-600 font-medium min-w-[2rem] text-center">
+                          {report.likes || 0}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => changeVote(report.report_id, "downvote")}
+                          disabled={reportVotes[report.report_id] === "downvote"}
+                          className={
+                            reportVotes[report.report_id] === "downvote"
+                              ? "text-red-600 hover:text-red-700 bg-red-50"
+                              : "text-slate-500 hover:text-slate-700"
+                          }
+                          title="Downvote this report"
+                        >
+                          <ThumbsDown className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm text-slate-600 font-medium min-w-[2rem] text-center">
+                          {report.dislikes || 0}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1985,7 +2335,7 @@ Timestamp: ${timestamp}
                   ) : lastError === "metamask_busy" ? (
                     "⏰ Retry - Create Petition"
                   ) : (
-                    "🗳️ Create Petition"
+                    "��️ Create Petition"
                   )}
                 </Button>
               </CardContent>
@@ -2045,6 +2395,37 @@ Timestamp: ${timestamp}
               </CardContent>
             </Card>
           </div>
+
+          {/* Priority Distribution */}
+          <Card className="border-0 shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Dynamic Priority Distribution
+              </CardTitle>
+              <CardDescription>
+                Priority levels automatically adjusted based on community votes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {Object.entries(getDynamicPriorityStats()).map(([priority, count]) => (
+                  <div key={priority} className="text-center">
+                    <div className={`text-2xl font-bold ${getPriorityColor(priority)}`}>
+                      {count}
+                    </div>
+                    <div className="text-sm text-slate-600">{priority}</div>
+                    <div className="text-xs text-slate-500">
+                      {reports.length > 0 ? Math.round((count / reports.length) * 100) : 0}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 text-xs text-slate-500 text-center">
+                Priority is automatically calculated: CRITICAL (50+ net votes), HIGH (20+ net votes), MEDIUM (5+ net votes), LOW (0+ net votes)
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
