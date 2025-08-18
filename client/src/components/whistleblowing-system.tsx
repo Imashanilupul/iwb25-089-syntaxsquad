@@ -1619,57 +1619,57 @@ Timestamp: ${timestamp}
               ))
             ) : (
               <>
-                <Card className="border-0 shadow-md">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  </CardHeader>
-                  <CardContent>
+            <Card className="border-0 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
                     {isLoadingStats ? (
                       <div className="text-2xl font-bold animate-pulse">...</div>
                     ) : (
                       <div className="text-2xl font-bold">{reportStatistics.unresolved_reports}</div>
                     )}
-                    <p className="text-xs text-slate-500">Under investigation</p>
-                  </CardContent>
-                </Card>
+                <p className="text-xs text-slate-500">Under investigation</p>
+              </CardContent>
+            </Card>
 
-                <Card className="border-0 shadow-md">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  </CardHeader>
-                  <CardContent>
+            <Card className="border-0 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
                     {isLoadingStats ? (
                       <div className="text-2xl font-bold animate-pulse">...</div>
                     ) : (
                       <div className="text-2xl font-bold">{reportStatistics.resolved_reports}</div>
                     )}
-                    <p className="text-xs text-slate-500">This year</p>
-                  </CardContent>
-                </Card>
+                <p className="text-xs text-slate-500">This year</p>
+              </CardContent>
+            </Card>
 
-                <Card className="border-0 shadow-md">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card className="border-0 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
                     <FileText className="h-4 w-4 text-blue-600" />
-                  </CardHeader>
-                  <CardContent>
+              </CardHeader>
+              <CardContent>
                     {isLoadingStats ? (
                       <div className="text-2xl font-bold animate-pulse">...</div>
                     ) : (
                       <div className="text-2xl font-bold">{reportStatistics.total_reports}</div>
                     )}
                     <p className="text-xs text-slate-500">All time</p>
-                  </CardContent>
-                </Card>
+              </CardContent>
+            </Card>
 
-                <Card className="border-0 shadow-md">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card className="border-0 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
                     <TrendingUp className="h-4 w-4 text-purple-600" />
-                  </CardHeader>
-                  <CardContent>
+              </CardHeader>
+              <CardContent>
                     {isLoadingStats ? (
                       <div className="text-2xl font-bold animate-pulse">...</div>
                     ) : (
@@ -1681,8 +1681,8 @@ Timestamp: ${timestamp}
                         Avg. time: {getAverageResolutionTime()} days
                       </p>
                     )}
-                  </CardContent>
-                </Card>
+              </CardContent>
+            </Card>
               </>
             )}
           </div>
@@ -1784,9 +1784,9 @@ Timestamp: ${timestamp}
                       <span>Blockchain verified</span>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
+                    <Button variant="outline" size="sm">
+                      View Details
+                    </Button>
                       {/* Upvote/Downvote Buttons for Reports */}
                       <div className="flex items-center gap-1">
                         <Button

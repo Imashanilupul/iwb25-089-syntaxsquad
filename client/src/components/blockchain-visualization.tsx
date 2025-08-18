@@ -2,55 +2,43 @@
 
 import { useState, useEffect } from "react"
 import { Progress } from "@/components/ui/progress"
-import { Activity, Zap, Shield } from "lucide-react"
+import { Activity, Zap } from "lucide-react"
 
 export function BlockchainVisualization() {
   const [networkStats, setNetworkStats] = useState({
-    blockHeight: 1247856,
-    transactionsPerSecond: 847,
-    networkHealth: 98.7,
-    consensusNodes: 156,
-    lastBlockTime: "12 seconds ago",
+    blockHeight: 0,
+    transactionsPerSecond: 0,
+    networkHealth: 100,
+    consensusNodes: 0,
+    lastBlockTime: "",
   })
 
-  const [recentBlocks, setRecentBlocks] = useState([
-    {
-      height: 1247856,
-      hash: "0x1a2b3c4d...",
-      transactions: 234,
-      timestamp: "12s ago",
-      validator: "Node-47",
-      status: "confirmed",
-    },
-    {
-      height: 1247855,
-      hash: "0x5e6f7g8h...",
-      transactions: 189,
-      timestamp: "24s ago",
-      validator: "Node-23",
-      status: "confirmed",
-    },
-    {
-      height: 1247854,
-      hash: "0x9i0j1k2l...",
-      transactions: 267,
-      timestamp: "36s ago",
-      validator: "Node-91",
-      status: "confirmed",
-    },
-  ])
-
-  // Simulate real-time updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNetworkStats((prev) => ({
-        ...prev,
-        blockHeight: prev.blockHeight + 1,
-        transactionsPerSecond: Math.floor(Math.random() * 200) + 750,
-        networkHealth: Math.random() * 2 + 97,
-      }))
-    }, 15000)
+    const fetchNetworkData = async () => {
+      try {
+        // Example using Etherscan API
+        const res = await fetch(
+          `https://api.etherscan.io/api?module=block&action=getblocknobytime&timestamp=${Math.floor(
+            Date.now() / 1000
+          )}&closest=before&apikey=YOUR_API_KEY`
+        )
+        const data = await res.json()
 
+        // Example values (you can extend this depending on API used)
+        setNetworkStats({
+          blockHeight: Number(data.result),
+          transactionsPerSecond: Math.floor(Math.random() * 10) + 10, // Placeholder, TPS API differs
+          networkHealth: 99.5, // Replace with your logic: uptime %, latency, etc.
+          consensusNodes: 5000, // Some APIs provide validator/peer counts
+          lastBlockTime: new Date().toLocaleTimeString(),
+        })
+      } catch (err) {
+        console.error("Error fetching blockchain data:", err)
+      }
+    }
+
+    fetchNetworkData()
+    const interval = setInterval(fetchNetworkData, 15000)
     return () => clearInterval(interval)
   }, [])
 
@@ -86,8 +74,6 @@ export function BlockchainVisualization() {
         </div>
         <Progress value={networkStats.networkHealth} className="h-2" />
       </div>
-
-  
 
       {/* Consensus Info */}
       <div className="flex items-center justify-between text-xs text-slate-600">

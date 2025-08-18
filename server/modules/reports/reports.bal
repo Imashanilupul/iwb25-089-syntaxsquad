@@ -871,18 +871,18 @@ public class ReportsService {
                     int newDislikes = currentDislikes;
                     
                     if (existingVote is string) {
-                        if (existingVote == "upvote") {
+                        if (existingVote == "likes") {
                             return error("User has already upvoted this report");
-                        } else if (existingVote == "downvote") {
+                        } else if (existingVote == "dislikes") {
                             // Change from downvote to upvote
                             newDislikes = currentDislikes - 1;
                             newLikes = currentLikes + 1;
-                            check self.updateUserVote(reportId, walletAddress, "upvote");
+                            check self.updateUserVote(reportId, walletAddress, "likes");
                         }
                     } else {
                         // New upvote
                         newLikes = currentLikes + 1;
-                        check self.recordUserVote(reportId, walletAddress, "upvote");
+                        check self.recordUserVote(reportId, walletAddress, "likes");
                     }
                     
                     // Calculate new priority based on votes
@@ -967,18 +967,18 @@ public class ReportsService {
                     int newDislikes = currentDislikes;
                     
                     if (existingVote is string) {
-                        if (existingVote == "downvote") {
+                        if (existingVote == "dislikes") {
                             return error("User has already downvoted this report");
-                        } else if (existingVote == "upvote") {
+                        } else if (existingVote == "likes") {
                             // Change from upvote to downvote
                             newLikes = currentLikes - 1;
                             newDislikes = currentDislikes + 1;
-                            check self.updateUserVote(reportId, walletAddress, "downvote");
+                            check self.updateUserVote(reportId, walletAddress, "dislikes");
                         }
                     } else {
                         // New downvote
                         newDislikes = currentDislikes + 1;
-                        check self.recordUserVote(reportId, walletAddress, "downvote");
+                        check self.recordUserVote(reportId, walletAddress, "dislikes");
                     }
                     
                     // Calculate new priority based on votes
