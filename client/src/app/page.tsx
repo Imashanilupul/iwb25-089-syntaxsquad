@@ -301,28 +301,23 @@ export default function CivicPlatform() {
               <h4 className="mb-2 font-semibold text-slate-900">Quick Links</h4>
               <ul className="space-y-1 text-sm text-slate-600">
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="https://www.parliament.lk/" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
                     Parliament of Sri Lanka
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="https://www.presidentsoffice.gov.lk/" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
                     Presidential Secretariat
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="https://www.gov.lk/webdirectory/provincialcouncils" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
                     Provincial Councils
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-blue-600">
+                  <a href="https://mpclg.gov.lk/web/index.php?option=com_content&view=article&id=69&Itemid=188&lang=en" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
                     Local Government
-                  </a>
-                </li>
-                <li>
-                  <a href="/signup" className="hover:text-blue-600">
-                    sign up
                   </a>
                 </li>
               </ul>
