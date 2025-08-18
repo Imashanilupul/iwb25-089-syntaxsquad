@@ -153,7 +153,7 @@ Timestamp: ${timestamp}
       const signer = await provider.getSigner()
 
       // Contract configuration
-      const contractAddress = "0x9AA4cAC63d30429edB1F21e6EA84dbc1F439ABB2" // Replace with your actual contract address
+      const contractAddress = "0xff40F4C374c1038378c7044720B939a2a0219a2f" // Updated with correct Sepolia Proposals contract address
       
       // Contract ABI for voting functions
       const contractAbi = [
@@ -179,6 +179,10 @@ Timestamp: ${timestamp}
         if (contractError.code === 4001) {
           throw new Error("User rejected the transaction")
         } else if (contractError.reason) {
+          // Check for specific authorization error
+          if (contractError.reason.includes("User not authorized")) {
+            throw new Error(`❌ Authorization Error: Your wallet address (${walletAddress}) is not authorized to vote. Please contact an admin to be added to the authorized users list.`)
+          }
           throw new Error(`Smart contract error: ${contractError.reason}`)
         } else {
           throw new Error(`Transaction failed: ${contractError.message || contractError}`)

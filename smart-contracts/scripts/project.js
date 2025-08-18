@@ -3,7 +3,7 @@ const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const router = express.Router();
 
-const contractAddress = "0x6e5A642acF9Ad0FFD96C54149201b2F44579d759"; // Replace with real Project contract address
+const contractAddress = "0x1770c50E6Bc8bbFB662c7ec45924aE986473b970"; // Replace with real Project contract address
 let project;
 let signers;
 
