@@ -230,59 +230,75 @@ export function SpendingTracker() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border-0 shadow-md">
-          <CardHeader>
-            <CardTitle>Budget Allocation by Category</CardTitle>
-            <CardDescription>Current fiscal year distribution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                allocated: { label: "Allocated", color: "#0088FE" },
-                spent: { label: "Spent", color: "#00C49F" },
-                remaining: { label: "Remaining", color: "#FFBB28" },
-              }}
-              className="h-64"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={budgetData}>
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="allocated" fill="#0088FE" />
-                  <Bar dataKey="spent" fill="#00C49F" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+      <Card className="border-0 shadow-md">
+  <CardHeader>
+    <CardTitle>Budget Allocation by Category</CardTitle>
+    <CardDescription>Current fiscal year distribution</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ChartContainer
+      config={{
+        allocated: { label: "Allocated", color: "#0088FE" },
+        spent: { label: "Spent", color: "#00C49F" },
+        remaining: { label: "Remaining", color: "#FFBB28" },
+      }}
+      className="h-64"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={budgetData}>
+          <XAxis dataKey="category" />
+          <YAxis
+            tickFormatter={(value: number) => {
+              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+              return value
+            }}
+          />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar dataKey="allocated" fill="#0088FE" />
+          <Bar dataKey="spent" fill="#00C49F" />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
 
-        <Card className="border-0 shadow-md">
-          <CardHeader>
-            <CardTitle>Monthly Spending Trend</CardTitle>
-            <CardDescription>Expenditure pattern over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{ amount: { label: "Amount", color: "#8884D8" } }}
-              className="h-64"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={spendingTrend}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="#8884D8"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+
+<Card className="border-0 shadow-md">
+  <CardHeader>
+    <CardTitle>Monthly Spending Trend</CardTitle>
+    <CardDescription>Expenditure pattern over time</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ChartContainer
+      config={{ amount: { label: "Amount", color: "#8884D8" } }}
+      className="h-64"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={spendingTrend}>
+          <XAxis dataKey="month" />
+          <YAxis
+            tickFormatter={(value: number) => {
+              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+              return value
+            }}
+          />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Line
+            type="monotone"
+            dataKey="amount"
+            stroke="#8884D8"
+            strokeWidth={2}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
+
       </div>
 
       {/* Project List with Search & Filter */}
