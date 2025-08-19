@@ -12,6 +12,7 @@ import { PolicyManagement } from "@/components/admin/policy-management"
 import { PetitionManagement } from "@/components/admin/petition-management"
 import { ReportManagement } from "@/components/admin/report-management"
 import { UserAnalytics } from "@/components/admin/user-analytics"
+import { DbSync } from "@/components/admin/db-sync"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAuth } from "@/context/AuthContext"
 import { useAppKitAccount } from "@reown/appkit/react"
@@ -25,6 +26,7 @@ import {
   AlertTriangle,
   Users,
   Wallet,
+  Database,
 } from "lucide-react"
 
 export default function AdminPortal() {
@@ -85,7 +87,7 @@ export default function AdminPortal() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:w-fit">
+          <TabsList className="grid w-full grid-cols-9 lg:w-fit">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4" />
               Overview
@@ -117,6 +119,10 @@ export default function AdminPortal() {
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Analytics
+            </TabsTrigger>
+            <TabsTrigger value="db-sync" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              DB Sync
             </TabsTrigger>
           </TabsList>
 
@@ -150,6 +156,10 @@ export default function AdminPortal() {
 
           <TabsContent value="users">
             <UserAnalytics />
+          </TabsContent>
+
+          <TabsContent value="db-sync">
+            <DbSync />
           </TabsContent>
         </Tabs>
       </div>
