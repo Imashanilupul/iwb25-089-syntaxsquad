@@ -1,12 +1,12 @@
 const { ethers } = require("hardhat");
-const { getFromPinata } = require("./ipfs.js");
+const { getFromPinata } = require("../ipfs.js");
 const fs = require('fs');
 const path = require('path');
 
 // Contract addresses for different networks
 const CONTRACT_ADDRESSES = {
   // From deployed-addresses.json
-  sepolia: "0x9AA4cAC63d30429edB1F21e6EA84dbc1F439ABB2", // Will be updated after deployment
+  sepolia: "0xff40F4C374c1038378c7044720B939a2a0219a2f", // Will be updated after deployment
   // Add other networks as needed
 };
 

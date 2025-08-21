@@ -4,7 +4,7 @@ const path = require("path");
 const router = express.Router();
 require("dotenv").config({ path: path.join(__dirname, '../.env') });
 
-const contractAddress = "0x6869062fA4b81C0cA4fBF52E49E136A37AdC28Fd"; // Sepolia contract address
+const contractAddress = "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9"; // Sepolia contract address
 const abi = require("../artifacts/contracts/auth/auth.sol/AuthRegistry.json").abi;
 
 // Use Sepolia RPC and your wallet private key from .env

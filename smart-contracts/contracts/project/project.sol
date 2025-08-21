@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 interface IAuthRegistry {
     function isAuthorized(address user) external view returns (bool);
+    function isAdmin(address user) external view returns (bool);
+
 }
 
 contract Project {
@@ -70,7 +72,7 @@ contract Project {
 
     // Only authorized users can perform write operations
     modifier onlyAuthorized() {
-        require(authRegistry.isAuthorized(msg.sender), "User not authorized");
+        require(authRegistry.isAdmin(msg.sender), "User not authorized");
         _;
     }
 

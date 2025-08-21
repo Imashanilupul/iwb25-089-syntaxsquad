@@ -3,10 +3,9 @@ const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const fs = require('fs');
 const path = require('path');
-
 const router = express.Router();
 
-const contractAddress = "0xeB575D4DC4C239E04A0dc09630f4E0A45d405Ced"; // Your specified contract address
+const contractAddress = "0x6a957A0D571b3Ed50AFc02Ac62CC061C6c533138"; // Your specified contract address
 let policies;
 let signers;
 
