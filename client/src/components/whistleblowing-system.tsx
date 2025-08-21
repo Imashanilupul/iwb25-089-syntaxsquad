@@ -35,6 +35,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
 import axios from 'axios';
 import { Report, reportService } from "@/services/report"
+import ChatWidget from "./ChatWidget"
 
 // Web3 types
 declare global {
@@ -2395,6 +2396,8 @@ Timestamp: ${timestamp}
               </CardContent>
             </Card>
           </div>
+
+          
 
           {/* Priority Distribution */}
           <Card className="border-0 shadow-md">
