@@ -24,6 +24,7 @@ listener http:Listener apiListener = new (port);
 
 # web3 service URL
 http:Client web3Service = check new ("http://localhost:3001");
+http:Client chatbot = check new ("http://localhost:8001");
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
@@ -1650,6 +1651,24 @@ service /petitions on newListener {
     resource function get [string id]/[string address](http:Caller caller, http:Request req) returns error? {
         json response = check web3Service->get("/has-signed/" + id + "/" + address);
         check caller->respond(response);
+    }
+
+    //RAG chatbot integration api 
+    // Resource to forward user chat requests to FastAPI
+    resource function post chat(http:Caller caller, http:Request req) returns error? {
+        json payload = check req.getJsonPayload();
+
+        // Send payload to FastAPI chatbot endpoint (/chat)
+        json|error res = chatbot->post("/chat", payload);
+
+        if res is json {
+            // Send back response from FastAPI
+            check caller->respond(res);
+        } else {
+            // Handle errors gracefully
+            log:printError("Error calling FastAPI chatbot", 'error = res);
+            check caller->respond({ "error": "Chatbot service unavailable" });
+        }
     }
 
     resource function get health() returns string {
