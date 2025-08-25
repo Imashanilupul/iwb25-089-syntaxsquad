@@ -47,7 +47,7 @@ export const registerUser = async (registrationData: RegistrationData): Promise<
       nic: registrationData.nicNumber,
       mobile_no: registrationData.mobileNumber,
       evm: registrationData.walletAddress,
-      Province: registrationData.province
+      province: registrationData.province
     };
 
     const databaseResponse = await axios.post(`${BACKEND_API_BASE}/api/users`, userPayload);
