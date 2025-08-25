@@ -13,18 +13,20 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
+
 # Environment variables configuration
 configurable int port = ?;
 configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
+configurable string fastApiEndpoint = "http://localhost:8001/chat";
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
 
 # web3 service URL
 http:Client web3Service = check new ("http://localhost:3001");
-http:Client chatbot = check new ("http://localhost:8001");
+
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
@@ -1653,23 +1655,7 @@ service /petitions on newListener {
         check caller->respond(response);
     }
 
-    //RAG chatbot integration api 
-    // Resource to forward user chat requests to FastAPI
-    resource function post chat(http:Caller caller, http:Request req) returns error? {
-        json payload = check req.getJsonPayload();
 
-        // Send payload to FastAPI chatbot endpoint (/chat)
-        json|error res = chatbot->post("/chat", payload);
-
-        if res is json {
-            // Send back response from FastAPI
-            check caller->respond(res);
-        } else {
-            // Handle errors gracefully
-            log:printError("Error calling FastAPI chatbot", 'error = res);
-            check caller->respond({ "error": "Chatbot service unavailable" });
-        }
-    }
 
     resource function get health() returns string {
         return "Ballerina service is running!";
@@ -1687,6 +1673,46 @@ function getHeaders() returns map<string> {
         "Content-Type": "application/json"
     };
 }
+
+#Rag chatbot parts
+# A record to represent the chat request payload
+type ChatRequest record {|
+    string question;
+    int top_k = 3;
+|};
+
+# A record to represent the chat response
+type ChatResponse record {|
+    string answer;
+|};
+
+# Ballerina service to connect to FastAPI chat endpoint
+service / on new http:Listener(9090) {
+    
+    resource function post chat(string question, int top_k = 3) returns ChatResponse|error {
+        // Create HTTP client
+        http:Client chatClient = check new(fastApiEndpoint);
+        
+        // Prepare request payload
+        ChatRequest requestPayload = {
+            question: question,
+            top_k: top_k
+        };
+        
+        // Make POST request to FastAPI endpoint
+        ChatResponse response = check chatClient->post(
+            "/",
+            requestPayload,
+            mediaType = "application/json"
+        );
+        
+        return response;
+    }
+}
+
+
+
+
 
 # Check database health via HTTP
 #
@@ -1745,8 +1771,7 @@ function initializeDatabase() returns error? {
     return;
 }
 
-# Application entry point
-#
+# Start the Transparent Governance Platform Backend
 # + return - Error if application fails to start
 public function main() returns error? {
     log:printInfo("🚀 Starting Transparent Governance Platform Backend v2.0...");
@@ -1770,6 +1795,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Petitions CRUD: http://localhost:" + port.toString() + "/api/petitions");
     log:printInfo("  ➤ Petition Activities CRUD: http://localhost:" + port.toString() + "/api/petitionactivities");
     log:printInfo("  ➤ Policy Comments CRUD: http://localhost:" + port.toString() + "/api/policycomments");
+    log:printInfo("  ➤ Chat endpoint: http://localhost:" + port.toString() + "/chat");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 

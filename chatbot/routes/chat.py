@@ -20,21 +20,21 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest):
-    # 1️⃣ Embed the question
+    # Embed the question
     query_embedding = get_embedding(req.question)
 
-    # 2️⃣ Retrieve relevant documents from Chroma
+    # Retrieve relevant documents from Chroma
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=req.top_k
     )
     docs = results['documents'][0]  # List of retrieved docs
 
-    # 3️⃣ Prepare prompt for Gemini LLM
+    # Prepare prompt for Gemini LLM
     context_text = "\n".join(docs)
     prompt = f"Answer the question based on the following context:\n\n{context_text}\n\nQuestion: {req.question}\nAnswer:"
 
-    # 4️⃣ Generate answer using Gemini LLM (Corrected Way)
+    # Generate answer using Gemini LLM (Corrected Way)
     # Instantiate the model
     model = genai.GenerativeModel('gemini-1.5-flash')
     
