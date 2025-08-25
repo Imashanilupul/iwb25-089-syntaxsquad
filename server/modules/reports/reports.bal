@@ -871,18 +871,18 @@ public class ReportsService {
                     int newDislikes = currentDislikes;
                     
                     if (existingVote is string) {
-                        if (existingVote == "likes") {
+                        if (existingVote == "like") {
                             return error("User has already upvoted this report");
-                        } else if (existingVote == "dislikes") {
+                        } else if (existingVote == "dislike") {
                             // Change from downvote to upvote
                             newDislikes = currentDislikes - 1;
                             newLikes = currentLikes + 1;
-                            check self.updateUserVote(reportId, walletAddress, "likes");
+                            check self.updateUserVote(reportId, walletAddress, "like");
                         }
                     } else {
                         // New upvote
                         newLikes = currentLikes + 1;
-                        check self.recordUserVote(reportId, walletAddress, "likes");
+                        check self.recordUserVote(reportId, walletAddress, "like");
                     }
                     
                     // Calculate new priority based on votes
@@ -967,18 +967,18 @@ public class ReportsService {
                     int newDislikes = currentDislikes;
                     
                     if (existingVote is string) {
-                        if (existingVote == "dislikes") {
+                        if (existingVote == "dislike") {
                             return error("User has already downvoted this report");
-                        } else if (existingVote == "likes") {
+                        } else if (existingVote == "like") {
                             // Change from upvote to downvote
                             newLikes = currentLikes - 1;
                             newDislikes = currentDislikes + 1;
-                            check self.updateUserVote(reportId, walletAddress, "dislikes");
+                            check self.updateUserVote(reportId, walletAddress, "dislike");
                         }
                     } else {
                         // New downvote
                         newDislikes = currentDislikes + 1;
-                        check self.recordUserVote(reportId, walletAddress, "dislikes");
+                        check self.recordUserVote(reportId, walletAddress, "dislike");
                     }
                     
                     // Calculate new priority based on votes
@@ -1129,7 +1129,7 @@ public class ReportsService {
             string endpoint = "/rest/v1/user_votes?report_id=eq." + reportId.toString() + "&wallet_address=eq." + walletAddress;
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
-            if response.statusCode != 200 {
+            if response.statusCode != 200 && response.statusCode != 204 {
                 return error("Failed to update user vote: " + response.statusCode.toString());
             }
             
