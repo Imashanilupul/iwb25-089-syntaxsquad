@@ -1400,6 +1400,13 @@ Timestamp: ${timestamp}
     fetchReports();
   }, [address]);
 
+  // Check user votes when wallet address changes and reports are already loaded
+  React.useEffect(() => {
+    if (address && reports.length > 0) {
+      checkUserReportVotes(reports);
+    }
+  }, [address, reports.length]);
+
   // Fetch report statistics from backend
   React.useEffect(() => {
     const fetchReportStatistics = async () => {
@@ -1462,8 +1469,11 @@ Timestamp: ${timestamp}
     for (const report of reportList) {
       try {
         const voteType = await reportService.checkUserVote(report.report_id, address);
-        if (voteType === 'upvote' || voteType === 'downvote') {
-          votes[report.report_id] = voteType;
+        // Map backend response ("like"/"dislike") to frontend format ("upvote"/"downvote")
+        if (voteType === 'like') {
+          votes[report.report_id] = 'upvote';
+        } else if (voteType === 'dislike') {
+          votes[report.report_id] = 'downvote';
         } else {
           votes[report.report_id] = null;
         }
