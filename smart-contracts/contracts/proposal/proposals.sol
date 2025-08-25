@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 interface IAuthRegistry {
     function isAuthorized(address user) external view returns (bool);
+    function isAdmin(address user) external view returns (bool);
+
 }
 
 contract Proposals {
@@ -53,15 +55,13 @@ contract Proposals {
         _;
     }
 
-    // User can only create one proposal per day to prevent spam
+        modifier onlyAdmin() {
+        require(authRegistry.isAdmin(msg.sender), "User not authorized");
+        _;
+    }
 
 
     // Only proposal creator can modify
-    modifier onlyCreator(uint256 proposalId) {
-        Proposal storage p = proposals[proposalId];
-        require(msg.sender == p.creator, "Only creator can modify proposal");
-        _;
-    }
 
     // Check if proposal is active and not expired
     modifier onlyActiveProposal(uint256 proposalId) {
@@ -86,7 +86,7 @@ contract Proposals {
         string calldata descriptionInDetailsCid,
         uint256 categoryId,
         uint256 expiredDate
-    ) external onlyAuthorized returns (uint256) {
+    ) external onlyAdmin returns (uint256) {
         require(bytes(titleCid).length > 0, "Title CID cannot be empty");
         require(bytes(shortDescriptionCid).length > 0, "Short description CID cannot be empty");
         require(bytes(descriptionInDetailsCid).length > 0, "Detailed description CID cannot be empty");
@@ -200,9 +200,10 @@ contract Proposals {
      * @param proposalId The ID of the proposal
      * @param newStatus New active status
      */
-    function changeProposalStatus(uint256 proposalId, bool newStatus) external onlyAuthorized onlyCreator(proposalId) {
+    function changeProposalStatus(uint256 proposalId, bool newStatus) external onlyAdmin {
         Proposal storage p = proposals[proposalId];
         require(p.creator != address(0), "Proposal does not exist");
+        require(msg.sender == p.creator || authRegistry.isAdmin(msg.sender), "Only creator or admin can change status");
         require(p.activeStatus != newStatus, "Status is already set to this value");
 
         p.activeStatus = newStatus;
@@ -216,9 +217,10 @@ contract Proposals {
      * @param proposalId The ID of the proposal
      * @param newExpiredDate New expiration timestamp
      */
-    function extendProposalDeadline(uint256 proposalId, uint256 newExpiredDate) external onlyAuthorized onlyCreator(proposalId) {
+    function extendProposalDeadline(uint256 proposalId, uint256 newExpiredDate) external onlyAdmin {
         Proposal storage p = proposals[proposalId];
         require(p.creator != address(0), "Proposal does not exist");
+        require(msg.sender == p.creator || authRegistry.isAdmin(msg.sender), "Only creator or admin can extend deadline");
         require(newExpiredDate > p.expiredDate, "Can only extend deadline, not reduce it");
         require(newExpiredDate > block.timestamp, "New deadline must be in the future");
 
@@ -230,9 +232,10 @@ contract Proposals {
      * Manually expire a proposal (only by creator)
      * @param proposalId The ID of the proposal to expire
      */
-    function expireProposal(uint256 proposalId) external onlyAuthorized onlyCreator(proposalId) {
+    function expireProposal(uint256 proposalId) external onlyAdmin {
         Proposal storage p = proposals[proposalId];
         require(p.creator != address(0), "Proposal does not exist");
+        require(msg.sender == p.creator || authRegistry.isAdmin(msg.sender), "Only creator or admin can expire proposal");
         require(p.activeStatus, "Proposal is already inactive");
 
         p.activeStatus = false;
@@ -332,88 +335,6 @@ contract Proposals {
         return (yesVotes, noVotes, netVotes, totalVotes, yesPercentage);
     }
 
-    /**
-     * Get all proposals created by a user
-     * @param user Address of the user
-     * @return proposalIds Array of proposal IDs created by the user
-     */
-    function getProposalsByUser(address user) external view returns (uint256[] memory proposalIds) {
-        uint256[] memory tempIds = new uint256[](proposalCount);
-        uint256 count = 0;
-        
-        for (uint256 i = 1; i <= proposalCount; i++) {
-            if (proposals[i].creator == user) {
-                tempIds[count] = i;
-                count++;
-            }
-        }
-        
-        proposalIds = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            proposalIds[i] = tempIds[i];
-        }
-        
-        return proposalIds;
-    }
 
-    /**
-     * Get active proposals by category
-     * @param categoryId The category ID to filter by
-     * @return proposalIds Array of active proposal IDs in the category
-     */
-    function getActiveProposalsByCategory(uint256 categoryId) external view returns (uint256[] memory proposalIds) {
-        uint256[] memory tempIds = new uint256[](proposalCount);
-        uint256 count = 0;
-        
-        for (uint256 i = 1; i <= proposalCount; i++) {
-            if (proposals[i].categoryId == categoryId && 
-                proposals[i].activeStatus && 
-                block.timestamp < proposals[i].expiredDate) {
-                tempIds[count] = i;
-                count++;
-            }
-        }
-        
-        proposalIds = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            proposalIds[i] = tempIds[i];
-        }
-        
-        return proposalIds;
-    }
 
-    /**
-     * Get expired proposals
-     * @return proposalIds Array of expired proposal IDs
-     */
-    function getExpiredProposals() external view returns (uint256[] memory proposalIds) {
-        uint256[] memory tempIds = new uint256[](proposalCount);
-        uint256 count = 0;
-        
-        for (uint256 i = 1; i <= proposalCount; i++) {
-            if (block.timestamp >= proposals[i].expiredDate) {
-                tempIds[count] = i;
-                count++;
-            }
-        }
-        
-        proposalIds = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            proposalIds[i] = tempIds[i];
-        }
-        
-        return proposalIds;
-    }
-
-    /**
-     * Check if proposal is expired
-     * @param proposalId The ID of the proposal
-     * @return isExpired Whether the proposal is expired
-     */
-    function isProposalExpired(uint256 proposalId) external view returns (bool isExpired) {
-        Proposal storage p = proposals[proposalId];
-        require(p.creator != address(0), "Proposal does not exist");
-        
-        return block.timestamp >= p.expiredDate;
-    }
 }

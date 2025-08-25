@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Smart Contract API Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 80px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .response {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .inline-form {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        .inline-form .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .contract-info {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ Project Smart Contract API Tester</h1>
+        
+        <div class="contract-info">
+            <strong>📋 Contract Information:</strong><br>
+            <div id="contractInfo">Loading contract information...</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Total Projects</h4>
+                <div class="value" id="totalProjects">-</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Budget</h4>
+                <div class="value" id="totalBudget">- ETH</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Spent</h4>
+                <div class="value" id="totalSpent">- ETH</div>
+            </div>
+            <div class="stat-card">
+                <h4>Budget Utilization</h4>
+                <div class="value" id="budgetUtilization">-%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prepare Project Section -->
+    <div class="container">
+        <div class="section">
+            <h3>📤 Prepare Project (Upload to IPFS)</h3>
+            <div class="form-group">
+                <label for="prepareProjectName">Project Name:</label>
+                <input type="text" id="prepareProjectName" value="Test Highway Project">
+            </div>
+            <div class="form-group">
+                <label for="prepareCategoryName">Category Name:</label>
+                <input type="text" id="prepareCategoryName" value="Infrastructure">
+            </div>
+            <div class="form-group">
+                <label for="prepareAllocatedBudget">Allocated Budget (ETH):</label>
+                <input type="number" id="prepareAllocatedBudget" step="0.01" value="10.5">
+            </div>
+            <div class="form-group">
+                <label for="prepareState">State:</label>
+                <input type="text" id="prepareState" value="Western Province">
+            </div>
+            <div class="form-group">
+                <label for="prepareProvince">Province:</label>
+                <input type="text" id="prepareProvince" value="Western">
+            </div>
+            <div class="form-group">
+                <label for="prepareMinistry">Ministry:</label>
+                <input type="text" id="prepareMinistry" value="Ministry of Highways">
+            </div>
+            <div class="form-group">
+                <label for="prepareViewDetails">View Details:</label>
+                <textarea id="prepareViewDetails" placeholder="Detailed project description...">This is a comprehensive highway development project that will improve transportation infrastructure across the region. The project includes road widening, bridge construction, and modern traffic management systems.</textarea>
+            </div>
+            <div class="form-group">
+                <label for="prepareStatus">Status:</label>
+                <select id="prepareStatus">
+                    <option value="PLANNED">PLANNED</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="IN_PROGRESS">IN_PROGRESS</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="prepareWalletAddress">Wallet Address:</label>
+                <input type="text" id="prepareWalletAddress" value="0x1234567890123456789012345678901234567890">
+            </div>
+            <button onclick="prepareProject()">📤 Prepare Project</button>
+            <div id="prepareResponse"></div>
+        </div>
+    </div>
+
+    <!-- Create Project Section -->
+    <div class="container">
+        <div class="section">
+            <h3>🏗️ Create Project</h3>
+            <div class="form-group">
+                <label for="createProjectName">Project Name:</label>
+                <input type="text" id="createProjectName" value="Test Highway Project">
+            </div>
+            <div class="form-group">
+                <label for="createCategoryName">Category Name:</label>
+                <input type="text" id="createCategoryName" value="Infrastructure">
+            </div>
+            <div class="form-group">
+                <label for="createAllocatedBudget">Allocated Budget (Wei):</label>
+                <input type="text" id="createAllocatedBudget" value="10500000000000000000">
+            </div>
+            <div class="form-group">
+                <label for="createState">State:</label>
+                <input type="text" id="createState" value="Western Province">
+            </div>
+            <div class="form-group">
+                <label for="createProvince">Province:</label>
+                <input type="text" id="createProvince" value="Western">
+            </div>
+            <div class="form-group">
+                <label for="createMinistry">Ministry:</label>
+                <input type="text" id="createMinistry" value="Ministry of Highways">
+            </div>
+            <div class="form-group">
+                <label for="createViewDetailsCid">View Details CID:</label>
+                <input type="text" id="createViewDetailsCid" placeholder="IPFS CID from prepare step">
+            </div>
+            <div class="form-group">
+                <label for="createStatus">Status:</label>
+                <select id="createStatus">
+                    <option value="PLANNED">PLANNED</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="IN_PROGRESS">IN_PROGRESS</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="createSignerIndex">Signer Index:</label>
+                <input type="number" id="createSignerIndex" value="0" min="0">
+            </div>
+            <button onclick="createProject()">🏗️ Create Project</button>
+            <div id="createResponse"></div>
+        </div>
+    </div>
+
+    <!-- Get Project Section -->
+    <div class="container">
+        <div class="section">
+            <h3>📋 Get Project Details</h3>
+            <div class="inline-form">
+                <div class="form-group">
+                    <label for="getProjectId">Project ID:</label>
+                    <input type="number" id="getProjectId" value="1" min="1">
+                </div>
+                <button onclick="getProject()">📋 Get Project</button>
+                <button onclick="getProjectBudget()">💰 Get Budget</button>
+            </div>
+            <div id="getProjectResponse"></div>
+        </div>
+    </div>
+
+    <!-- Update Project Section -->
+    <div class="container">
+        <div class="section">
+            <h3>✏️ Update Project</h3>
+            <div class="form-group">
+                <label for="updateProjectId">Project ID:</label>
+                <input type="number" id="updateProjectId" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label for="updateProjectName">Project Name:</label>
+                <input type="text" id="updateProjectName" value="Updated Highway Project">
+            </div>
+            <div class="form-group">
+                <label for="updateCategoryName">Category Name:</label>
+                <input type="text" id="updateCategoryName" value="Infrastructure">
+            </div>
+            <div class="form-group">
+                <label for="updateState">State:</label>
+                <input type="text" id="updateState" value="Western Province">
+            </div>
+            <div class="form-group">
+                <label for="updateProvince">Province:</label>
+                <input type="text" id="updateProvince" value="Western">
+            </div>
+            <div class="form-group">
+                <label for="updateMinistry">Ministry:</label>
+                <input type="text" id="updateMinistry" value="Ministry of Highways">
+            </div>
+            <div class="form-group">
+                <label for="updateViewDetailsCid">View Details CID:</label>
+                <input type="text" id="updateViewDetailsCid" placeholder="IPFS CID">
+            </div>
+            <div class="form-group">
+                <label for="updateStatus">Status:</label>
+                <select id="updateStatus">
+                    <option value="PLANNED">PLANNED</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="IN_PROGRESS" selected>IN_PROGRESS</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                </select>
+            </div>
+            <button onclick="updateProject()">✏️ Update Project</button>
+            <div id="updateResponse"></div>
+        </div>
+    </div>
+
+    <!-- Budget Management Section -->
+    <div class="container">
+        <div class="section">
+            <h3>💰 Budget Management</h3>
+            <div class="inline-form">
+                <div class="form-group">
+                    <label for="budgetProjectId">Project ID:</label>
+                    <input type="number" id="budgetProjectId" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="budgetAmount">Amount (ETH):</label>
+                    <input type="number" id="budgetAmount" step="0.01" value="1.5">
+                </div>
+                <button onclick="addSpentBudget()">➕ Add Spent</button>
+                <button onclick="deductSpentBudget()">➖ Deduct Spent</button>
+            </div>
+            <div id="budgetResponse"></div>
+        </div>
+    </div>
+
+    <!-- Query Projects Section -->
+    <div class="container">
+        <div class="section">
+            <h3>🔍 Query Projects</h3>
+            <div class="inline-form">
+                <div class="form-group">
+                    <label for="queryType">Query Type:</label>
+                    <select id="queryType" onchange="updateQueryInput()">
+                        <option value="all">All Projects</option>
+                        <option value="category">By Category</option>
+                        <option value="status">By Status</option>
+                        <option value="state">By State</option>
+                        <option value="ministry">By Ministry</option>
+                        <option value="user">By User</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="queryValue">Query Value:</label>
+                    <input type="text" id="queryValue" placeholder="Enter query value...">
+                </div>
+                <button onclick="queryProjects()">🔍 Search</button>
+            </div>
+            <div id="queryResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api'; // Adjust this to your API base URL
+
+        // Initialize page
+        window.onload = function() {
+            loadContractInfo();
+            loadStats();
+        };
+
+        async function loadContractInfo() {
+            // This would typically come from your API
+            document.getElementById('contractInfo').innerHTML = `
+                Address: <code>Loading...</code><br>
+                Network: <code>Loading...</code><br>
+                Status: <code>Checking connection...</code>
+            `;
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/projects?limit=1000`);
+                const data = await response.json();
+                
+                if (data.projects) {
+                    const totalProjects = data.pagination.totalProjects;
+                    let totalBudget = 0;
+                    let totalSpent = 0;
+                    
+                    // Note: This is simplified - in reality you'd need to fetch individual project details
+                    document.getElementById('totalProjects').textContent = totalProjects;
+                    document.getElementById('totalBudget').textContent = totalBudget.toFixed(2);
+                    document.getElementById('totalSpent').textContent = totalSpent.toFixed(2);
+                    document.getElementById('budgetUtilization').textContent = '0.00';
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function makeRequest(url, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                return {
+                    success: response.ok,
+                    data,
+                    status: response.status
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    status: 0
+                };
+            }
+        }
+
+        function displayResponse(elementId, result) {
+            const element = document.getElementById(elementId);
+            
+            if (result.success) {
+                element.innerHTML = `
+                    <div class="success">✅ Success!</div>
+                    <div class="response">${JSON.stringify(result.data, null, 2)}</div>
+                `;
+            } else {
+                element.innerHTML = `
+                    <div class="error">❌ Error ${result.status}: ${result.error || result.data?.error || 'Unknown error'}</div>
+                    <div class="response">${JSON.stringify(result.data || result.error, null, 2)}</div>
+                `;
+            }
+        }
+
+        async function prepareProject() {
+            const data = {
+                projectName: document.getElementById('prepareProjectName').value,
+                categoryName: document.getElementById('prepareCategoryName').value,
+                allocatedBudget: document.getElementById('prepareAllocatedBudget').value,
+                state: document.getElementById('prepareState').value,
+                province: document.getElementById('prepareProvince').value,
+                ministry: document.getElementById('prepareMinistry').value,
+                viewDetails: document.getElementById('prepareViewDetails').value,
+                status: document.getElementById('prepareStatus').value,
+                walletAddress: document.getElementById('prepareWalletAddress').value
+            };
+            
+            const result = await makeRequest(`${API_BASE}/prepare-project`, 'POST', data);
+            displayResponse('prepareResponse', result);
+            
+            // Auto-fill create form if successful
+            if (result.success && result.data.viewDetailsCid) {
+                document.getElementById('createViewDetailsCid').value = result.data.viewDetailsCid;
+                document.getElementById('createAllocatedBudget').value = result.data.allocatedBudget;
+            }
+        }
+
+        async function createProject() {
+            const data = {
+                projectName: document.getElementById('createProjectName').value,
+                categoryName: document.getElementById('createCategoryName').value,
+                allocatedBudget: document.getElementById('createAllocatedBudget').value,
+                state: document.getElementById('createState').value,
+                province: document.getElementById('createProvince').value,
+                ministry: document.getElementById('createMinistry').value,
+                viewDetailsCid: document.getElementById('createViewDetailsCid').value,
+                status: document.getElementById('createStatus').value,
+                signerIndex: parseInt(document.getElementById('createSignerIndex').value)
+            };
+            
+            const result = await makeRequest(`${API_BASE}/create-project`, 'POST', data);
+            displayResponse('createResponse', result);
+            
+            // Reload stats after creating project
+            if (result.success) {
+                loadStats();
+            }
+        }
+
+        async function getProject() {
+            const projectId = document.getElementById('getProjectId').value;
+            const result = await makeRequest(`${API_BASE}/project/${projectId}`);
+            displayResponse('getProjectResponse', result);
+        }
+
+        async function getProjectBudget() {
+            const projectId = document.getElementById('getProjectId').value;
+            const result = await makeRequest(`${API_BASE}/project/${projectId}/budget`);
+            displayResponse('getProjectResponse', result);
+        }
+
+        async function updateProject() {
+            const projectId = document.getElementById('updateProjectId').value;
+            const data = {
+                projectName: document.getElementById('updateProjectName').value,
+                categoryName: document.getElementById('updateCategoryName').value,
+                state: document.getElementById('updateState').value,
+                province: document.getElementById('updateProvince').value,
+                ministry: document.getElementById('updateMinistry').value,
+                viewDetailsCid: document.getElementById('updateViewDetailsCid').value,
+                status: document.getElementById('updateStatus').value,
+                signerIndex: 0
+            };
+            
+            const result = await makeRequest(`${API_BASE}/update-project/${projectId}`, 'PUT', data);
+            displayResponse('updateResponse', result);
+        }
+
+        async function addSpentBudget() {
+            const data = {
+                projectId: document.getElementById('budgetProjectId').value,
+                amount: document.getElementById('budgetAmount').value,
+                signerIndex: 0
+            };
+            
+            const result = await makeRequest(`${API_BASE}/add-spent-budget`, 'POST', data);
+            displayResponse('budgetResponse', result);
+        }
+
+        async function deductSpentBudget() {
+            const data = {
+                projectId: document.getElementById('budgetProjectId').value,
+                amount: document.getElementById('budgetAmount').value,
+                signerIndex: 0
+            };
+            
+            const result = await makeRequest(`${API_BASE}/deduct-spent-budget`, 'POST', data);
+            displayResponse('budgetResponse', result);
+        }
+
+        async function queryProjects() {
+            const queryType = document.getElementById('queryType').value;
+            const queryValue = document.getElementById('queryValue').value;
+            
+            let url;
+            if (queryType === 'all') {
+                url = `${API_BASE}/projects`;
+            } else if (queryType === 'category') {
+                url = `${API_BASE}/projects/category/${encodeURIComponent(queryValue)}`;
+            } else if (queryType === 'status') {
+                url = `${API_BASE}/projects/status/${encodeURIComponent(queryValue)}`;
+            } else if (queryType === 'state') {
+                url = `${API_BASE}/projects/state/${encodeURIComponent(queryValue)}`;
+            } else if (queryType === 'ministry') {
+                url = `${API_BASE}/projects/ministry/${encodeURIComponent(queryValue)}`;
+            } else if (queryType === 'user') {
+                url = `${API_BASE}/projects/user/${queryValue}`;
+            }
+            
+            const result = await makeRequest(url);
+            displayResponse('queryResponse', result);
+        }
+
+        function updateQueryInput() {
+            const queryType = document.getElementById('queryType').value;
+            const queryInput = document.getElementById('queryValue');
+            
+            switch (queryType) {
+                case 'all':
+                    queryInput.placeholder = 'No input needed';
+                    queryInput.disabled = true;
+                    break;
+                case 'category':
+                    queryInput.placeholder = 'e.g., Infrastructure';
+                    queryInput.disabled = false;
+                    break;
+                case 'status':
+                    queryInput.placeholder = 'e.g., PLANNED, IN_PROGRESS';
+                    queryInput.disabled = false;
+                    break;
+                case 'state':
+                    queryInput.placeholder = 'e.g., Western Province';
+                    queryInput.disabled = false;
+                    break;
+                case 'ministry':
+                    queryInput.placeholder = 'e.g., Ministry of Highways';
+                    queryInput.disabled = false;
+                    break;
+                case 'user':
+                    queryInput.placeholder = 'e.g., 0x1234...';
+                    queryInput.disabled = false;
+                    break;
+            }
+        }
+
+        // Initialize query input
+        updateQueryInput();
+    </script>
+</body>
+</html>

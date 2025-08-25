@@ -6,7 +6,7 @@ const path = require('path');
 
 const router = express.Router();
 
-const contractAddress = "0x5475D9bE5bbfa84392D15DA0cCdfF5d64339bf16"; // Replace with real
+const contractAddress = "0x1577FD3B3E54cFA368F858d542920A0fefBaf807"; // Replace with real
 let petitions;
 let signers;
 

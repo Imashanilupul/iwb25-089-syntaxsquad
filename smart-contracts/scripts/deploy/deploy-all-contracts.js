@@ -31,12 +31,12 @@ async function main() {
   console.log("✅ Reports deployed to:", reportsAddress);
 
   // Deploy Policies contract
-  // console.log("\n4. Deploying Policies...");
-  // const Policies = await hre.ethers.getContractFactory("Policies");
-  // const policies = await Policies.deploy(authRegistryAddress);
-  // await policies.waitForDeployment();
-  // const policiesAddress = await policies.getAddress();
-  // console.log("✅ Policies deployed to:", policiesAddress);
+  console.log("\n4. Deploying Policies...");
+  const Policies = await hre.ethers.getContractFactory("Policies");
+  const policies = await Policies.deploy(authRegistryAddress);
+  await policies.waitForDeployment();
+  const policiesAddress = await policies.getAddress();
+  console.log("✅ Policies deployed to:", policiesAddress);
 
   // Deploy Proposals contract
   console.log("\n5. Deploying Proposals...");
@@ -46,19 +46,28 @@ async function main() {
   const proposalsAddress = await proposals.getAddress();
   console.log("✅ Proposals deployed to:", proposalsAddress);
 
-  // Authorize the deployer
-  console.log("\n6. Authorizing deployer address...");
-  await authRegistry.authorizeUser(deployer.address);
-  console.log("✅ Deployer authorized successfully");
+  // Deploy Project contract
+  console.log("\n6. Deploying Project...");
+  const Project = await hre.ethers.getContractFactory("Project");
+  const project = await Project.deploy(authRegistryAddress);
+  await project.waitForDeployment();
+  const projectAddress = await project.getAddress();
+  console.log("✅ Project deployed to:", projectAddress);
+
+  // Authorize the deployer as admin
+  console.log("\n7. Authorizing deployer address as admin...");
+  await authRegistry.authorizeAdmin(deployer.address);
+  console.log("✅ Deployer authorized as admin successfully");
 
   console.log("\n🎉 Complete Deployment Summary:");
   console.log("================================");
   console.log("AuthRegistry:  ", authRegistryAddress);
   console.log("Petitions:     ", petitionsAddress);
   console.log("Reports:       ", reportsAddress);
-  // console.log("Policies:      ", policiesAddress);
+  console.log("Policies:      ", policiesAddress);
   console.log("Proposals:     ", proposalsAddress);
-  console.log("Authorized:    ", [deployer.address]);
+  console.log("Project:       ", projectAddress);
+  console.log("Admin User:    ", [deployer.address]);
 
   console.log("\nTo test the integration, run:");
   console.log("npx hardhat run scripts/test-reports-integration.js --network localhost");
