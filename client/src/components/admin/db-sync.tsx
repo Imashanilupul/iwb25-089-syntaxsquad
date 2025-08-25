@@ -132,108 +132,123 @@ export function DbSync() {
     setIsFullSync(true)
     setSyncProgress(0)
     setCurrentSyncStep('Initializing blockchain sync...')
-    
+
+    // Helper to add a timeout to promises
+    const withTimeout = async <T,>(p: Promise<T>, ms: number, msg = 'Operation timed out'): Promise<T> => {
+      return await Promise.race([
+        p,
+        new Promise<T>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))
+      ])
+    }
+
     try {
       // Initialize ethers and get current block
-      const ethers = await import("ethers")
-      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
-      
-      // Verify network connection
-      const network = await provider.getNetwork()
+      const ethers = await import('ethers')
+      // Prefer user's injected provider (MetaMask / Wallet) but be prepared to fall back
+      let provider: any = null
+
+      if ((window as any).ethereum && (ethers as any).BrowserProvider) {
+        try {
+          provider = new (ethers as any).BrowserProvider((window as any).ethereum)
+        } catch (err) {
+          console.warn('Failed to create BrowserProvider from window.ethereum, will try fallback', err)
+          provider = null
+        }
+      }
+
+      // If we couldn't create a BrowserProvider, fall back to a public Sepolia JSON-RPC provider
+      const FALLBACK_RPC = 'https://rpc.sepolia.org'
+      if (!provider) {
+        console.log('No wallet provider available or BrowserProvider failed — using fallback JSON-RPC provider')
+        provider = new (ethers as any).JsonRpcProvider(FALLBACK_RPC)
+        setCurrentSyncStep('Using fallback RPC provider for block data')
+      }
+
+      // Verify network connection (short timeout to avoid hanging)
+  const network = await withTimeout(provider.getNetwork(), 10000, 'Network check timed out') as any
       console.log(`🌐 Connected to: ${network.name} (chainId: ${network.chainId})`)
-      
+
       // Check if we're on the right network (Sepolia = chainId 11155111)
       if (Number(network.chainId) !== 11155111) {
-        console.log(`❌ Wrong network detected: ${network.name} (chainId: ${network.chainId})`);
-        
-        // Check if MetaMask is available
-        if (!window.ethereum || !(window.ethereum as any).request) {
-          throw new Error(`Please switch to Sepolia testnet manually. Currently connected to ${network.name} (chainId: ${network.chainId}).`);
+        console.log(`❌ Wrong network detected: ${network.name} (chainId: ${network.chainId})`)
+
+        // Check if wallet provider is available
+        if (!(window as any).ethereum || !(window as any).ethereum.request) {
+          throw new Error(`Please switch to Sepolia testnet manually. Currently connected to ${network.name} (chainId: ${network.chainId}).`)
         }
-        
+
         // Try to automatically switch to Sepolia
         try {
-          console.log('🔄 Attempting to switch to Sepolia testnet...');
-          
+          console.log('🔄 Attempting to switch to Sepolia testnet...')
+
           // Request network switch to Sepolia
-          await (window.ethereum as any).request({
+          await withTimeout((window as any).ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0xaa36a7' }], // 11155111 in hex
-          });
-          
-          // Wait a bit for network switch to complete
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Verify the switch worked
-          const newNetwork = await provider.getNetwork();
+            params: [{ chainId: '0xaa36a7' }],
+          }), 15000, 'Network switch timed out')
+
+          // Give wallet a moment and re-create provider
+          await new Promise(resolve => setTimeout(resolve, 1500))
+          provider = new (ethers as any).BrowserProvider((window as any).ethereum)
+
+          const newNetwork = await withTimeout(provider.getNetwork(), 10000, 'Network check after switch timed out') as any
           if (Number(newNetwork.chainId) !== 11155111) {
-            throw new Error('Network switch failed');
+            throw new Error('Network switch failed')
           }
-          
-          console.log('✅ Successfully switched to Sepolia testnet');
-          
-          toast({
-            title: "Network Switched",
-            description: "Successfully switched to Sepolia testnet",
-            variant: "default"
-          });
-          
+
+          console.log('✅ Successfully switched to Sepolia testnet')
+          toast({ title: 'Network Switched', description: 'Successfully switched to Sepolia testnet', variant: 'default' })
+
         } catch (switchError: any) {
-          console.error('❌ Failed to switch network:', switchError);
-          
+          console.error('❌ Failed to switch network:', switchError)
+
           // If switch fails, try to add Sepolia network
           try {
-            console.log('🔄 Attempting to add Sepolia testnet...');
-            
-            await (window.ethereum as any).request({
+            console.log('🔄 Attempting to add Sepolia testnet...')
+            await withTimeout((window as any).ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [{
                 chainId: '0xaa36a7', // 11155111 in hex
                 chainName: 'Sepolia Testnet',
-                nativeCurrency: {
-                  name: 'Sepolia Ether',
-                  symbol: 'SEP',
-                  decimals: 18,
-                },
+                nativeCurrency: { name: 'Sepolia Ether', symbol: 'SEP', decimals: 18 },
                 rpcUrls: ['https://rpc.sepolia.org'],
                 blockExplorerUrls: ['https://sepolia.etherscan.io/'],
               }],
-            });
-            
-            console.log('✅ Successfully added Sepolia testnet');
-            
-            toast({
-              title: "Network Added",
-              description: "Sepolia testnet added to wallet. Please try sync again.",
-              variant: "default"
-            });
-            
+            }), 20000, 'Add network timed out')
+
+            toast({ title: 'Network Added', description: 'Sepolia testnet added to wallet. Please try sync again.', variant: 'default' })
           } catch (addError: any) {
-            console.error('❌ Failed to add network:', addError);
-            
-            toast({
-              title: "Network Switch Required",
-              description: "Please manually switch to Sepolia testnet in your wallet and try again. Current network: " + network.name,
-              variant: "destructive"
-            });
+            console.error('❌ Failed to add network:', addError)
+            toast({ title: 'Network Switch Required', description: 'Please manually switch to Sepolia testnet in your wallet and try again.', variant: 'destructive' })
           }
-          
-          throw new Error(`Please switch to Sepolia testnet. Currently connected to ${network.name} (chainId: ${network.chainId}). Click 'Add Network' in MetaMask if Sepolia is not available.`);
+
+          throw new Error(`Please switch to Sepolia testnet. Currently connected to ${network.name} (chainId: ${network.chainId}).`)
         }
       }
-      
-      const currentBlock = await provider.getBlockNumber()
+
+      // Get current block with timeout. If this fails (wallet blocks RPC calls), try a fallback
+      let currentBlock: number | null = null
+      try {
+        // give slightly longer timeout for block number
+  currentBlock = await withTimeout(provider.getBlockNumber(), 20000, 'Failed to get current block') as number
+      } catch (err) {
+        console.warn('provider.getBlockNumber failed, attempting fallback JsonRpcProvider...', err)
+        try {
+          const fallback = new (ethers as any).JsonRpcProvider('https://sepolia.infura.io/v3/2f9de21ad6e04590bc8e47dfd16365ce')
+  currentBlock = await withTimeout(fallback.getBlockNumber(), 15000, 'Fallback failed to get current block') as number
+          setCurrentSyncStep('Using fallback RPC provider to determine current block')
+        } catch (fallbackErr) {
+          throw new Error('Failed to get current block from wallet and fallback RPC provider')
+        }
+      }
+
+      if (currentBlock === null) throw new Error('Failed to determine current block')
       console.log(`📊 Current block: ${currentBlock}`)
-      
+
       const fromBlock = isFullSync ? 0 : Math.max(0, currentBlock - blocksToScan)
-      
+
       const timeRange = calculateTimeRange(isFullSync ? currentBlock : blocksToScan)
-      setBlockRange({
-        from: fromBlock,
-        to: currentBlock,
-        total: isFullSync ? currentBlock : blocksToScan,
-        timeRange
-      })
+      setBlockRange({ from: fromBlock, to: currentBlock, total: isFullSync ? currentBlock : blocksToScan, timeRange })
 
       // Initialize sync results
       const initialResults: SyncResult[] = [
@@ -248,78 +263,37 @@ export function DbSync() {
       setCurrentSyncStep('Calling Ballerina backend for blockchain sync...')
       setSyncProgress(30)
 
-      // Call Ballerina backend to handle the sync
-      const syncResponse = await fetch('http://localhost:8080/api/blockchain/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fromBlock,
-          toBlock: currentBlock,
-          isFullSync
-        })
-      })
+      // Call Ballerina backend to handle the sync with AbortController timeout
+      const controller = new AbortController()
+      const fetchTimeout = setTimeout(() => controller.abort(), 20000)
 
-      if (!syncResponse.ok) {
-        throw new Error(`Sync failed: ${syncResponse.statusText}`)
+      let syncResponse: Response
+      try {
+        syncResponse = await fetch('http://localhost:8080/api/blockchain/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromBlock, toBlock: currentBlock, isFullSync }),
+          signal: controller.signal
+        })
+      } finally {
+        clearTimeout(fetchTimeout)
       }
 
-      const syncData = await syncResponse.json()
+      if (!syncResponse || !syncResponse.ok) {
+        const statusText = syncResponse ? syncResponse.statusText : 'No response'
+        throw new Error(`Sync failed: ${statusText}`)
+      }
+
+  const syncData = await syncResponse.json() as any
       console.log('🎉 Sync completed:', syncData)
 
       // Update results based on Ballerina response
       const finalResults: SyncResult[] = [
-        { 
-          contractType: 'Proposals', 
-          totalItems: syncData.results?.proposals?.total || 0, 
-          newItems: syncData.results?.proposals?.new || 0, 
-          updatedItems: syncData.results?.proposals?.updated || 0, 
-          errors: syncData.results?.proposals?.errors?.length || 0, 
-          removedItems: syncData.results?.proposals?.removed || 0, 
-          lastBlockScanned: currentBlock, 
-          status: 'completed' 
-        },
-        { 
-          contractType: 'Petitions', 
-          totalItems: syncData.results?.petitions?.total || 0, 
-          newItems: syncData.results?.petitions?.new || 0, 
-          updatedItems: syncData.results?.petitions?.updated || 0, 
-          errors: syncData.results?.petitions?.errors?.length || 0, 
-          removedItems: syncData.results?.petitions?.removed || 0, 
-          lastBlockScanned: currentBlock, 
-          status: 'completed' 
-        },
-        { 
-          contractType: 'Reports', 
-          totalItems: syncData.results?.reports?.total || 0, 
-          newItems: syncData.results?.reports?.new || 0, 
-          updatedItems: syncData.results?.reports?.updated || 0, 
-          errors: syncData.results?.reports?.errors?.length || 0, 
-          removedItems: syncData.results?.reports?.removed || 0, 
-          lastBlockScanned: currentBlock, 
-          status: 'completed' 
-        },
-        { 
-          contractType: 'Policies', 
-          totalItems: syncData.results?.policies?.total || 0, 
-          newItems: syncData.results?.policies?.new || 0, 
-          updatedItems: syncData.results?.policies?.updated || 0, 
-          errors: syncData.results?.policies?.errors?.length || 0, 
-          removedItems: syncData.results?.policies?.removed || 0, 
-          lastBlockScanned: currentBlock, 
-          status: 'completed' 
-        },
-        { 
-          contractType: 'Projects', 
-          totalItems: syncData.results?.projects?.total || 0, 
-          newItems: syncData.results?.projects?.new || 0, 
-          updatedItems: syncData.results?.projects?.updated || 0, 
-          errors: syncData.results?.projects?.errors?.length || 0, 
-          removedItems: syncData.results?.projects?.removed || 0, 
-          lastBlockScanned: currentBlock, 
-          status: 'completed' 
-        }
+        { contractType: 'Proposals', totalItems: syncData.results?.proposals?.total || 0, newItems: syncData.results?.proposals?.new || 0, updatedItems: syncData.results?.proposals?.updated || 0, errors: syncData.results?.proposals?.errors?.length || 0, removedItems: syncData.results?.proposals?.removed || 0, lastBlockScanned: currentBlock, status: 'completed' },
+        { contractType: 'Petitions', totalItems: syncData.results?.petitions?.total || 0, newItems: syncData.results?.petitions?.new || 0, updatedItems: syncData.results?.petitions?.updated || 0, errors: syncData.results?.petitions?.errors?.length || 0, removedItems: syncData.results?.petitions?.removed || 0, lastBlockScanned: currentBlock, status: 'completed' },
+        { contractType: 'Reports', totalItems: syncData.results?.reports?.total || 0, newItems: syncData.results?.reports?.new || 0, updatedItems: syncData.results?.reports?.updated || 0, errors: syncData.results?.reports?.errors?.length || 0, removedItems: syncData.results?.reports?.removed || 0, lastBlockScanned: currentBlock, status: 'completed' },
+        { contractType: 'Policies', totalItems: syncData.results?.policies?.total || 0, newItems: syncData.results?.policies?.new || 0, updatedItems: syncData.results?.policies?.updated || 0, errors: syncData.results?.policies?.errors?.length || 0, removedItems: syncData.results?.policies?.removed || 0, lastBlockScanned: currentBlock, status: 'completed' },
+        { contractType: 'Projects', totalItems: syncData.results?.projects?.total || 0, newItems: syncData.results?.projects?.new || 0, updatedItems: syncData.results?.projects?.updated || 0, errors: syncData.results?.projects?.errors?.length || 0, removedItems: syncData.results?.projects?.removed || 0, lastBlockScanned: currentBlock, status: 'completed' }
       ]
 
       setSyncResults(finalResults)
@@ -336,26 +310,14 @@ export function DbSync() {
       const totalNewItems = finalResults.reduce((sum, r) => sum + r.newItems, 0)
       const totalUpdatedItems = finalResults.reduce((sum, r) => sum + r.updatedItems, 0)
 
-      toast({
-        title: "Sync Completed",
-        description: `Successfully synced blockchain data. ${totalNewItems} new items added, ${totalUpdatedItems} items updated.`,
-        variant: "default"
-      })
+      toast({ title: 'Sync Completed', description: `Successfully synced blockchain data. ${totalNewItems} new items added, ${totalUpdatedItems} items updated.`, variant: 'default' })
 
     } catch (error: any) {
       console.error('❌ Sync failed:', error)
-      
-      setSyncResults(prev => prev.map(result => ({
-        ...result,
-        status: 'error' as const,
-        errors: 1
-      })))
-      
-      toast({
-        title: "Sync Failed",
-        description: `Blockchain sync failed: ${error.message || 'Unknown error'}`,
-        variant: "destructive"
-      })
+
+      setSyncResults(prev => prev.map(result => ({ ...result, status: 'error' as const, errors: 1 })))
+
+      toast({ title: 'Sync Failed', description: `Blockchain sync failed: ${error.message || 'Unknown error'}`, variant: 'destructive' })
     } finally {
       setIsFullSync(false)
       setSyncProgress(0)
