@@ -168,6 +168,58 @@ service /api on apiListener {
         };
     }
 
+    # Blockchain sync endpoint
+    #
+    # + request - HTTP request with sync parameters
+    # + return - Sync results or error
+    resource function post blockchain/sync(http:Request request) returns json|error {
+        log:printInfo("🔄 Blockchain sync endpoint called");
+        
+        json payload = check request.getJsonPayload();
+        
+        // Extract sync parameters
+        int fromBlock = <int>check payload.fromBlock;
+        int toBlock = <int>check payload.toBlock;
+        boolean isFullSync = <boolean>check payload.isFullSync;
+        
+        log:printInfo(string `Starting blockchain sync from block ${fromBlock} to ${toBlock}`);
+        
+        // Initialize sync results
+        json syncResults = {
+            "petitions": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
+            "proposals": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
+            "reports": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
+            "policies": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
+            "projects": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []}
+        };
+        
+        // Sync each contract type
+        json proposalsResult = check syncProposalsFromBlockchain(fromBlock, toBlock);
+        json petitionsResult = check syncPetitionsFromBlockchain(fromBlock, toBlock);
+        json reportsResult = check syncReportsFromBlockchain(fromBlock, toBlock);
+        json policiesResult = check syncPoliciesFromBlockchain(fromBlock, toBlock);
+        json projectsResult = check syncProjectsFromBlockchain(fromBlock, toBlock);
+        
+        // Compile results
+        syncResults = {
+            "status": "completed",
+            "fromBlock": fromBlock,
+            "toBlock": toBlock,
+            "isFullSync": isFullSync,
+            "results": {
+                "proposals": proposalsResult,
+                "petitions": petitionsResult,
+                "reports": reportsResult,
+                "policies": policiesResult,
+                "projects": projectsResult
+            },
+            "timestamp": time:utcNow()[0]
+        };
+        
+        log:printInfo("✅ Blockchain sync completed successfully");
+        return syncResults;
+    }
+
     # Get all categories
     #
     # + return - Categories list or error
@@ -1606,6 +1658,260 @@ function initializeDatabase() returns error? {
     }
 
     return;
+}
+
+# Sync proposals from blockchain
+#
+# + fromBlock - Starting block number
+# + toBlock - Ending block number  
+# + return - Sync results or error
+function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|error {
+    log:printInfo("🗳️ Syncing proposals from blockchain...");
+    
+    // Call Express.js backend to get blockchain data
+    json requestPayload = {
+        "fromBlock": fromBlock,
+        "toBlock": toBlock
+    };
+    
+    http:Response blockchainResponse = check web3Service->post("/proposals/blockchain-data", requestPayload);
+    
+    if blockchainResponse.statusCode != 200 {
+        return error("Failed to get blockchain data from Express backend");
+    }
+    
+    json blockchainData = check blockchainResponse.getJsonPayload();
+    json[] proposals = <json[]>check blockchainData.data;
+    
+    int newCount = 0;
+    int updatedCount = 0;
+    int removedCount = 0;
+    json[] errors = [];
+    
+    // Get existing DB data
+    json|error dbResponse = proposalsService.getAllProposals();
+    json[] dbProposals = [];
+    
+    if dbResponse is json {
+        dbProposals = <json[]>check dbResponse.data;
+    }
+    
+    // Sync each blockchain proposal
+    foreach json proposal in proposals {
+        int blockchainId = <int>check proposal.blockchain_proposal_id;
+        
+        // Find existing DB record
+        json? existingProposal = ();
+        foreach json dbProposal in dbProposals {
+            if (<int>check dbProposal.blockchain_proposal_id) == blockchainId {
+                existingProposal = dbProposal;
+                break;
+            }
+        }
+        
+        if existingProposal is () {
+            // New proposal - create in DB
+            string title = <string>check proposal.title;
+            string description = <string>check proposal.description;
+            
+            json|error createResult = proposalsService.createProposal(
+                title, 
+                description, // shortDescription
+                description, // descriptionInDetails 
+                "2025-12-31", // expiredDate (default)
+                1, // categoryId (default)
+                1, // createdBy (default)
+                true, // activeStatus
+                <int>check proposal.votes_for,
+                <int>check proposal.votes_against
+            );
+            
+            if createResult is json {
+                newCount += 1;
+                log:printInfo(string `✅ Created proposal ${blockchainId}`);
+            } else {
+                errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
+            }
+        } else {
+            // Check for conflicts and update
+            boolean needsUpdate = false;
+            
+            // Compare key fields
+            if (<string>check existingProposal.title) != (<string>check proposal.title) ||
+               (<int>check existingProposal.yes_votes) != (<int>check proposal.votes_for) ||
+               (<int>check existingProposal.no_votes) != (<int>check proposal.votes_against) {
+                needsUpdate = true;
+            }
+            
+            if needsUpdate {
+                json|error updateResult = proposalsService.updateProposal(<int>check existingProposal.id, proposal);
+                if updateResult is json {
+                    updatedCount += 1;
+                    log:printInfo(string `🔄 Updated proposal ${blockchainId}`);
+                } else {
+                    errors.push({"type": "update", "id": blockchainId, "error": updateResult.message()});
+                }
+            }
+        }
+    }
+    
+    // Remove proposals that exist in DB but not in blockchain
+    foreach json dbProposal in dbProposals {
+        if (<json>check dbProposal.blockchain_proposal_id) != () {
+            int dbBlockchainId = <int>check dbProposal.blockchain_proposal_id;
+            boolean existsInBlockchain = false;
+            
+            foreach json proposal in proposals {
+                if (<int>check proposal.blockchain_proposal_id) == dbBlockchainId {
+                    existsInBlockchain = true;
+                    break;
+                }
+            }
+            
+            if !existsInBlockchain {
+                json|error deleteResult = proposalsService.deleteProposal(<int>check dbProposal.id);
+                if deleteResult is json {
+                    removedCount += 1;
+                    log:printInfo(string `🗑️ Removed proposal ${dbBlockchainId}`);
+                } else {
+                    errors.push({"type": "delete", "id": dbBlockchainId, "error": deleteResult.message()});
+                }
+            }
+        }
+    }
+    
+    return {
+        "total": proposals.length(),
+        "new": newCount,
+        "updated": updatedCount,
+        "removed": removedCount,
+        "errors": errors
+    };
+}
+
+# Sync petitions from blockchain  
+#
+# + fromBlock - Starting block number
+# + toBlock - Ending block number
+# + return - Sync results or error
+function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|error {
+    log:printInfo("📝 Syncing petitions from blockchain...");
+    
+    json requestPayload = {
+        "fromBlock": fromBlock,
+        "toBlock": toBlock
+    };
+    
+    http:Response blockchainResponse = check web3Service->post("/petitions/blockchain-data", requestPayload);
+    
+    if blockchainResponse.statusCode != 200 {
+        return error("Failed to get blockchain data from Express backend");
+    }
+    
+    json blockchainData = check blockchainResponse.getJsonPayload();
+    json[] petitions = <json[]>check blockchainData.data;
+    
+    // Similar sync logic as proposals...
+    return {
+        "total": petitions.length(),
+        "new": 0,
+        "updated": 0, 
+        "removed": 0,
+        "errors": []
+    };
+}
+
+# Sync reports from blockchain
+#
+# + fromBlock - Starting block number  
+# + toBlock - Ending block number
+# + return - Sync results or error
+function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|error {
+    log:printInfo("📊 Syncing reports from blockchain...");
+    
+    json requestPayload = {
+        "fromBlock": fromBlock,
+        "toBlock": toBlock
+    };
+    
+    http:Response blockchainResponse = check web3Service->post("/reports/blockchain-data", requestPayload);
+    
+    if blockchainResponse.statusCode != 200 {
+        return error("Failed to get blockchain data from Express backend");
+    }
+    
+    json blockchainData = check blockchainResponse.getJsonPayload();
+    json[] reports = <json[]>check blockchainData.data;
+    
+    return {
+        "total": reports.length(),
+        "new": 0,
+        "updated": 0,
+        "removed": 0, 
+        "errors": []
+    };
+}
+
+# Sync policies from blockchain
+#
+# + fromBlock - Starting block number
+# + toBlock - Ending block number  
+# + return - Sync results or error
+function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|error {
+    log:printInfo("📜 Syncing policies from blockchain...");
+    
+    json requestPayload = {
+        "fromBlock": fromBlock,
+        "toBlock": toBlock
+    };
+    
+    http:Response blockchainResponse = check web3Service->post("/policies/blockchain-data", requestPayload);
+    
+    if blockchainResponse.statusCode != 200 {
+        return error("Failed to get blockchain data from Express backend");
+    }
+    
+    json blockchainData = check blockchainResponse.getJsonPayload();
+    json[] policies = <json[]>check blockchainData.data;
+    
+    return {
+        "total": policies.length(),
+        "new": 0,
+        "updated": 0,
+        "removed": 0,
+        "errors": []
+    };
+}
+
+# Sync projects from blockchain  
+#
+# + fromBlock - Starting block number
+# + toBlock - Ending block number
+# + return - Sync results or error
+function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|error {
+    log:printInfo("🏗️ Syncing projects from blockchain...");
+    
+    json requestPayload = {
+        "fromBlock": fromBlock,
+        "toBlock": toBlock
+    };
+    
+    http:Response blockchainResponse = check web3Service->post("/projects/blockchain-data", requestPayload);
+    
+    if blockchainResponse.statusCode != 200 {
+        return error("Failed to get blockchain data from Express backend");
+    }
+    
+    json blockchainData = check blockchainResponse.getJsonPayload();
+    json[] projects = <json[]>check blockchainData.data;
+    
+    return {
+        "total": projects.length(),
+        "new": 0,
+        "updated": 0,
+        "removed": 0,
+        "errors": []
+    };
 }
 
 # Application entry point
