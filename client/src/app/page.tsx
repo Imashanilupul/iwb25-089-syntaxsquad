@@ -26,6 +26,7 @@ import SignUpPage from "@/components/signup"
 import { userService } from "@/services/user"
 import { categoryService } from "@/services/category"
 import { useAuth } from "@/context/AuthContext"
+import ChatWidget from "@/components/ChatWidget"
 
 export default function CivicPlatform() {
   const { address } = useAuth()
@@ -139,14 +140,16 @@ export default function CivicPlatform() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50 relative">
       <div className="container mx-auto p-6">
-        <div className="fixed top-6 right-6 z-50 flex gap-3">
+        {/* Top-right fixed buttons */}
+        <div className="fixed top-6 right-6 z-[10000] flex gap-3">
           <RegistrationDialog />
           <ConnectButton />
         </div>
+
         {/* Header */}
-        <div className="relative mb-8">
+        <div className="relative mb-8 z-[9000]">
           <div className="mb-4 flex items-center gap-4">
             <img
               src="/images/sri-lanka-emblem.png"
@@ -213,7 +216,7 @@ export default function CivicPlatform() {
                 </Card>
               ))}
             </div>
-
+            
             {/* Recent Activities */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <Card className="border-0 shadow-md">
@@ -282,6 +285,7 @@ export default function CivicPlatform() {
           </TabsContent>
         </Tabs>
       </div>
+
       {/* Footer */}
       <footer className="mt-12 border-t bg-slate-50 py-8">
         <div className="container mx-auto px-6">
@@ -339,6 +343,11 @@ export default function CivicPlatform() {
           </div>
         </div>
       </footer>
+
+      {/* Chat Widget Container */}
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999]">
+        <ChatWidget />
+      </div>
     </div>
   )
 }

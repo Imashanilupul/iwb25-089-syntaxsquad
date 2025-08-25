@@ -831,4 +831,311 @@ public class ReportsService {
             return error("Failed to confirm report draft: " + e.message());
         }
     }
+
+    # Like a report and update priority based on votes
+    #
+    # + reportId - Report ID to like
+    # + walletAddress - User's wallet address
+    # + return - Updated report data or error
+    public function likeReport(int reportId, string walletAddress) returns json|error {
+        do {
+            // Check if user has already voted
+            string? existingVote = check self.checkUserVote(reportId, walletAddress);
+            
+            // Get current report data
+            json reportResult = check self.getReportById(reportId);
+            if reportResult is map<json> {
+                json|error reportData = reportResult["data"];
+                if reportData is map<json> {
+                    // Get current likes and dislikes
+                    int currentLikes = 0;
+                    int currentDislikes = 0;
+                    
+                    json|error likesJson = reportData["likes"];
+                    if likesJson is json {
+                        int|error likesInt = likesJson.ensureType(int);
+                        if likesInt is int {
+                            currentLikes = likesInt;
+                        }
+                    }
+                    
+                    json|error dislikesJson = reportData["dislikes"];
+                    if dislikesJson is json {
+                        int|error dislikesInt = dislikesJson.ensureType(int);
+                        if dislikesInt is int {
+                            currentDislikes = dislikesInt;
+                        }
+                    }
+                    
+                    int newLikes = currentLikes;
+                    int newDislikes = currentDislikes;
+                    
+                    if (existingVote is string) {
+                        if (existingVote == "likes") {
+                            return error("User has already upvoted this report");
+                        } else if (existingVote == "dislikes") {
+                            // Change from downvote to upvote
+                            newDislikes = currentDislikes - 1;
+                            newLikes = currentLikes + 1;
+                            check self.updateUserVote(reportId, walletAddress, "likes");
+                        }
+                    } else {
+                        // New upvote
+                        newLikes = currentLikes + 1;
+                        check self.recordUserVote(reportId, walletAddress, "likes");
+                    }
+                    
+                    // Calculate new priority based on votes
+                    string newPriority = self.calculatePriorityFromVotes(newLikes, newDislikes);
+                    
+                    // Update report with new likes, dislikes and priority
+                    json payload = {
+                        "likes": newLikes,
+                        "dislikes": newDislikes,
+                        "priority": newPriority,
+                        "last_updated_time": "now()"
+                    };
+                    
+                    map<string> headers = self.getHeaders(true);
+                    string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+                    http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+                    
+                    if response.statusCode != 200 {
+                        return error("Failed to like report: " + response.statusCode.toString());
+                    }
+                    
+                    json result = check response.getJsonPayload();
+                    json[] reports = check result.ensureType();
+                    
+                    if reports.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Report liked successfully",
+                            "data": reports[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return error("Report not found");
+                    }
+                } else {
+                    return error("Invalid report data format");
+                }
+            } else {
+                return error("Failed to retrieve report data");
+            }
+        } on fail error e {
+            return error("Failed to like report: " + e.message());
+        }
+    }
+
+    # Dislike a report and update priority based on votes
+    #
+    # + reportId - Report ID to dislike
+    # + walletAddress - User's wallet address
+    # + return - Updated report data or error
+    public function dislikeReport(int reportId, string walletAddress) returns json|error {
+        do {
+            // Check if user has already voted
+            string? existingVote = check self.checkUserVote(reportId, walletAddress);
+            
+            // Get current report data
+            json reportResult = check self.getReportById(reportId);
+            if reportResult is map<json> {
+                json|error reportData = reportResult["data"];
+                if reportData is map<json> {
+                    // Get current likes and dislikes
+                    int currentLikes = 0;
+                    int currentDislikes = 0;
+                    
+                    json|error likesJson = reportData["likes"];
+                    if likesJson is json {
+                        int|error likesInt = likesJson.ensureType(int);
+                        if likesInt is int {
+                            currentLikes = likesInt;
+                        }
+                    }
+                    
+                    json|error dislikesJson = reportData["dislikes"];
+                    if dislikesJson is json {
+                        int|error dislikesInt = dislikesJson.ensureType(int);
+                        if dislikesInt is int {
+                            currentDislikes = dislikesInt;
+                        }
+                    }
+                    
+                    int newLikes = currentLikes;
+                    int newDislikes = currentDislikes;
+                    
+                    if (existingVote is string) {
+                        if (existingVote == "dislikes") {
+                            return error("User has already downvoted this report");
+                        } else if (existingVote == "likes") {
+                            // Change from upvote to downvote
+                            newLikes = currentLikes - 1;
+                            newDislikes = currentDislikes + 1;
+                            check self.updateUserVote(reportId, walletAddress, "dislikes");
+                        }
+                    } else {
+                        // New downvote
+                        newDislikes = currentDislikes + 1;
+                        check self.recordUserVote(reportId, walletAddress, "dislikes");
+                    }
+                    
+                    // Calculate new priority based on votes
+                    string newPriority = self.calculatePriorityFromVotes(newLikes, newDislikes);
+                    
+                    // Update report with new likes, dislikes and priority
+                    json payload = {
+                        "likes": newLikes,
+                        "dislikes": newDislikes,
+                        "priority": newPriority,
+                        "last_updated_time": "now()"
+                    };
+                    
+                    map<string> headers = self.getHeaders(true);
+                    string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+                    http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+                    
+                    if response.statusCode != 200 {
+                        return error("Failed to dislike report: " + response.statusCode.toString());
+                    }
+                    
+                    json result = check response.getJsonPayload();
+                    json[] reports = check result.ensureType();
+                    
+                    if reports.length() > 0 {
+                        return {
+                            "success": true,
+                            "message": "Report disliked successfully",
+                            "data": reports[0],
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        return error("Report not found");
+                    }
+                } else {
+                    return error("Invalid report data format");
+                }
+            } else {
+                return error("Failed to retrieve report data");
+            }
+        } on fail error e {
+            return error("Failed to dislike report: " + e.message());
+        }
+    }
+
+    # Calculate priority based on likes and dislikes
+    #
+    # + likes - Number of likes
+    # + dislikes - Number of dislikes
+    # + return - Calculated priority string
+    private function calculatePriorityFromVotes(int likes, int dislikes) returns string {
+        int netVotes = likes - dislikes;
+        
+        if netVotes >= 50 {
+            return "CRITICAL";
+        } else if netVotes >= 20 {
+            return "HIGH";
+        } else if netVotes >= 5 {
+            return "MEDIUM";
+        } else if netVotes >= 0 {
+            return "MEDIUM";
+        } else if netVotes >= -20 {
+            return "LOW";
+        } else {
+            return "LOW";
+        }
+    }
+
+    # Check if a user has already voted on a report
+    #
+    # + reportId - Report ID to check
+    # + walletAddress - User's wallet address
+    # + return - Vote type if exists, null if no vote, or error
+    public function checkUserVote(int reportId, string walletAddress) returns string?|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/user_votes?report_id=eq." + reportId.toString() + "&wallet_address=eq." + walletAddress;
+            
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to check user vote: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] votes = check result.ensureType();
+            
+            if votes.length() > 0 {
+                json voteData = votes[0];
+                if voteData is map<json> {
+                    json|error voteType = voteData["vote_type"];
+                    if voteType is json {
+                        string|error voteTypeStr = voteType.ensureType(string);
+                        if voteTypeStr is string {
+                            return voteTypeStr;
+                        }
+                    }
+                }
+            }
+            
+            return ();
+        } on fail error e {
+            return error("Failed to check user vote: " + e.message());
+        }
+    }
+
+    # Record a user's vote on a report
+    #
+    # + reportId - Report ID to vote on
+    # + walletAddress - User's wallet address
+    # + voteType - Type of vote ('upvote' or 'downvote')
+    # + return - Success status or error
+    private function recordUserVote(int reportId, string walletAddress, string voteType) returns error? {
+        do {
+            json payload = {
+                "report_id": reportId,
+                "wallet_address": walletAddress,
+                "vote_type": voteType
+            };
+            
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/user_votes";
+            http:Response response = check self.supabaseClient->post(endpoint, payload, headers);
+            
+            if response.statusCode != 201 {
+                return error("Failed to record user vote: " + response.statusCode.toString());
+            }
+            
+            return;
+        } on fail error e {
+            return error("Failed to record user vote: " + e.message());
+        }
+    }
+
+    # Update an existing user vote
+    #
+    # + reportId - Report ID to update vote on
+    # + walletAddress - User's wallet address
+    # + newVoteType - New vote type ('upvote' or 'downvote')
+    # + return - Success status or error
+    private function updateUserVote(int reportId, string walletAddress, string newVoteType) returns error? {
+        do {
+            json payload = {
+                "vote_type": newVoteType
+            };
+            
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/user_votes?report_id=eq." + reportId.toString() + "&wallet_address=eq." + walletAddress;
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to update user vote: " + response.statusCode.toString());
+            }
+            
+            return;
+        } on fail error e {
+            return error("Failed to update user vote: " + e.message());
+        }
+    }
 }

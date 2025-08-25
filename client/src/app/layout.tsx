@@ -1,19 +1,21 @@
-import type { Metadata } from "next"
-import "../styles/globals.css"
-import ContextProvider from "@/components/walletConnect/context"
-import { AuthProvider } from "@/context/AuthContext"
-import { Toaster } from "sonner"
+// src/app/layout.tsx
+
+import type { Metadata } from "next";
+import "../styles/globals.css";
+import ContextProvider from "@/components/walletConnect/context";
+import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Sri Lanka Transparent Governance Platform",
   description: "Created with v0",
   generator: "v0.dev",
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en">
@@ -21,8 +23,8 @@ export default function RootLayout({
         <AuthProvider>
           <ContextProvider>
             {children}
-            <Toaster 
-              position="top-right" 
+            <Toaster
+              position="top-right"
               toastOptions={{
                 style: {
                   background: 'white',
@@ -35,5 +37,5 @@ export default function RootLayout({
         </AuthProvider>
       </body>
     </html>
-  )
+  );
 }

@@ -328,51 +328,47 @@ Timestamp: ${timestamp}
 
           {/* Voting Stats */}
           {!loading && !error && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="border-0 shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
-                  <Vote className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalProposals}</div>
-                  <p className="text-xs text-slate-500">Currently open for voting</p>
-                </CardContent>
-              </Card>
+            <div className="flex justify-center w-full">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl w-full px-4">
+    {/* Active Proposals */}
+    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
+        <Vote className="h-5 w-5 text-blue-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.totalProposals}</div>
+        <p className="text-xs text-slate-500">Currently open for voting</p>
+      </CardContent>
+    </Card>
 
-              <Card className="border-0 shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Votes</CardTitle>
-                  <Users className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalVoters.toLocaleString()}</div>
-                  <p className="text-xs text-slate-500">Votes cast across all proposals</p>
-                </CardContent>
-              </Card>
+    {/* Total Votes */}
+    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Total Votes</CardTitle>
+        <Users className="h-5 w-5 text-green-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.totalVoters.toLocaleString()}</div>
+        <p className="text-xs text-slate-500">Votes cast across all proposals</p>
+      </CardContent>
+    </Card>
 
-              <Card className="border-0 shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avg Participation</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.participationRate}%</div>
-                  <p className="text-xs text-slate-500">Average votes per proposal</p>
-                </CardContent>
-              </Card>
+    {/* Avg Participation */}
+    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Avg Participation</CardTitle>
+        <TrendingUp className="h-5 w-5 text-purple-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{stats.participationRate}%</div>
+        <p className="text-xs text-slate-500">Average votes per proposal</p>
+      </CardContent>
+    </Card>
+  </div>
+</div>
 
-              <Card className="border-0 shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Security Score</CardTitle>
-                  <Shield className="h-4 w-4 text-emerald-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.securityScore}%</div>
-                  <p className="text-xs text-slate-500">Zero-knowledge verified</p>
-                </CardContent>
-              </Card>
-            </div>
+
           )}
 
           {/* Proposals List */}
