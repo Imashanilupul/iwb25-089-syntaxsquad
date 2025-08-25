@@ -237,7 +237,8 @@ Timestamp: ${timestamp}
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             proposalId: proposalId,
-            signerIndex: 0 // Using first signer for now, should be dynamic based on user
+            signerIndex: 0, // Using first signer for now, should be dynamic based on user
+            walletAddress: walletAddress // Include wallet address for proper tracking
           })
         })
 
@@ -257,14 +258,29 @@ Timestamp: ${timestamp}
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 proposalId: proposalId,
-                voteType: voteType
+                voteType: voteType,
+                walletAddress: walletAddress // Include wallet address for proper vote tracking
               })
             })
 
             if (fallbackResponse.ok) {
               const fallbackData = await fallbackResponse.json()
               console.log("Direct database vote confirmed:", fallbackData)
-              toast.success(`✅ Vote recorded via database backup (blockchain vote already confirmed)`)
+              
+              // Show detailed vote info if available
+              if (fallbackData.success && fallbackData.data) {
+                const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = fallbackData.data;
+                
+                if (vote_change) {
+                  toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
+                } else if (previous_vote === 'none') {
+                  toast.success(`✅ ${new_vote === 'yes' ? 'Yes' : 'No'} vote recorded! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
+                } else {
+                  toast.success(`✅ Vote confirmed: ${new_vote} (Totals: Yes: ${yes_votes}, No: ${no_votes})`)
+                }
+              } else {
+                toast.success(`✅ Vote recorded via database backup (blockchain vote already confirmed)`)
+              }
             } else {
               toast.warning(`⚠️ Vote recorded on blockchain but database update failed`)
             }
@@ -290,7 +306,8 @@ Timestamp: ${timestamp}
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               proposalId: proposalId,
-              voteType: voteType
+              voteType: voteType,
+              walletAddress: walletAddress // Include wallet address for proper vote tracking
             })
           })
 

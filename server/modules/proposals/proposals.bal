@@ -651,12 +651,14 @@ public class ProposalsService {
         }
     }
 
-    # Vote on a proposal
+    # Vote on a proposal with proper vote change handling
     #
     # + proposalId - Proposal ID to vote on
     # + voteType - Type of vote ("yes" or "no")
-    # + return - Updated proposal data or error
-    public function voteOnProposal(int proposalId, string voteType) returns json|error {
+    # + walletAddress - Wallet address of the voter
+    # + userId - User ID (optional)
+    # + return - Vote result data or error
+    public function voteOnProposal(int proposalId, string voteType, string? walletAddress = (), int? userId = ()) returns json|error {
         // Validate input
         if proposalId <= 0 {
             return error("Proposal ID must be a positive integer");
@@ -668,6 +670,104 @@ public class ProposalsService {
         
         do {
             log:printInfo("🗳️ Processing vote: " + voteType + " for proposal ID: " + proposalId.toString());
+            
+            if walletAddress is string {
+                log:printInfo("👤 Voter wallet: " + walletAddress);
+                
+                // Use the new database function for proper vote handling
+                map<string> headers = self.getHeaders();
+                
+                // Prepare the function call
+                json functionPayload = {
+                    "proposal_id": proposalId,
+                    "wallet_address": walletAddress,
+                    "vote_type": voteType
+                };
+                
+                if userId is int {
+                    functionPayload = check functionPayload.mergeJson({"user_id": userId});
+                }
+                
+                // Call the database function
+                string endpoint = "/rest/v1/rpc/record_proposal_vote";
+                http:Response response = check self.supabaseClient->post(endpoint, functionPayload, headers);
+                
+                if response.statusCode != 200 {
+                    log:printError("❌ Database function call failed with status: " + response.statusCode.toString());
+                    return error("Failed to record vote: " + response.statusCode.toString());
+                }
+                
+                json result = check response.getJsonPayload();
+                json[] functionResults = check result.ensureType();
+                
+                if functionResults.length() > 0 {
+                    map<json> voteResult = check functionResults[0].ensureType();
+                    boolean success = check voteResult["success"].ensureType(boolean);
+                    
+                    if success {
+                        string message = check voteResult["message"].ensureType(string);
+                        string previousVote = check voteResult["previous_vote"].ensureType(string);
+                        string newVote = check voteResult["new_vote"].ensureType(string);
+                        int yesVotes = check voteResult["yes_votes"].ensureType(int);
+                        int noVotes = check voteResult["no_votes"].ensureType(int);
+                        
+                        log:printInfo("✅ Vote recorded successfully");
+                        log:printInfo("📊 Vote change: " + previousVote + " → " + newVote);
+                        log:printInfo("📊 Final counts - Yes: " + yesVotes.toString() + ", No: " + noVotes.toString());
+                        
+                        return {
+                            "success": true,
+                            "message": message,
+                            "data": {
+                                "proposal_id": proposalId,
+                                "wallet_address": walletAddress,
+                                "previous_vote": previousVote,
+                                "new_vote": newVote,
+                                "vote_change": previousVote != newVote && previousVote != "none",
+                                "yes_votes": yesVotes,
+                                "no_votes": noVotes
+                            },
+                            "timestamp": time:utcNow()[0]
+                        };
+                    } else {
+                        string errorMessage = check voteResult["message"].ensureType(string);
+                        log:printError("❌ Vote recording failed: " + errorMessage);
+                        return error(errorMessage);
+                    }
+                } else {
+                    log:printError("❌ No result returned from database function");
+                    return error("No result returned from vote recording function");
+                }
+                
+            } else {
+                // Fallback to old method if no wallet address provided
+                log:printWarn("⚠️ No wallet address provided, using fallback method");
+                return self.voteOnProposalFallback(proposalId, voteType);
+            }
+            
+        } on fail error e {
+            log:printError("❌ Vote processing failed: " + e.message());
+            return error("Failed to vote on proposal: " + e.message());
+        }
+    }
+
+    # Fallback voting method (old implementation for compatibility)
+    #
+    # + proposalId - Proposal ID to vote on
+    # + voteType - Type of vote ("yes" or "no")
+    # + return - Updated proposal data or error
+    public function voteOnProposalFallback(int proposalId, string voteType) returns json|error {
+        // Validate input
+        if proposalId <= 0 {
+            return error("Proposal ID must be a positive integer");
+        }
+        
+        if voteType != "yes" && voteType != "no" {
+            return error("Vote type must be 'yes' or 'no'");
+        }
+        
+        do {
+            log:printInfo("🗳️ Processing fallback vote: " + voteType + " for proposal ID: " + proposalId.toString());
             
             // First get the current proposal to increment the vote count
             json currentProposal = check self.getProposalById(proposalId);
@@ -737,6 +837,44 @@ public class ProposalsService {
         } on fail error e {
             log:printError("❌ Vote processing failed: " + e.message());
             return error("Failed to vote on proposal: " + e.message());
+        }
+    }
+
+    # Get user's current vote on a proposal
+    #
+    # + proposalId - Proposal ID
+    # + walletAddress - Wallet address of the user
+    # + return - Current vote type or error
+    public function getUserVote(int proposalId, string walletAddress) returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            
+            json functionPayload = {
+                "proposal_id_param": proposalId,
+                "wallet_address_param": walletAddress
+            };
+            
+            string endpoint = "/rest/v1/rpc/get_user_proposal_vote";
+            http:Response response = check self.supabaseClient->post(endpoint, functionPayload, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get user vote: " + response.statusCode.toString());
+            }
+            
+            string currentVote = check response.getTextPayload();
+            
+            return {
+                "success": true,
+                "data": {
+                    "proposal_id": proposalId,
+                    "wallet_address": walletAddress,
+                    "current_vote": currentVote
+                },
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get user vote: " + e.message());
         }
     }
 
