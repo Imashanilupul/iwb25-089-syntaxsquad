@@ -317,6 +317,7 @@ public class UsersService {
                 };
             } else {
                 return error("User not found");
+                
             }
             
         } on fail error e {
