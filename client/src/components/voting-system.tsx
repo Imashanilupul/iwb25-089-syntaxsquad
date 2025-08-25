@@ -84,6 +84,31 @@ export function VotingSystem() {
     loadData()
   }, [])
 
+  // Refresh data function for reuse
+  const refreshData = async () => {
+    try {
+      const proposalsRes = await proposalsService.getAllProposals()
+      if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
+        setProposals(proposalsRes.data)
+        
+        // Update stats
+        const totalProposals = proposalsRes.data.length
+        const activeProposalsCount = proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length
+        const totalVotes = proposalsRes.data.reduce((sum, p) => sum + p.yes_votes + p.no_votes, 0)
+        const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
+
+        setStats(prev => ({
+          ...prev,
+          totalProposals: activeProposalsCount,
+          totalVoters: totalVotes,
+          participationRate: participationRate
+        }))
+      }
+    } catch (err) {
+      console.error("Error refreshing data:", err)
+    }
+  }
+
   // Handle voting with blockchain-first approach
   const handleVote = async (proposalId: number, voteType: "yes" | "no") => {
     try {
@@ -183,6 +208,10 @@ Timestamp: ${timestamp}
           if (contractError.reason.includes("User not authorized")) {
             throw new Error(`❌ Authorization Error: Your wallet address (${walletAddress}) is not authorized to vote. Please contact an admin to be added to the authorized users list.`)
           }
+          // Check for already voted errors - these are user-facing errors, not system errors
+          if (contractError.reason.includes("You have already voted")) {
+            throw new Error(`Smart contract error: ${contractError.reason}`)
+          }
           throw new Error(`Smart contract error: ${contractError.reason}`)
         } else {
           throw new Error(`Transaction failed: ${contractError.message || contractError}`)
@@ -200,8 +229,8 @@ Timestamp: ${timestamp}
 
       try {
         const apiEndpoint = voteType === "yes" 
-          ? `http://localhost:3001/proposal/vote-yes` 
-          : `http://localhost:3001/proposal/vote-no`
+          ? `http://localhost:8080/api/proposal/vote-yes` 
+          : `http://localhost:8080/api/proposal/vote-no`
 
         const apiResponse = await fetch(apiEndpoint, {
           method: "POST",
@@ -219,22 +248,82 @@ Timestamp: ${timestamp}
         } else {
           const errorText = await apiResponse.text()
           console.warn(`Smart contract API call failed: ${apiResponse.status} - ${errorText}`)
-          toast.success(`✅ Vote recorded on blockchain (API confirmation failed but vote is still valid)`)
+          
+          // Fallback: Try direct database update
+          toast.info("🔄 Attempting direct database update...")
+          try {
+            const fallbackResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                proposalId: proposalId,
+                voteType: voteType
+              })
+            })
+
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json()
+              console.log("Direct database vote confirmed:", fallbackData)
+              toast.success(`✅ Vote recorded via database backup (blockchain vote already confirmed)`)
+            } else {
+              toast.warning(`⚠️ Vote recorded on blockchain but database update failed`)
+            }
+          } catch (fallbackError) {
+            console.error("Fallback database update failed:", fallbackError)
+            toast.warning(`⚠️ Vote recorded on blockchain but database update failed`)
+          }
         }
 
         // Refresh proposal data to get updated vote counts
-        // Note: We could call loadData() here but it would reload all data
-        // For now, just show success message and let user refresh if needed
-        console.log("Vote completed successfully")
+        toast.info("🔄 Refreshing proposal data...")
+        await refreshData()
+        toast.success("📊 Vote counts updated!")
 
       } catch (apiError: any) {
         console.error("Smart contract API call failed:", apiError)
-        toast.success(`✅ Vote recorded on blockchain (API confirmation failed but vote is still valid)`)
+        
+        // Fallback: Try direct database update
+        toast.info("🔄 Attempting direct database update as fallback...")
+        try {
+          const fallbackResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              proposalId: proposalId,
+              voteType: voteType
+            })
+          })
+
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json()
+            console.log("Direct database vote confirmed:", fallbackData)
+            toast.success(`✅ Vote recorded via database (blockchain vote already confirmed)`)
+          } else {
+            toast.warning(`⚠️ Vote recorded on blockchain but database sync failed`)
+          }
+        } catch (fallbackError) {
+          console.error("Fallback database update failed:", fallbackError)
+          toast.warning(`⚠️ Vote recorded on blockchain but database sync failed`)
+        }
+        
+        // Still try to refresh data even if API call failed
+        try {
+          await refreshData()
+        } catch (refreshError) {
+          console.error("Failed to refresh data:", refreshError)
+        }
       }
 
     } catch (err: any) {
-      console.error("Error voting:", err)
-      toast.error(`❌ Failed to record vote: ${err.message || "Unknown error"}`)
+      // Don't log expected user errors to console - only show notifications
+      const errorMessage = err.message || "Unknown error"
+      const isAlreadyVotedError = errorMessage.includes("You have already voted")
+      
+      if (!isAlreadyVotedError) {
+        console.error("Error voting:", err)
+      }
+      
+      toast.error(`❌ Failed to record vote: ${errorMessage}`)
     } finally {
       setVotingLoading(null)
     }

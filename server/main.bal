@@ -731,6 +731,41 @@ service /api on apiListener {
         return proposalsService.voteOnProposal(proposalId, voteType);
     }
 
+    # Direct database vote endpoint (for backup/testing)
+    #
+    # + return - Vote response
+    resource function post proposals/vote(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Direct database vote endpoint called");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                check caller->respond({"error": "Invalid or missing proposalId"});
+                return;
+            }
+            
+            string|error voteType = payload.voteType.ensureType(string);
+            if voteType is error {
+                check caller->respond({"error": "Invalid or missing voteType"});
+                return;
+            }
+            
+            if voteType != "yes" && voteType != "no" {
+                check caller->respond({"error": "voteType must be 'yes' or 'no'"});
+                return;
+            }
+            
+            json result = check proposalsService.voteOnProposal(proposalId, voteType);
+            check caller->respond(result);
+            
+        } on fail error e {
+            log:printError("Error in direct database vote: " + e.message());
+            check caller->respond({"error": "Failed to process vote: " + e.message()});
+        }
+    }
+
     # Get all users
     #
     # + return - Users list or error
@@ -1672,6 +1707,96 @@ service /petitions on newListener {
 
     resource function get health() returns string {
         return "Ballerina service is running!";
+    }
+
+    # Smart contract voting endpoints
+    
+    # Vote YES on a proposal via smart contract
+    #
+    # + return - Smart contract vote response
+    resource function post proposal/'vote\-yes(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Smart contract vote YES endpoint called");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            log:printInfo("Vote YES payload: " + payload.toJsonString());
+            
+            // Extract proposal ID and signer index from payload
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                check caller->respond({"error": "Invalid or missing proposalId"});
+                return;
+            }
+            
+            int|error signerIndex = payload.signerIndex.ensureType(int);
+            if signerIndex is error {
+                check caller->respond({"error": "Invalid or missing signerIndex"});
+                return;
+            }
+            
+            // Forward to smart contract service
+            json response = check web3Service->post("/proposal/vote-yes", payload);
+            log:printInfo("Smart contract YES vote response: " + response.toJsonString());
+            
+            // Also update the database vote count
+            json|error updateResult = proposalsService.voteOnProposal(proposalId, "yes");
+            if updateResult is error {
+                log:printWarn("Failed to update database vote count: " + updateResult.message());
+                // Still return success if blockchain vote succeeded
+            } else {
+                log:printInfo("Database vote count updated successfully");
+            }
+            
+            check caller->respond(response);
+            
+        } on fail error e {
+            log:printError("Error in smart contract vote YES: " + e.message());
+            check caller->respond({"error": "Failed to process vote: " + e.message()});
+        }
+    }
+    
+    # Vote NO on a proposal via smart contract
+    #
+    # + return - Smart contract vote response
+    resource function post proposal/'vote\-no(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Smart contract vote NO endpoint called");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            log:printInfo("Vote NO payload: " + payload.toJsonString());
+            
+            // Extract proposal ID and signer index from payload
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                check caller->respond({"error": "Invalid or missing proposalId"});
+                return;
+            }
+            
+            int|error signerIndex = payload.signerIndex.ensureType(int);
+            if signerIndex is error {
+                check caller->respond({"error": "Invalid or missing signerIndex"});
+                return;
+            }
+            
+            // Forward to smart contract service
+            json response = check web3Service->post("/proposal/vote-no", payload);
+            log:printInfo("Smart contract NO vote response: " + response.toJsonString());
+            
+            // Also update the database vote count
+            json|error updateResult = proposalsService.voteOnProposal(proposalId, "no");
+            if updateResult is error {
+                log:printWarn("Failed to update database vote count: " + updateResult.message());
+                // Still return success if blockchain vote succeeded
+            } else {
+                log:printInfo("Database vote count updated successfully");
+            }
+            
+            check caller->respond(response);
+            
+        } on fail error e {
+            log:printError("Error in smart contract vote NO: " + e.message());
+            check caller->respond({"error": "Failed to process vote: " + e.message()});
+        }
     }
 
 }

@@ -667,6 +667,8 @@ public class ProposalsService {
         }
         
         do {
+            log:printInfo("🗳️ Processing vote: " + voteType + " for proposal ID: " + proposalId.toString());
+            
             // First get the current proposal to increment the vote count
             json currentProposal = check self.getProposalById(proposalId);
             map<json> proposalData = check currentProposal.data.ensureType();
@@ -674,12 +676,16 @@ public class ProposalsService {
             int currentYesVotes = check proposalData["yes_votes"].ensureType(int);
             int currentNoVotes = check proposalData["no_votes"].ensureType(int);
             
+            log:printInfo("📊 Current votes - Yes: " + currentYesVotes.toString() + ", No: " + currentNoVotes.toString());
+            
             map<json> updatePayload = {};
             
             if voteType == "yes" {
                 updatePayload["yes_votes"] = currentYesVotes + 1;
+                log:printInfo("➕ Incrementing YES votes to: " + (currentYesVotes + 1).toString());
             } else {
                 updatePayload["no_votes"] = currentNoVotes + 1;
+                log:printInfo("➕ Incrementing NO votes to: " + (currentNoVotes + 1).toString());
             }
             
             updatePayload["updated_at"] = "now()";
@@ -687,9 +693,12 @@ public class ProposalsService {
             
             map<string> headers = self.getHeaders(true);
             string endpoint = "/rest/v1/proposals?id=eq." + proposalId.toString();
+            
+            log:printInfo("🔄 Sending database update request to: " + endpoint);
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
             if response.statusCode != 200 {
+                log:printError("❌ Database update failed with status: " + response.statusCode.toString());
                 return error("Failed to vote on proposal: " + response.statusCode.toString());
             }
             
@@ -697,18 +706,36 @@ public class ProposalsService {
             json[] proposals = check result.ensureType();
             
             if proposals.length() > 0 {
+                log:printInfo("✅ Vote recorded successfully in database");
+                
+                // Log the updated vote counts for verification
+                map<json> updatedProposal = check proposals[0].ensureType();
+                int updatedYesVotes = check updatedProposal["yes_votes"].ensureType(int);
+                int updatedNoVotes = check updatedProposal["no_votes"].ensureType(int);
+                log:printInfo("📊 Updated votes - Yes: " + updatedYesVotes.toString() + ", No: " + updatedNoVotes.toString());
+                
                 return {
                     "success": true,
                     "message": "Vote recorded successfully",
                     "data": proposals[0],
                     "voteType": voteType,
+                    "previousVotes": {
+                        "yes": currentYesVotes,
+                        "no": currentNoVotes
+                    },
+                    "newVotes": {
+                        "yes": updatedYesVotes,
+                        "no": updatedNoVotes
+                    },
                     "timestamp": time:utcNow()[0]
                 };
             } else {
+                log:printError("❌ No proposal returned after update");
                 return error("Proposal not found");
             }
             
         } on fail error e {
+            log:printError("❌ Vote processing failed: " + e.message());
             return error("Failed to vote on proposal: " + e.message());
         }
     }
