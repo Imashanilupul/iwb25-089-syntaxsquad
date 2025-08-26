@@ -175,52 +175,122 @@ service /api on apiListener {
         };
     }
 
-    # Blockchain sync endpoint
+    # Start blockchain sync job (async)
     #
     # + request - HTTP request with sync parameters
-    # + return - Sync results or error
+    # + return - Job ID or error
     resource function post blockchain/sync(http:Request request) returns json|error {
-        log:printInfo("🔄 Blockchain sync endpoint called");
+        log:printInfo("� Blockchain sync job request received");
         
-        json payload = check request.getJsonPayload();
+        json requestPayload = check request.getJsonPayload();
         
-        // Extract sync parameters
-        int fromBlock = <int>check payload.fromBlock;
-        int toBlock = <int>check payload.toBlock;
-        boolean isFullSync = <boolean>check payload.isFullSync;
+        // Extract parameters with proper type checking
+        int blocksBack = 1000;
+        boolean isFullSync = false;
         
-        log:printInfo(string `Starting blockchain sync from block ${fromBlock} to ${toBlock}`);
-        
-        // Initialize sync results
-        json syncResults = {
-            "petitions": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
-            "proposals": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
-            "reports": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
-            "policies": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []},
-            "projects": {"total": 0, "new": 0, "updated": 0, "removed": 0, "errors": []}
-        };
-        
-        // Fetch aggregated blockchain data once and return it as the sync result.
-        int blocksBack = (toBlock - fromBlock) > 0 ? toBlock - fromBlock : 1;
-        json|error aggResp = fetchAllBlockchainData(blocksBack);
-
-        if aggResp is error {
-            log:printError("❌ Aggregated fetch failed", 'error = aggResp);
-            return error("Blockchain sync failed: " + aggResp.message());
+        json|error blocksBackValue = requestPayload.blocksBack;
+        if blocksBackValue is int {
+            blocksBack = blocksBackValue;
         }
-
-        // Build a minimal results object using the aggregated payload
-        syncResults = {
-            "status": "completed",
-            "fromBlock": fromBlock,
-            "toBlock": toBlock,
-            "isFullSync": isFullSync,
-            "results": aggResp,
-            "timestamp": time:utcNow()[0]
+        
+        json|error isFullSyncValue = requestPayload.isFullSync;
+        if isFullSyncValue is boolean {
+            isFullSync = isFullSyncValue;
+        }
+        
+        log:printInfo(string `🔄 Creating blockchain sync job (isFullSync: ${isFullSync}, blocksBack: ${blocksBack})`);
+        
+        // Call Node.js job manager to start async job
+        http:Request jobRequest = new;
+        jobRequest.setJsonPayload({
+            blocksBack: isFullSync ? 999999 : blocksBack,
+            isFullSync: isFullSync
+        });
+        
+        http:Response jobResponse = check web3Service->post("/jobs/blockchain-sync", jobRequest);
+        
+        if jobResponse.statusCode != 200 {
+            return error("Failed to create blockchain sync job");
+        }
+        
+        json jobData = check jobResponse.getJsonPayload();
+        
+        // Extract jobId with type checking
+        json|error jobIdValue = jobData.jobId;
+        string jobIdStr = "";
+        if jobIdValue is string {
+            jobIdStr = jobIdValue;
+        }
+        
+        return {
+            success: true,
+            message: "Blockchain sync job started",
+            jobId: jobIdStr,
+            statusUrl: string `/api/blockchain/sync/status/${jobIdStr}`,
+            resultUrl: string `/api/blockchain/sync/result/${jobIdStr}`
         };
+    }
 
-        log:printInfo("✅ Blockchain aggregated fetch completed successfully");
-        return syncResults;
+    # Get blockchain sync job status
+    #
+    # + jobId - Job ID to check status
+    # + return - Job status or error
+    resource function get blockchain/sync/status/[string jobId]() returns json|error {
+        log:printInfo(string `📊 Checking blockchain sync job status: ${jobId}`);
+        
+        http:Response statusResponse = check web3Service->get(string `/jobs/${jobId}/status`);
+        
+        if statusResponse.statusCode == 404 {
+            return error("Job not found");
+        } else if statusResponse.statusCode != 200 {
+            return error("Failed to get job status");
+        }
+        
+        return check statusResponse.getJsonPayload();
+    }
+
+    # Get blockchain sync job result
+    #
+    # + jobId - Job ID to get result
+    # + return - Job result or error
+    resource function get blockchain/sync/result/[string jobId]() returns json|error {
+        log:printInfo(string `📋 Getting blockchain sync job result: ${jobId}`);
+        
+        http:Response resultResponse = check web3Service->get(string `/jobs/${jobId}/result`);
+        
+        if resultResponse.statusCode == 404 {
+            return error("Job not found");
+        } else if resultResponse.statusCode == 400 {
+            _ = check resultResponse.getJsonPayload(); // Consume the response payload
+            return error("Bad request - job failed");
+        } else if resultResponse.statusCode != 200 {
+            return error("Failed to get job result");
+        }
+        
+        json resultData = check resultResponse.getJsonPayload();
+        
+        // Extract result fields with type checking
+        json resultValue = {};
+        json completedAtValue = "";
+        
+        json|error resultField = resultData.result;
+        if resultField is json {
+            resultValue = resultField;
+        }
+        
+        json|error completedAtField = resultData.completedAt;
+        if completedAtField is string {
+            completedAtValue = completedAtField;
+        }
+        
+        return {
+            success: true,
+            message: "Blockchain sync job result retrieved",
+            jobId: jobId,
+            result: resultValue,
+            completedAt: completedAtValue,
+            timestamp: time:utcNow()
+        };
     }
 
     # Get all categories
