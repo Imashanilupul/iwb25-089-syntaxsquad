@@ -35,7 +35,35 @@ class ApiService {
           localStorage.removeItem("authToken")
           window.location.href = "/login"
         }
-        return Promise.reject(error)
+        
+        // Enhanced error logging with proper serialization
+        const errorDetails = {
+          status: error.response?.status || 'No status',
+          statusText: error.response?.statusText || 'No status text',
+          data: error.response?.data || 'No response data',
+          url: error.config?.url || 'No URL',
+          method: error.config?.method?.toUpperCase() || 'No method',
+          message: error.message || 'No error message',
+          code: error.code || 'No error code'
+        }
+        
+        console.error("API Error Details:", errorDetails)
+        console.error("Full error object:", error)
+        
+        // Create enhanced error with user-friendly message
+        let enhancedError = error as any
+        if (error.response?.status === 500) {
+          const serverMessage = (error.response?.data as any)?.message || 'Internal server error occurred'
+          enhancedError.userMessage = `Server Error (500): ${serverMessage}`
+        } else if (error.response?.status === 404) {
+          enhancedError.userMessage = `Not Found (404): ${error.config?.url || 'Resource not found'}`
+        } else if (error.response?.status === 403) {
+          enhancedError.userMessage = `Forbidden (403): Access denied`
+        } else if (!error.response) {
+          enhancedError.userMessage = `Network Error: Unable to connect to server`
+        }
+        
+        return Promise.reject(enhancedError)
       }
     )
   }
@@ -105,7 +133,32 @@ class ApiService {
   async verifyTransaction(hash: string) {
     return this.get(`/api/blockchain/verify?hash=${hash}`)
   }
+
+  // Utility method to check if API is reachable
+  async healthCheck() {
+    try {
+      return await this.get("/api/health")
+    } catch (error) {
+      console.warn("Health check failed:", error)
+      return { status: "error", message: "API not reachable" }
+    }
+  }
+
+  // Utility method to get user-friendly error message
+  static getErrorMessage(error: any): string {
+    if (error.userMessage) {
+      return error.userMessage
+    }
+    if (error.response?.data?.message) {
+      return error.response.data.message
+    }
+    if (error.message) {
+      return error.message
+    }
+    return "An unexpected error occurred"
+  }
 }
 
 export const apiService = new ApiService()
+export { ApiService }
 export default apiService

@@ -731,6 +731,92 @@ service /api on apiListener {
         return proposalsService.voteOnProposal(proposalId, voteType);
     }
 
+    # Direct database vote endpoint (for backup/testing)
+    #
+    # + return - Vote response
+    resource function post proposals/vote(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Direct database vote endpoint called");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                check caller->respond({"error": "Invalid or missing proposalId"});
+                return;
+            }
+            
+            string|error voteType = payload.voteType.ensureType(string);
+            if voteType is error {
+                check caller->respond({"error": "Invalid or missing voteType"});
+                return;
+            }
+            
+            if voteType != "yes" && voteType != "no" {
+                check caller->respond({"error": "voteType must be 'yes' or 'no'"});
+                return;
+            }
+            
+            // Extract wallet address if provided
+            string? walletAddress = ();
+            map<json> payloadMap = check payload.ensureType();
+            if payloadMap.hasKey("walletAddress") {
+                string|error walletAddr = payloadMap["walletAddress"].ensureType(string);
+                if walletAddr is string {
+                    walletAddress = walletAddr;
+                    log:printInfo("👤 Wallet address provided: " + walletAddr);
+                }
+            }
+            
+            // Extract user ID if provided
+            int? userId = ();
+            if payloadMap.hasKey("userId") {
+                int|error userIdVal = payloadMap["userId"].ensureType(int);
+                if userIdVal is int {
+                    userId = userIdVal;
+                }
+            }
+            
+            json result = check proposalsService.voteOnProposal(proposalId, voteType, walletAddress, userId);
+            check caller->respond(result);
+            
+        } on fail error e {
+            log:printError("Error in direct database vote: " + e.message());
+            check caller->respond({"error": "Failed to process vote: " + e.message()});
+        }
+    }
+
+    # Get user's current vote on a proposal
+    #
+    # + proposalId - Proposal ID
+    # + walletAddress - Wallet address
+    # + return - Current vote
+    resource function get proposals/[int proposalId]/vote/[string walletAddress](http:Caller caller, http:Request req) returns error? {
+        do {
+            log:printInfo("🔍 Getting user vote for proposal " + proposalId.toString() + " and wallet " + walletAddress);
+            
+            json result = check proposalsService.getUserVote(proposalId, walletAddress);
+            
+            check caller->respond(result);
+        } on fail error e {
+            log:printError("❌ Get user vote error: " + e.message());
+            json errorResponse = {
+                "success": false,
+                "error": e.message(),
+                "timestamp": time:utcNow()[0]
+            };
+            check caller->respond(errorResponse);
+        }
+    }
+
+    # Get voter demographics
+    #
+    # + return - Voter demographics data by age groups
+    resource function get proposals/voterdemographics() returns json|error {
+        log:printInfo("Get voter demographics endpoint called");
+        return proposalsService.getVoterDemographics();
+    }
+
     # Get all users
     #
     # + return - Users list or error
@@ -765,7 +851,7 @@ service /api on apiListener {
 
         // Extract optional fields
         string? evm = payload.evm is string ? check payload.evm : ();
-        string? province = payload.Province is string ? check payload.Province : ();
+        string? province = payload.province is string ? check payload.province : ();
 
         return usersService.createUser(userName, email, nic, mobileNo, evm, province);
     }
@@ -1620,6 +1706,185 @@ service /api on apiListener {
                 verified: false,
                 token: ()
             };
+        }
+    }
+
+    # Smart contract voting endpoints
+    
+    # Handle preflight requests for smart contract voting
+    #
+    # + caller - HTTP caller
+    # + return - CORS preflight response
+    resource function options proposal/'vote\-yes(http:Caller caller) returns error? {
+        http:Response response = new;
+        response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.statusCode = 200;
+        check caller->respond(response);
+    }
+
+    # Handle preflight requests for smart contract voting
+    #
+    # + caller - HTTP caller
+    # + return - CORS preflight response
+    resource function options proposal/'vote\-no(http:Caller caller) returns error? {
+        http:Response response = new;
+        response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.statusCode = 200;
+        check caller->respond(response);
+    }
+    
+    # Vote YES on a proposal via smart contract
+    #
+    # + caller - HTTP caller
+    # + req - HTTP request
+    # + return - Smart contract vote response
+    resource function post proposal/'vote\-yes(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Smart contract vote YES endpoint called");
+        
+        // Set CORS headers explicitly
+        http:Response response = new;
+        response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            log:printInfo("Vote YES payload: " + payload.toJsonString());
+            
+            // Extract proposal ID and signer index from payload
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                response.setJsonPayload({"error": "Invalid or missing proposalId"});
+                response.statusCode = 400;
+                check caller->respond(response);
+                return;
+            }
+            
+            int|error signerIndex = payload.signerIndex.ensureType(int);
+            if signerIndex is error {
+                response.setJsonPayload({"error": "Invalid or missing signerIndex"});
+                response.statusCode = 400;
+                check caller->respond(response);
+                return;
+            }
+
+            // Extract wallet address if provided
+            string? walletAddress = ();
+            json|error walletAddressJson = payload.walletAddress;
+            if walletAddressJson is json {
+                string|error walletAddr = walletAddressJson.ensureType(string);
+                if walletAddr is string {
+                    walletAddress = walletAddr;
+                    log:printInfo("👤 Wallet address: " + walletAddr);
+                }
+            }
+            
+            // Forward to smart contract service
+            json web3Payload = {
+                "proposalId": proposalId,
+                "signerIndex": signerIndex
+            };
+            
+            json web3Response = check web3Service->post("/proposal/vote-yes", web3Payload);
+            log:printInfo("Smart contract YES vote response: " + web3Response.toJsonString());
+            
+            // Also update the database vote count with wallet address
+            json|error updateResult = proposalsService.voteOnProposal(proposalId, "yes", walletAddress);
+            if updateResult is error {
+                log:printWarn("Failed to update database vote count: " + updateResult.message());
+                // Still return success if blockchain vote succeeded
+            } else {
+                log:printInfo("Database vote count updated successfully");
+            }
+            
+            response.setJsonPayload(web3Response);
+            response.statusCode = 200;
+            check caller->respond(response);
+            
+        } on fail error e {
+            log:printError("Error in smart contract vote YES: " + e.message());
+            response.setJsonPayload({"error": "Failed to process vote: " + e.message()});
+            response.statusCode = 500;
+            check caller->respond(response);
+        }
+    }
+    
+    # Vote NO on a proposal via smart contract
+    #
+    # + caller - HTTP caller
+    # + req - HTTP request
+    # + return - Smart contract vote response
+    resource function post proposal/'vote\-no(http:Caller caller, http:Request req) returns error? {
+        log:printInfo("Smart contract vote NO endpoint called");
+        
+        // Set CORS headers explicitly
+        http:Response response = new;
+        response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        
+        do {
+            json payload = check req.getJsonPayload();
+            log:printInfo("Vote NO payload: " + payload.toJsonString());
+            
+            // Extract proposal ID and signer index from payload
+            int|error proposalId = payload.proposalId.ensureType(int);
+            if proposalId is error {
+                response.setJsonPayload({"error": "Invalid or missing proposalId"});
+                response.statusCode = 400;
+                check caller->respond(response);
+                return;
+            }
+            
+            int|error signerIndex = payload.signerIndex.ensureType(int);
+            if signerIndex is error {
+                response.setJsonPayload({"error": "Invalid or missing signerIndex"});
+                response.statusCode = 400;
+                check caller->respond(response);
+                return;
+            }
+
+            // Extract wallet address if provided
+            string? walletAddress = ();
+            json|error walletAddressJson = payload.walletAddress;
+            if walletAddressJson is json {
+                string|error walletAddr = walletAddressJson.ensureType(string);
+                if walletAddr is string {
+                    walletAddress = walletAddr;
+                    log:printInfo("👤 Wallet address: " + walletAddr);
+                }
+            }
+            
+            // Forward to smart contract service
+            json web3Payload = {
+                "proposalId": proposalId,
+                "signerIndex": signerIndex
+            };
+            
+            json web3Response = check web3Service->post("/proposal/vote-no", web3Payload);
+            log:printInfo("Smart contract NO vote response: " + web3Response.toJsonString());
+            
+            // Also update the database vote count with wallet address
+            json|error updateResult = proposalsService.voteOnProposal(proposalId, "no", walletAddress);
+            if updateResult is error {
+                log:printWarn("Failed to update database vote count: " + updateResult.message());
+                // Still return success if blockchain vote succeeded
+            } else {
+                log:printInfo("Database vote count updated successfully");
+            }
+            
+            response.setJsonPayload(web3Response);
+            check caller->respond(response);
+            
+        } on fail error e {
+            log:printError("Error in smart contract vote NO: " + e.message());
+            response.setJsonPayload({"error": "Failed to process vote: " + e.message()});
+            response.statusCode = 500;
+            check caller->respond(response);
         }
     }
 }
