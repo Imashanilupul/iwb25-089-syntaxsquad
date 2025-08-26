@@ -53,6 +53,18 @@ export interface VoterDemographicsResponse {
   timestamp: number
 }
 
+export interface VotingActivityData {
+  hour: string
+  votes: number
+}
+
+export interface VotingActivityResponse {
+  success: boolean
+  message: string
+  data: VotingActivityData[]
+  timestamp: number
+}
+
 class ProposalsService {
   async getAllProposals(): Promise<ProposalResponse> {
     return apiService.get<ProposalResponse>("/api/proposals")
@@ -108,6 +120,10 @@ class ProposalsService {
 
   async getVoterDemographics(): Promise<VoterDemographicsResponse> {
     return apiService.get<VoterDemographicsResponse>("/api/proposals/voterdemographics")
+  }
+
+  async getVotingActivity(): Promise<VotingActivityResponse> {
+    return apiService.get<VotingActivityResponse>("/api/proposals/votingactivity")
   }
 
   // Helper methods for vote calculations

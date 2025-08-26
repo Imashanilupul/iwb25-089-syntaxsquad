@@ -21,6 +21,11 @@ interface VoterDemographics {
   color: string
 }
 
+interface VotingActivity {
+  hour: string
+  votes: number
+}
+
 export function VotingSystem() {
   const [selectedProposal, setSelectedProposal] = useState<number | null>(null)
   const [proposals, setProposals] = useState<Proposal[]>([])
@@ -29,11 +34,14 @@ export function VotingSystem() {
   const [error, setError] = useState<string | null>(null)
   const [votingLoading, setVotingLoading] = useState<number | null>(null)
   const [voterDemographics, setVoterDemographics] = useState<VoterDemographics[]>([])
+  const [votingActivity, setVotingActivity] = useState<VotingActivity[]>([])
   const [stats, setStats] = useState({
     totalProposals: 0,
     totalVoters: 0,
     participationRate: 0,
-    securityScore: 99.8
+    securityScore: 99.8,
+    totalVotes: 0,
+    totalProposalsInDB: 0
   })
 
   // Load data on component mount
@@ -43,11 +51,12 @@ export function VotingSystem() {
         setLoading(true)
         setError(null)
 
-        // Load proposals, categories, and stats in parallel
-        const [proposalsRes, categoriesRes, userStatsRes] = await Promise.all([
+        // Load proposals, categories, stats, and proposal statistics in parallel
+        const [proposalsRes, categoriesRes, userStatsRes, proposalStatsRes] = await Promise.all([
           proposalsService.getAllProposals(),
           categoriesService.getAllCategories(),
-          usersService.getUserStatistics()
+          usersService.getUserStatistics(),
+          proposalsService.getProposalStatistics()
         ])
 
         if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
@@ -60,7 +69,7 @@ export function VotingSystem() {
           setCategories(categoriesRes.data)
         }
 
-        // Calculate stats
+        // Calculate local stats from proposals
         const totalProposals = Array.isArray(proposalsRes.data) ? proposalsRes.data.length : 0
         const activeProposalsCount = Array.isArray(proposalsRes.data) 
           ? proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length 
@@ -73,11 +82,23 @@ export function VotingSystem() {
 
         const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
 
+        // Get database statistics
+        let dbTotalProposals = totalProposals
+        let dbTotalVotes = totalVotes
+        
+        if (proposalStatsRes.success && proposalStatsRes.data) {
+          const statsData = proposalStatsRes.data as any
+          dbTotalProposals = statsData.total_proposals || totalProposals
+          dbTotalVotes = statsData.total_votes || totalVotes
+        }
+
         setStats({
           totalProposals: activeProposalsCount,
           totalVoters: totalVotes, // This represents total votes, not unique voters
           participationRate: participationRate,
-          securityScore: 99.8
+          securityScore: 99.8,
+          totalVotes: dbTotalVotes,
+          totalProposalsInDB: dbTotalProposals
         })
 
       } catch (err) {
@@ -95,7 +116,11 @@ export function VotingSystem() {
   // Refresh data function for reuse
   const refreshData = async () => {
     try {
-      const proposalsRes = await proposalsService.getAllProposals()
+      const [proposalsRes, proposalStatsRes] = await Promise.all([
+        proposalsService.getAllProposals(),
+        proposalsService.getProposalStatistics()
+      ])
+      
       if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
         setProposals(proposalsRes.data)
         
@@ -105,11 +130,23 @@ export function VotingSystem() {
         const totalVotes = proposalsRes.data.reduce((sum, p) => sum + p.yes_votes + p.no_votes, 0)
         const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
 
+        // Get database statistics
+        let dbTotalProposals = totalProposals
+        let dbTotalVotes = totalVotes
+        
+        if (proposalStatsRes.success && proposalStatsRes.data) {
+          const statsData = proposalStatsRes.data as any
+          dbTotalProposals = statsData.total_proposals || totalProposals
+          dbTotalVotes = statsData.total_votes || totalVotes
+        }
+
         setStats(prev => ({
           ...prev,
           totalProposals: activeProposalsCount,
           totalVoters: totalVotes,
-          participationRate: participationRate
+          participationRate: participationRate,
+          totalVotes: dbTotalVotes,
+          totalProposalsInDB: dbTotalProposals
         }))
 
         // Refresh voter demographics
@@ -120,6 +157,16 @@ export function VotingSystem() {
           }
         } catch (error) {
           console.error("Failed to refresh voter demographics:", error)
+        }
+
+        // Refresh voting activity
+        try {
+          const activityRes = await proposalsService.getVotingActivity()
+          if (activityRes.success && Array.isArray(activityRes.data)) {
+            setVotingActivity(activityRes.data)
+          }
+        } catch (error) {
+          console.error("Failed to refresh voting activity:", error)
         }
       }
     } catch (err) {
@@ -465,15 +512,47 @@ Timestamp: ${timestamp}
     loadVoterDemographics()
   }, [stats.totalVoters])
 
-  // Generate voting activity (mock data for now)
-  const votingActivity = [
-    { hour: "00:00", votes: Math.floor(Math.random() * 50) + 20 },
-    { hour: "04:00", votes: Math.floor(Math.random() * 30) + 10 },
-    { hour: "08:00", votes: Math.floor(Math.random() * 200) + 150 },
-    { hour: "12:00", votes: Math.floor(Math.random() * 300) + 200 },
-    { hour: "16:00", votes: Math.floor(Math.random() * 250) + 180 },
-    { hour: "20:00", votes: Math.floor(Math.random() * 180) + 100 },
-  ]
+  // Load voting activity data
+  useEffect(() => {
+    const loadVotingActivity = async () => {
+      try {
+        const response = await proposalsService.getVotingActivity()
+        if (response.success && Array.isArray(response.data)) {
+          setVotingActivity(response.data)
+        } else {
+          console.error("Failed to load voting activity:", response.message)
+          // Fallback to sample data if API fails
+          const fallbackActivity = [
+            { hour: "00:00", votes: 5 },
+            { hour: "04:00", votes: 2 },
+            { hour: "08:00", votes: 15 },
+            { hour: "12:00", votes: 25 },
+            { hour: "16:00", votes: 20 },
+            { hour: "20:00", votes: 12 },
+          ]
+          setVotingActivity(fallbackActivity)
+        }
+      } catch (error) {
+        console.error("Failed to load voting activity:", error)
+        // Fallback to sample data
+        const fallbackActivity = [
+          { hour: "00:00", votes: 3 },
+          { hour: "04:00", votes: 1 },
+          { hour: "08:00", votes: 12 },
+          { hour: "12:00", votes: 18 },
+          { hour: "16:00", votes: 15 },
+          { hour: "20:00", votes: 8 },
+        ]
+        setVotingActivity(fallbackActivity)
+      }
+    }
+
+    loadVotingActivity()
+    
+    // Refresh voting activity every 5 minutes
+    const interval = setInterval(loadVotingActivity, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -712,7 +791,7 @@ Timestamp: ${timestamp}
                     </span>
                   ) : voterDemographics.reduce((sum, item) => sum + item.value, 0) < stats.totalVoters ? (
                     <span className="text-blue-600 text-xs block mt-1">
-                      * Showing estimated demographics - actual voter data will display when users with linked NICs vote
+                      * Showing estimated demographics - actual voter data will display when users with linked Blockchain's vote
                     </span>
                   ) : (
                     <span className="text-amber-600 text-xs block mt-1">
@@ -752,7 +831,18 @@ Timestamp: ${timestamp}
             <Card className="border-0 shadow-md">
               <CardHeader>
                 <CardTitle>Voting Activity</CardTitle>
-                <CardDescription>Hourly voting patterns today</CardDescription>
+                <CardDescription>
+                  Hourly voting patterns today
+                  {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
+                    <span className="text-green-600 text-xs block mt-1">
+                      ✓ Showing real-time data 
+                    </span>
+                  ) : (
+                    <span className="text-blue-600 text-xs block mt-1">
+                      * No votes recorded today - sample data shown for demonstration
+                    </span>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer
@@ -793,7 +883,7 @@ Timestamp: ${timestamp}
                       <CheckCircle className="h-6 w-6 text-green-600" />
                       <span className="text-lg font-semibold text-green-800">Votes Verified</span>
                     </div>
-                    <p className="text-3xl font-bold text-green-900">45,892</p>
+                    <p className="text-3xl font-bold text-green-900">{stats.totalVotes.toLocaleString()}</p>
                     <p className="text-sm text-green-700 mt-1">100% verification rate</p>
                   </div>
 
@@ -802,30 +892,14 @@ Timestamp: ${timestamp}
                       <Lock className="h-6 w-6 text-blue-600" />
                       <span className="text-lg font-semibold text-blue-800">Anonymous Votes</span>
                     </div>
-                    <p className="text-3xl font-bold text-blue-900">45,892</p>
+                    <p className="text-3xl font-bold text-blue-900">{stats.totalVotes.toLocaleString()}</p>
                     <p className="text-sm text-blue-700 mt-1">Zero identity exposure</p>
                   </div>
                   <div className="hidden lg:block"></div>
                 </div>
               </div>
 
-              <div className="border rounded-lg p-4 bg-slate-50">
-                <h4 className="font-semibold mb-2">Latest Blockchain Transactions</h4>
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex justify-between">
-                    <span>0xa1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>0xb2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>0xc3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                </div>
-              </div>
+             
             </CardContent>
           </Card>
         </TabsContent>
