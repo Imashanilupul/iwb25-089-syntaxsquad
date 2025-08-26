@@ -679,7 +679,8 @@ public class UsersService {
     public function getProvinceStatistics() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/users?select=Province&Province=not.is.null";
+            // Use the correct lowercase column name
+            string endpoint = "/rest/v1/users?select=province";
             
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
@@ -695,7 +696,7 @@ public class UsersService {
             int totalUsers = users.length();
             
             foreach json user in users {
-                json|error provinceResult = user.Province;
+                json|error provinceResult = user.province;
                 if provinceResult is json && provinceResult != () {
                     string rawProvince = provinceResult.toString();
                     // Normalize province name: trim whitespace, remove "Province" suffix, standardize
