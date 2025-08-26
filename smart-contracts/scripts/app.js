@@ -4,7 +4,9 @@ const authRouter = require("./auth");
 const reportsRouter = require("./reports");
 const policyRouter = require("./policy");
 const proposalsRouter = require("./proposals");
-const projectRouter=require("./project")
+const projectRouter = require("./project");
+const blockchainSyncRouter = require("./blockchain-sync");
+const { router: jobManagerRouter } = require("./job-manager");
 
 const app = express();
 
@@ -30,6 +32,11 @@ app.use("/report", reportsRouter);
 app.use("/policy", policyRouter);
 app.use("/proposal", proposalsRouter);
 app.use("/project", projectRouter);
+// Mount job manager router for async job management
+app.use('/', jobManagerRouter);
+// Mount blockchain sync router at root so endpoints like
+// /proposals/blockchain-data and /all/blockchain-data are available.
+app.use('/', blockchainSyncRouter);
 
 
 
