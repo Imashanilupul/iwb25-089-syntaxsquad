@@ -345,11 +345,27 @@ Timestamp: ${timestamp}
       }
 
     } catch (err: any) {
-      // Don't log expected user errors to console - only show notifications
+      // Define user-facing errors that shouldn't be logged to console
+      // These are expected user actions/errors that should only show as notifications
       const errorMessage = err.message || "Unknown error"
-      const isAlreadyVotedError = errorMessage.includes("You have already voted")
+      const userFacingErrors = [
+        "User rejected the signature request",
+        "Please connect your wallet to vote",
+        "You have already voted",
+        "Cannot vote on your own proposal",
+        "User not authorized",
+        "User rejected the transaction",
+        "Smart contract error:",
+        "Authorization Error:"
+      ]
       
-      if (!isAlreadyVotedError) {
+      // Only log to console if it's not a user-facing error
+      // This prevents expected user errors from cluttering the console
+      const isUserFacingError = userFacingErrors.some(userError => 
+        errorMessage.includes(userError)
+      )
+      
+      if (!isUserFacingError) {
         console.error("Error voting:", err)
       }
       
