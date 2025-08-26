@@ -33,7 +33,9 @@ export function VotingSystem() {
     totalProposals: 0,
     totalVoters: 0,
     participationRate: 0,
-    securityScore: 99.8
+    securityScore: 99.8,
+    totalVotes: 0,
+    totalProposalsInDB: 0
   })
 
   // Load data on component mount
@@ -43,11 +45,12 @@ export function VotingSystem() {
         setLoading(true)
         setError(null)
 
-        // Load proposals, categories, and stats in parallel
-        const [proposalsRes, categoriesRes, userStatsRes] = await Promise.all([
+        // Load proposals, categories, stats, and proposal statistics in parallel
+        const [proposalsRes, categoriesRes, userStatsRes, proposalStatsRes] = await Promise.all([
           proposalsService.getAllProposals(),
           categoriesService.getAllCategories(),
-          usersService.getUserStatistics()
+          usersService.getUserStatistics(),
+          proposalsService.getProposalStatistics()
         ])
 
         if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
@@ -60,7 +63,7 @@ export function VotingSystem() {
           setCategories(categoriesRes.data)
         }
 
-        // Calculate stats
+        // Calculate local stats from proposals
         const totalProposals = Array.isArray(proposalsRes.data) ? proposalsRes.data.length : 0
         const activeProposalsCount = Array.isArray(proposalsRes.data) 
           ? proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length 
@@ -73,11 +76,23 @@ export function VotingSystem() {
 
         const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
 
+        // Get database statistics
+        let dbTotalProposals = totalProposals
+        let dbTotalVotes = totalVotes
+        
+        if (proposalStatsRes.success && proposalStatsRes.data) {
+          const statsData = proposalStatsRes.data as any
+          dbTotalProposals = statsData.total_proposals || totalProposals
+          dbTotalVotes = statsData.total_votes || totalVotes
+        }
+
         setStats({
           totalProposals: activeProposalsCount,
           totalVoters: totalVotes, // This represents total votes, not unique voters
           participationRate: participationRate,
-          securityScore: 99.8
+          securityScore: 99.8,
+          totalVotes: dbTotalVotes,
+          totalProposalsInDB: dbTotalProposals
         })
 
       } catch (err) {
@@ -95,7 +110,11 @@ export function VotingSystem() {
   // Refresh data function for reuse
   const refreshData = async () => {
     try {
-      const proposalsRes = await proposalsService.getAllProposals()
+      const [proposalsRes, proposalStatsRes] = await Promise.all([
+        proposalsService.getAllProposals(),
+        proposalsService.getProposalStatistics()
+      ])
+      
       if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
         setProposals(proposalsRes.data)
         
@@ -105,11 +124,23 @@ export function VotingSystem() {
         const totalVotes = proposalsRes.data.reduce((sum, p) => sum + p.yes_votes + p.no_votes, 0)
         const participationRate = totalProposals > 0 ? Math.round((totalVotes / totalProposals) * 100) / 100 : 0
 
+        // Get database statistics
+        let dbTotalProposals = totalProposals
+        let dbTotalVotes = totalVotes
+        
+        if (proposalStatsRes.success && proposalStatsRes.data) {
+          const statsData = proposalStatsRes.data as any
+          dbTotalProposals = statsData.total_proposals || totalProposals
+          dbTotalVotes = statsData.total_votes || totalVotes
+        }
+
         setStats(prev => ({
           ...prev,
           totalProposals: activeProposalsCount,
           totalVoters: totalVotes,
-          participationRate: participationRate
+          participationRate: participationRate,
+          totalVotes: dbTotalVotes,
+          totalProposalsInDB: dbTotalProposals
         }))
 
         // Refresh voter demographics
@@ -793,7 +824,7 @@ Timestamp: ${timestamp}
                       <CheckCircle className="h-6 w-6 text-green-600" />
                       <span className="text-lg font-semibold text-green-800">Votes Verified</span>
                     </div>
-                    <p className="text-3xl font-bold text-green-900">45,892</p>
+                    <p className="text-3xl font-bold text-green-900">{stats.totalVotes.toLocaleString()}</p>
                     <p className="text-sm text-green-700 mt-1">100% verification rate</p>
                   </div>
 
@@ -802,30 +833,14 @@ Timestamp: ${timestamp}
                       <Lock className="h-6 w-6 text-blue-600" />
                       <span className="text-lg font-semibold text-blue-800">Anonymous Votes</span>
                     </div>
-                    <p className="text-3xl font-bold text-blue-900">45,892</p>
+                    <p className="text-3xl font-bold text-blue-900">{stats.totalVotes.toLocaleString()}</p>
                     <p className="text-sm text-blue-700 mt-1">Zero identity exposure</p>
                   </div>
                   <div className="hidden lg:block"></div>
                 </div>
               </div>
 
-              <div className="border rounded-lg p-4 bg-slate-50">
-                <h4 className="font-semibold mb-2">Latest Blockchain Transactions</h4>
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex justify-between">
-                    <span>0xa1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>0xb2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>0xc3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8</span>
-                    <Badge variant="outline">Verified</Badge>
-                  </div>
-                </div>
-              </div>
+             
             </CardContent>
           </Card>
         </TabsContent>
