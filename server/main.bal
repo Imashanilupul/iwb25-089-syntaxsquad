@@ -817,6 +817,14 @@ service /api on apiListener {
         return proposalsService.getVoterDemographics();
     }
 
+    # Get voting activity
+    #
+    # + return - Hourly voting activity data for today
+    resource function get proposals/votingactivity() returns json|error {
+        log:printInfo("Get voting activity endpoint called");
+        return proposalsService.getVotingActivity();
+    }
+
     # Get all users
     #
     # + return - Users list or error
