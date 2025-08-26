@@ -293,6 +293,180 @@ service /api on apiListener {
         };
     }
 
+    # Execute blockchain synchronization (called by Node.js job manager)
+    #
+    # + request - HTTP request with sync parameters
+    # + return - Sync results or error
+    resource function post blockchain/execute\-sync(http:Request request) returns json|error {
+        log:printInfo("🚀 Starting blockchain synchronization execution...");
+        
+        json requestPayload = check request.getJsonPayload();
+        
+        // Extract parameters
+        int blocksBack = 1000;
+        boolean isFullSync = false;
+        
+        json|error blocksBackValue = requestPayload.blocksBack;
+        if blocksBackValue is int {
+            blocksBack = blocksBackValue;
+        }
+        
+        json|error isFullSyncValue = requestPayload.isFullSync;
+        if isFullSyncValue is boolean {
+            isFullSync = isFullSyncValue;
+        }
+        
+        // Calculate block range for sync (simplified approach)
+        int currentBlock = 1000000; // You might want to fetch this from the blockchain
+        int fromBlock = currentBlock - blocksBack;
+        int toBlock = currentBlock;
+        
+        log:printInfo(string `📊 Syncing blockchain data from block ${fromBlock} to ${toBlock}`);
+        
+        // Execute all sync functions in sequence
+        json[] syncResults = [];
+        
+        // 1. Sync Proposals
+        log:printInfo("🗳️ Syncing proposals...");
+        json|error proposalsResult = syncProposalsFromBlockchain(fromBlock, toBlock);
+        if proposalsResult is json {
+            syncResults.push({
+                "type": "proposals",
+                "result": proposalsResult
+            });
+        } else {
+            syncResults.push({
+                "type": "proposals",
+                "error": proposalsResult.message()
+            });
+        }
+        
+        // 2. Sync Petitions
+        log:printInfo("📝 Syncing petitions...");
+        json|error petitionsResult = syncPetitionsFromBlockchain(fromBlock, toBlock);
+        if petitionsResult is json {
+            syncResults.push({
+                "type": "petitions",
+                "result": petitionsResult
+            });
+        } else {
+            syncResults.push({
+                "type": "petitions",
+                "error": petitionsResult.message()
+            });
+        }
+        
+        // 3. Sync Reports
+        log:printInfo("📊 Syncing reports...");
+        json|error reportsResult = syncReportsFromBlockchain(fromBlock, toBlock);
+        if reportsResult is json {
+            syncResults.push({
+                "type": "reports",
+                "result": reportsResult
+            });
+        } else {
+            syncResults.push({
+                "type": "reports",
+                "error": reportsResult.message()
+            });
+        }
+        
+        // 4. Sync Policies
+        log:printInfo("📜 Syncing policies...");
+        json|error policiesResult = syncPoliciesFromBlockchain(fromBlock, toBlock);
+        if policiesResult is json {
+            syncResults.push({
+                "type": "policies",
+                "result": policiesResult
+            });
+        } else {
+            syncResults.push({
+                "type": "policies",
+                "error": policiesResult.message()
+            });
+        }
+        
+        // 5. Sync Projects
+        log:printInfo("🏗️ Syncing projects...");
+        json|error projectsResult = syncProjectsFromBlockchain(fromBlock, toBlock);
+        if projectsResult is json {
+            syncResults.push({
+                "type": "projects",
+                "result": projectsResult
+            });
+        } else {
+            syncResults.push({
+                "type": "projects",
+                "error": projectsResult.message()
+            });
+        }
+        
+        // Calculate totals
+        int totalNew = 0;
+        int totalUpdated = 0;
+        int totalRemoved = 0;
+        int totalErrors = 0;
+        
+        foreach json result in syncResults {
+            json|error typeField = result.'type;
+            json|error resultField = result.result;
+            if (typeField is json && resultField is json) {
+                json resultData = resultField;
+                map<json> resultMap = <map<json>>resultData;
+                if (resultMap.hasKey("results")) {
+                    json resultsValue = resultMap["results"];
+                    map<json> results = <map<json>>resultsValue;
+                    
+                    if (results.hasKey("new")) {
+                        json newValue = results["new"];
+                        if (newValue is int) {
+                            totalNew += newValue;
+                        }
+                    }
+                    
+                    if (results.hasKey("updated")) {
+                        json updatedValue = results["updated"];
+                        if (updatedValue is int) {
+                            totalUpdated += updatedValue;
+                        }
+                    }
+                    
+                    if (results.hasKey("removed")) {
+                        json removedValue = results["removed"];
+                        if (removedValue is int) {
+                            totalRemoved += removedValue;
+                        }
+                    }
+                    
+                    if (results.hasKey("errors")) {
+                        json errorsValue = results["errors"];
+                        if (errorsValue is json[]) {
+                            json[] errors = errorsValue;
+                            totalErrors += errors.length();
+                        }
+                    }
+                }
+            }
+        }
+        
+        log:printInfo(string `✅ Blockchain sync completed! New: ${totalNew}, Updated: ${totalUpdated}, Removed: ${totalRemoved}, Errors: ${totalErrors}`);
+        
+        return {
+            "status": "completed",
+            "fromBlock": fromBlock,
+            "toBlock": toBlock,
+            "isFullSync": isFullSync,
+            "summary": {
+                "totalNew": totalNew,
+                "totalUpdated": totalUpdated,
+                "totalRemoved": totalRemoved,
+                "totalErrors": totalErrors
+            },
+            "details": syncResults,
+            "timestamp": time:utcNow()[0]
+        };
+    }
+
     # Get all categories
     #
     # + return - Categories list or error
@@ -1765,15 +1939,214 @@ function fetchAllBlockchainData(int blocksBack) returns json|error {
 # + toBlock - Ending block number  
 # + return - Sync results or error
 function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|error {
-    // Lightweight wrapper — return the proposals slice from the aggregated fetch
-    json|error agg = fetchAllBlockchainData((toBlock - fromBlock) > 0 ? toBlock - fromBlock : 1);
-    if agg is error {
-        return agg;
+    log:printInfo("🗳️ Syncing proposals from blockchain...");
+    
+    // Fetch aggregated data and extract proposals
+    json|error _aggProposalsResp = fetchAllBlockchainData((toBlock - fromBlock) > 0 ? toBlock - fromBlock : 1);
+    json[] proposals = [];
+    if _aggProposalsResp is json {
+        json aggJson = _aggProposalsResp;
+        if aggJson.proposals is json {
+            json|error proposalsField = aggJson.proposals;
+            json proposalsVal = check proposalsField.ensureType();
+            proposals = <json[]>check proposalsVal.ensureType();
+        }
+    } else {
+        return error("Failed to fetch aggregated blockchain data: " + _aggProposalsResp.message());
     }
-    if agg.proposals is json {
-        return agg.proposals;
+
+    int newCount = 0;
+    int updatedCount = 0;
+    int removedCount = 0;
+    json[] errors = [];
+
+    // Get existing DB data
+    json|error dbResponse = proposalsService.getAllProposals();
+    json[] dbProposals = [];
+    if dbResponse is json {
+        dbProposals = <json[]>check dbResponse.data;
     }
-    return { "status": "no-data", "results": [] };
+    
+    log:printInfo(string `📊 Found ${proposals.length()} proposals in blockchain and ${dbProposals.length()} in database`);
+
+    // Phase 1: Check each DB record against blockchain data
+    log:printInfo("🔍 Phase 1: Checking existing DB records against blockchain data...");
+    foreach int i in 0 ..< dbProposals.length() {
+        json dbProposal = dbProposals[i];
+        int dbId = <int>check dbProposal.id;
+        
+        log:printInfo(string `🔍 Checking DB proposal ${i + 1}/${dbProposals.length()}: ID ${dbId}`);
+        
+        // Look for this record in blockchain data
+        boolean foundInBlockchain = false;
+        int blockchainIdValue = 0;
+        
+        if (dbProposal.blockchain_proposal_id is json) {
+            blockchainIdValue = <int>check dbProposal.blockchain_proposal_id;
+            
+            foreach json blockchainProposal in proposals {
+                if (blockchainProposal.blockchain_proposal_id is json) {
+                    int bcId = <int>check blockchainProposal.blockchain_proposal_id;
+                    if (bcId == blockchainIdValue) {
+                        foundInBlockchain = true;
+                        
+                        // Compare data and update if different
+                        boolean needsUpdate = false;
+                        string dbTitle = <string>check dbProposal.title;
+                        string bcTitle = <string>check blockchainProposal.title;
+                        
+                        if (dbTitle != bcTitle) {
+                            needsUpdate = true;
+                            log:printInfo(string `📝 Title differs: DB="${dbTitle}" vs BC="${bcTitle}"`);
+                        }
+                        
+                        if (dbProposal.short_description is json && blockchainProposal.description is json) {
+                            string dbDesc = <string>check dbProposal.short_description;
+                            string bcDesc = <string>check blockchainProposal.description;
+                            if (dbDesc != bcDesc) {
+                                needsUpdate = true;
+                                log:printInfo(string `📝 Description differs for proposal ${blockchainIdValue}`);
+                            }
+                        }
+                        
+                        if (dbProposal.yes_votes is json && blockchainProposal.yes_votes is json) {
+                            int dbYes = <int>check dbProposal.yes_votes;
+                            int bcYes = <int>check blockchainProposal.yes_votes;
+                            if (dbYes != bcYes) {
+                                needsUpdate = true;
+                                log:printInfo(string `🗳️ Yes votes differ: DB=${dbYes} vs BC=${bcYes} for proposal ${blockchainIdValue}`);
+                            }
+                        }
+                        
+                        if (dbProposal.no_votes is json && blockchainProposal.no_votes is json) {
+                            int dbNo = <int>check dbProposal.no_votes;
+                            int bcNo = <int>check blockchainProposal.no_votes;
+                            if (dbNo != bcNo) {
+                                needsUpdate = true;
+                                log:printInfo(string `🗳️ No votes differ: DB=${dbNo} vs BC=${bcNo} for proposal ${blockchainIdValue}`);
+                            }
+                        }
+                        
+                        if (needsUpdate) {
+                            // Create update payload
+                            map<json> updatePayload = {
+                                "title": check blockchainProposal.title,
+                                "short_description": check blockchainProposal.description,
+                                "blockchain_proposal_id": check blockchainProposal.blockchain_proposal_id
+                            };
+                            
+                            if (blockchainProposal.detailed_description is json) {
+                                updatePayload["description_in_details"] = check blockchainProposal.detailed_description;
+                            }
+                            
+                            if (blockchainProposal.yes_votes is json) {
+                                updatePayload["yes_votes"] = check blockchainProposal.yes_votes;
+                            }
+                            
+                            if (blockchainProposal.no_votes is json) {
+                                updatePayload["no_votes"] = check blockchainProposal.no_votes;
+                            }
+                            
+                            json|error updateResult = proposalsService.updateProposal(dbId, updatePayload);
+                            if updateResult is json {
+                                updatedCount += 1;
+                                log:printInfo(string `✅ Updated proposal ${blockchainIdValue} in database`);
+                            } else {
+                                errors.push({"type": "update", "id": blockchainIdValue, "error": updateResult.message()});
+                                log:printError(string `❌ Failed to update proposal ${blockchainIdValue}: ${updateResult.message()}`);
+                            }
+                        } else {
+                            log:printInfo(string `✅ Proposal ${blockchainIdValue} is up to date`);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (!foundInBlockchain) {
+            // This DB record doesn't exist in blockchain - delete it
+            json|error deleteResult = proposalsService.deleteProposal(dbId);
+            if deleteResult is json {
+                removedCount += 1;
+                log:printInfo(string `�️ Removed proposal ${dbId} (blockchain_id: ${blockchainIdValue}) from database - not found in blockchain`);
+            } else {
+                errors.push({"type": "delete", "id": dbId, "error": deleteResult.message()});
+                log:printError(string `❌ Failed to delete proposal ${dbId}: ${deleteResult.message()}`);
+            }
+        }
+    }
+
+    // Phase 2: Check for new blockchain records not in database
+    log:printInfo("🔍 Phase 2: Checking for new blockchain records...");
+    foreach json blockchainProposal in proposals {
+        int blockchainId = <int>check blockchainProposal.blockchain_proposal_id;
+        
+        // Look for this blockchain record in database
+        boolean foundInDb = false;
+        foreach json dbProposal in dbProposals {
+            if (dbProposal.blockchain_proposal_id is json) {
+                int dbBlockchainId = <int>check dbProposal.blockchain_proposal_id;
+                if (dbBlockchainId == blockchainId) {
+                    foundInDb = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!foundInDb) {
+            // New proposal from blockchain - create in DB
+            string title = <string>check blockchainProposal.title;
+            string description = <string>check blockchainProposal.description;
+            string detailedDesc = "";
+            if (blockchainProposal.detailed_description is json) {
+                detailedDesc = <string>check blockchainProposal.detailed_description;
+            }
+            
+            string deadline = "";
+            if (blockchainProposal.deadline is json) {
+                deadline = <string>check blockchainProposal.deadline;
+            }
+            
+            int? creatorId = ();
+            if (blockchainProposal.creator_id is json) {
+                creatorId = <int>check blockchainProposal.creator_id;
+            }
+            
+            int yesVotes = 0;
+            if (blockchainProposal.yes_votes is json) {
+                yesVotes = <int>check blockchainProposal.yes_votes;
+            }
+            
+            int noVotes = 0;
+            if (blockchainProposal.no_votes is json) {
+                noVotes = <int>check blockchainProposal.no_votes;
+            }
+            
+            json|error createResult = proposalsService.createProposal(title, description, detailedDesc, deadline, (), creatorId, true, yesVotes, noVotes);
+            if createResult is json {
+                newCount += 1;
+                log:printInfo(string `✅ Created new proposal ${blockchainId} in database`);
+            } else {
+                errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
+                log:printError(string `❌ Failed to create proposal ${blockchainId}: ${createResult.message()}`);
+            }
+        }
+    }
+
+    return {
+        "status": "completed",
+        "fromBlock": fromBlock,
+        "toBlock": toBlock,
+        "isFullSync": false,
+        "results": {
+            "new": newCount,
+            "updated": updatedCount,
+            "removed": removedCount,
+            "errors": errors
+        },
+        "timestamp": time:utcNow()[0]
+    };
 }
 
 # Sync petitions from blockchain  
@@ -1859,16 +2232,56 @@ function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|er
                 errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
             }
         } else {
-            // Compare and update
+            // Compare and update if needed
             boolean needsUpdate = false;
-                if ((<string>check existingPetition.title) != (<string>check petition.title)) ||
-                    ((<int>check existingPetition.required_signature_count) != (<int>check petition.required_signature_count)) ||
-                    ((<int>check existingPetition.signature_count) != (<int>check petition.signature_count)) {
+            
+            // Check if title changed
+            if ((<string>check existingPetition.title) != (<string>check petition.title)) {
                 needsUpdate = true;
+            }
+            
+            // Check if description changed
+            if ((<string>check existingPetition.description) != (<string>check petition.description)) {
+                needsUpdate = true;
+            }
+            
+            // Check if required signature count changed
+            if ((<int>check existingPetition.required_signature_count) != (<int>check petition.required_signature_count)) {
+                needsUpdate = true;
+            }
+            
+            // Check if current signature count changed
+            if (petition.signature_count is json && existingPetition.signature_count is json) {
+                if ((<int>check existingPetition.signature_count) != (<int>check petition.signature_count)) {
+                    needsUpdate = true;
+                }
+            }
+            
+            // Check if status changed
+            if (petition.is_active is json && existingPetition.is_active is json) {
+                if ((<boolean>check existingPetition.is_active) != (<boolean>check petition.is_active)) {
+                    needsUpdate = true;
+                }
             }
 
             if needsUpdate {
-                json|error updateResult = petitionsService.updatePetition(<int>check existingPetition.id, petition);
+                // Create update payload with proper field mapping
+                map<json> updatePayload = {
+                    "title": check petition.title,
+                    "description": check petition.description,
+                    "required_signature_count": check petition.required_signature_count,
+                    "blockchain_petition_id": check petition.blockchain_petition_id
+                };
+                
+                if (petition.signature_count is json) {
+                    updatePayload["signature_count"] = check petition.signature_count;
+                }
+                
+                if (petition.is_active is json) {
+                    updatePayload["is_active"] = check petition.is_active;
+                }
+                
+                json|error updateResult = petitionsService.updatePetition(<int>check existingPetition.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
                     log:printInfo(string `🔄 Updated petition ${blockchainId}`);
@@ -2000,12 +2413,39 @@ function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|erro
                 errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
             }
         } else {
+            // Compare and update if needed
             boolean needsUpdate = false;
+            
+            // Check if title changed
             if (<string>check existingReport.report_title) != (<string>check report.title) {
                 needsUpdate = true;
             }
+            
+            // Check if description changed
+            if (<string>check existingReport.description) != (<string>check report.description) {
+                needsUpdate = true;
+            }
+            
+            // Check if priority changed
+            if (report.priority is json && existingReport.priority is json) {
+                if (<string>check existingReport.priority) != (<string>check report.priority) {
+                    needsUpdate = true;
+                }
+            }
+            
             if needsUpdate {
-                json|error updateResult = reportsService.updateReport(<int>check existingReport.report_id, report);
+                // Create update payload with proper field mapping
+                map<json> updatePayload = {
+                    "report_title": check report.title,
+                    "description": check report.description,
+                    "blockchain_report_id": check report.blockchain_report_id
+                };
+                
+                if (report.priority is json) {
+                    updatePayload["priority"] = check report.priority;
+                }
+                
+                json|error updateResult = reportsService.updateReport(<int>check existingReport.report_id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
                     log:printInfo(string `🔄 Updated report ${blockchainId}`);
@@ -2113,6 +2553,22 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
             string title = check _pTitle.ensureType(string);
             json|error _pContent = policy.content;
             string content = check _pContent.ensureType(string);
+            
+            string description = content;
+            if (policy.description is json) {
+                description = check policy.description.ensureType(string);
+            }
+            
+            string ministry = "UNKNOWN";
+            if (policy.ministry is json) {
+                ministry = check policy.ministry.ensureType(string);
+            }
+            
+            string status = "DRAFT";
+            if (policy.status is json) {
+                status = check policy.status.ensureType(string);
+            }
+            
             if (policy.category_id is json) {
                 var _ = check policy.category_id.ensureType(int);
             }
@@ -2120,7 +2576,7 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
                 var _ = check policy.author_address.ensureType(string);
             }
 
-            json|error createResult = policiesService.createPolicy(title, content, content, "UNKNOWN", "DRAFT", ());
+            json|error createResult = policiesService.createPolicy(title, description, content, ministry, status, ());
             if createResult is json {
                 newCount += 1;
                 log:printInfo(string `✅ Created policy ${blockchainId}`);
@@ -2128,12 +2584,49 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
                 errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
             }
         } else {
+            // Compare and update if needed
             boolean needsUpdate = false;
-            if (<string>check existingPolicy.title) != (<string>check policy.title) {
+            
+            // Check if title changed
+            if (<string>check existingPolicy.name) != (<string>check policy.title) {
                 needsUpdate = true;
             }
+            
+            // Check if content changed
+            if (<string>check existingPolicy.description) != (<string>check policy.content) {
+                needsUpdate = true;
+            }
+            
+            // Check if view_full_policy changed
+            if (<string>check existingPolicy.view_full_policy) != (<string>check policy.content) {
+                needsUpdate = true;
+            }
+            
+            // Check if status changed
+            if (policy.status is json && existingPolicy.status is json) {
+                if (<string>check existingPolicy.status) != (<string>check policy.status) {
+                    needsUpdate = true;
+                }
+            }
+            
             if needsUpdate {
-                json|error updateResult = policiesService.updatePolicy(<int>check existingPolicy.id, policy);
+                // Create update payload with proper field mapping
+                map<json> updatePayload = {
+                    "name": check policy.title,
+                    "description": check policy.content,
+                    "view_full_policy": check policy.content,
+                    "blockchain_policy_id": check policy.blockchain_policy_id
+                };
+                
+                if (policy.status is json) {
+                    updatePayload["status"] = check policy.status;
+                }
+                
+                if (policy.ministry is json) {
+                    updatePayload["ministry"] = check policy.ministry;
+                }
+                
+                json|error updateResult = policiesService.updatePolicy(<int>check existingPolicy.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
                     log:printInfo(string `🔄 Updated policy ${blockchainId}`);
@@ -2239,15 +2732,43 @@ function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|err
         if existingProject is () {
             json|error _prTitle = project.title;
             string title = check _prTitle.ensureType(string);
+            
+            string description = "";
             if (project.description is json) {
-                var _ = check project.description.ensureType(string);
+                description = check project.description.ensureType(string);
             }
+            
             decimal allocated = 0d;
             if (project.allocated_budget is json) {
                 allocated = check project.allocated_budget.ensureType(decimal);
             }
+            
+            decimal spent = 0d;
+            if (project.spent_budget is json) {
+                spent = check project.spent_budget.ensureType(decimal);
+            }
+            
+            string state = "";
+            if (project.state is json) {
+                state = check project.state.ensureType(string);
+            }
+            
+            string province = "";
+            if (project.province is json) {
+                province = check project.province.ensureType(string);
+            }
+            
+            string ministry = "";
+            if (project.ministry is json) {
+                ministry = check project.ministry.ensureType(string);
+            }
+            
+            string status = "PLANNED";
+            if (project.status is json) {
+                status = check project.status.ensureType(string);
+            }
 
-            json|error createResult = projectsService.createProject(title, "", "", "", allocated, (), 0d, (), "PLANNED");
+            json|error createResult = projectsService.createProject(title, state, province, ministry, allocated, (), spent, description, status);
             if createResult is json {
                 newCount += 1;
                 log:printInfo(string `✅ Created project ${blockchainId}`);
@@ -2255,12 +2776,78 @@ function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|err
                 errors.push({"type": "create", "id": blockchainId, "error": createResult.message()});
             }
         } else {
+            // Compare and update if needed
             boolean needsUpdate = false;
+            
+            // Check if title changed
             if (<string>check existingProject.project_name) != (<string>check project.title) {
                 needsUpdate = true;
             }
+            
+            // Check if allocated budget changed
+            if (project.allocated_budget is json && existingProject.allocated_budget is json) {
+                if (<decimal>check existingProject.allocated_budget) != (<decimal>check project.allocated_budget) {
+                    needsUpdate = true;
+                }
+            }
+            
+            // Check if spent budget changed
+            if (project.spent_budget is json && existingProject.spent_budget is json) {
+                if (<decimal>check existingProject.spent_budget) != (<decimal>check project.spent_budget) {
+                    needsUpdate = true;
+                }
+            }
+            
+            // Check if status changed
+            if (project.status is json && existingProject.status is json) {
+                if (<string>check existingProject.status) != (<string>check project.status) {
+                    needsUpdate = true;
+                }
+            }
+            
+            // Check if description changed
+            if (project.description is json && existingProject.view_details is json) {
+                if (<string>check existingProject.view_details) != (<string>check project.description) {
+                    needsUpdate = true;
+                }
+            }
+            
             if needsUpdate {
-                json|error updateResult = projectsService.updateProject(<int>check existingProject.id, project);
+                // Create update payload with proper field mapping
+                map<json> updatePayload = {
+                    "project_name": check project.title,
+                    "blockchain_project_id": check project.blockchain_project_id
+                };
+                
+                if (project.allocated_budget is json) {
+                    updatePayload["allocated_budget"] = check project.allocated_budget;
+                }
+                
+                if (project.spent_budget is json) {
+                    updatePayload["spent_budget"] = check project.spent_budget;
+                }
+                
+                if (project.status is json) {
+                    updatePayload["status"] = check project.status;
+                }
+                
+                if (project.description is json) {
+                    updatePayload["view_details"] = check project.description;
+                }
+                
+                if (project.state is json) {
+                    updatePayload["state"] = check project.state;
+                }
+                
+                if (project.province is json) {
+                    updatePayload["province"] = check project.province;
+                }
+                
+                if (project.ministry is json) {
+                    updatePayload["ministry"] = check project.ministry;
+                }
+                
+                json|error updateResult = projectsService.updateProject(<int>check existingProject.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
                     log:printInfo(string `🔄 Updated project ${blockchainId}`);

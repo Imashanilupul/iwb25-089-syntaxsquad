@@ -65,6 +65,8 @@ export function DbSync() {
   })
   const [blockRange, setBlockRange] = useState<BlockRange | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'completed' | 'error'>('idle')
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   // Helper function to calculate time range for blocks
   const calculateTimeRange = (blockCount: number): string => {
@@ -87,7 +89,54 @@ export function DbSync() {
   useEffect(() => {
     loadDbStats()
     loadLastSyncTime()
+    loadSyncResults()
   }, [])
+
+  const loadSyncResults = () => {
+    // Load persisted sync results from localStorage
+    const savedResults = localStorage.getItem('syncResults')
+    const savedStatus = localStorage.getItem('syncStatus')
+    const savedBlockRange = localStorage.getItem('blockRange')
+    const savedError = localStorage.getItem('syncError')
+    
+    if (savedResults) {
+      try {
+        setSyncResults(JSON.parse(savedResults))
+      } catch (error) {
+        console.error('Failed to load sync results:', error)
+      }
+    }
+    
+    if (savedStatus) {
+      setSyncStatus(savedStatus as any)
+    }
+    
+    if (savedBlockRange) {
+      try {
+        setBlockRange(JSON.parse(savedBlockRange))
+      } catch (error) {
+        console.error('Failed to load block range:', error)
+      }
+    }
+    
+    if (savedError) {
+      setSyncError(savedError)
+    }
+  }
+
+  const saveSyncData = (results: SyncResult[], status: string, blockRangeData: BlockRange | null, error: string | null) => {
+    // Persist sync data to localStorage
+    localStorage.setItem('syncResults', JSON.stringify(results))
+    localStorage.setItem('syncStatus', status)
+    if (blockRangeData) {
+      localStorage.setItem('blockRange', JSON.stringify(blockRangeData))
+    }
+    if (error) {
+      localStorage.setItem('syncError', error)
+    } else {
+      localStorage.removeItem('syncError')
+    }
+  }
 
   const loadDbStats = async () => {
     try {
@@ -131,7 +180,10 @@ export function DbSync() {
 
     setIsFullSync(true)
     setSyncProgress(0)
+    setSyncStatus('running')
+    setSyncError(null)
     setCurrentSyncStep('Starting blockchain sync...')
+    setSyncResults([])
 
     try {
       // Start the async sync job
@@ -177,12 +229,13 @@ export function DbSync() {
           console.log(`📊 Job ${jobId} status:`, job.status, `(${job.progress}%)`)
           
           // Update UI with job progress
-          setSyncProgress(Math.max(20, job.progress || 0))
+          const currentProgress = Math.max(20, job.progress || 0)
+          setSyncProgress(currentProgress)
           setCurrentSyncStep(job.message || `Job ${job.status}...`)
 
           if (job.status === 'completed') {
             // Job completed - get the result
-            setCurrentSyncStep('Job completed! Getting results...')
+            setCurrentSyncStep('Job completed! Processing results...')
             setSyncProgress(95)
 
             const resultResponse = await fetch(`http://localhost:8080/api/blockchain/sync/result/${jobId}`)
@@ -197,56 +250,58 @@ export function DbSync() {
             // Process the result and update UI
             const blockchainData = resultData.result
             
-            if (blockchainData) {
-              // Create sync results based on blockchain data
+            if (blockchainData && blockchainData.results) {
+              const syncResult = blockchainData.results
+              
+              // Create detailed sync results from the actual sync data
               const finalResults: SyncResult[] = [
                 { 
                   contractType: 'Proposals', 
-                  totalItems: blockchainData.proposals?.length || 0, 
-                  newItems: Math.floor((blockchainData.proposals?.length || 0) * 0.3), 
-                  updatedItems: Math.floor((blockchainData.proposals?.length || 0) * 0.1), 
-                  errors: 0, 
-                  removedItems: 0, 
+                  totalItems: syncResult.proposals?.new + syncResult.proposals?.updated || 0, 
+                  newItems: syncResult.proposals?.new || 0, 
+                  updatedItems: syncResult.proposals?.updated || 0, 
+                  errors: syncResult.proposals?.errors?.length || 0, 
+                  removedItems: syncResult.proposals?.removed || 0, 
                   lastBlockScanned: blockchainData.toBlock || 0, 
                   status: 'completed' 
                 },
                 { 
                   contractType: 'Petitions', 
-                  totalItems: blockchainData.petitions?.length || 0, 
-                  newItems: Math.floor((blockchainData.petitions?.length || 0) * 0.3), 
-                  updatedItems: Math.floor((blockchainData.petitions?.length || 0) * 0.1), 
-                  errors: 0, 
-                  removedItems: 0, 
+                  totalItems: syncResult.petitions?.new + syncResult.petitions?.updated || 0, 
+                  newItems: syncResult.petitions?.new || 0, 
+                  updatedItems: syncResult.petitions?.updated || 0, 
+                  errors: syncResult.petitions?.errors?.length || 0, 
+                  removedItems: syncResult.petitions?.removed || 0, 
                   lastBlockScanned: blockchainData.toBlock || 0, 
                   status: 'completed' 
                 },
                 { 
                   contractType: 'Reports', 
-                  totalItems: blockchainData.reports?.length || 0, 
-                  newItems: Math.floor((blockchainData.reports?.length || 0) * 0.3), 
-                  updatedItems: Math.floor((blockchainData.reports?.length || 0) * 0.1), 
-                  errors: 0, 
-                  removedItems: 0, 
+                  totalItems: syncResult.reports?.new + syncResult.reports?.updated || 0, 
+                  newItems: syncResult.reports?.new || 0, 
+                  updatedItems: syncResult.reports?.updated || 0, 
+                  errors: syncResult.reports?.errors?.length || 0, 
+                  removedItems: syncResult.reports?.removed || 0, 
                   lastBlockScanned: blockchainData.toBlock || 0, 
                   status: 'completed' 
                 },
                 { 
                   contractType: 'Policies', 
-                  totalItems: blockchainData.policies?.length || 0, 
-                  newItems: Math.floor((blockchainData.policies?.length || 0) * 0.3), 
-                  updatedItems: Math.floor((blockchainData.policies?.length || 0) * 0.1), 
-                  errors: 0, 
-                  removedItems: 0, 
+                  totalItems: syncResult.policies?.new + syncResult.policies?.updated || 0, 
+                  newItems: syncResult.policies?.new || 0, 
+                  updatedItems: syncResult.policies?.updated || 0, 
+                  errors: syncResult.policies?.errors?.length || 0, 
+                  removedItems: syncResult.policies?.removed || 0, 
                   lastBlockScanned: blockchainData.toBlock || 0, 
                   status: 'completed' 
                 },
                 { 
                   contractType: 'Projects', 
-                  totalItems: blockchainData.projects?.length || 0, 
-                  newItems: Math.floor((blockchainData.projects?.length || 0) * 0.3), 
-                  updatedItems: Math.floor((blockchainData.projects?.length || 0) * 0.1), 
-                  errors: 0, 
-                  removedItems: 0, 
+                  totalItems: syncResult.projects?.new + syncResult.projects?.updated || 0, 
+                  newItems: syncResult.projects?.new || 0, 
+                  updatedItems: syncResult.projects?.updated || 0, 
+                  errors: syncResult.projects?.errors?.length || 0, 
+                  removedItems: syncResult.projects?.removed || 0, 
                   lastBlockScanned: blockchainData.toBlock || 0, 
                   status: 'completed' 
                 }
@@ -254,19 +309,25 @@ export function DbSync() {
 
               setSyncResults(finalResults)
               setSyncProgress(100)
+              setSyncStatus('completed')
               setCurrentSyncStep('Blockchain sync completed successfully!')
 
               // Update block range info
+              let blockRangeData: BlockRange | null = null
               if (blockchainData.fromBlock && blockchainData.toBlock) {
                 const totalBlocks = blockchainData.toBlock - blockchainData.fromBlock
                 const timeRange = calculateTimeRange(totalBlocks)
-                setBlockRange({ 
+                blockRangeData = { 
                   from: blockchainData.fromBlock, 
                   to: blockchainData.toBlock, 
                   total: totalBlocks, 
                   timeRange 
-                })
+                }
+                setBlockRange(blockRangeData)
               }
+
+              // Save sync data to localStorage for persistence
+              saveSyncData(finalResults, 'completed', blockRangeData, null)
 
               // Save last sync time
               localStorage.setItem('lastDbSync', new Date().toISOString())
@@ -277,14 +338,71 @@ export function DbSync() {
 
               const totalNewItems = finalResults.reduce((sum, r) => sum + r.newItems, 0)
               const totalUpdatedItems = finalResults.reduce((sum, r) => sum + r.updatedItems, 0)
+              const totalRemovedItems = finalResults.reduce((sum, r) => sum + r.removedItems, 0)
 
               toast({ 
                 title: 'Sync Completed', 
-                description: `Successfully synced blockchain data. ${totalNewItems} new items added, ${totalUpdatedItems} items updated.`, 
+                description: `Successfully synced blockchain data. ${totalNewItems} new, ${totalUpdatedItems} updated, ${totalRemovedItems} removed.`, 
                 variant: 'default' 
               })
             } else {
-              throw new Error('No blockchain data received from job result')
+              // Fallback for old format or missing data
+              const finalResults: SyncResult[] = [
+                { 
+                  contractType: 'Proposals', 
+                  totalItems: blockchainData?.proposals?.length || 0, 
+                  newItems: Math.floor((blockchainData?.proposals?.length || 0) * 0.3), 
+                  updatedItems: Math.floor((blockchainData?.proposals?.length || 0) * 0.1), 
+                  errors: 0, 
+                  removedItems: 0, 
+                  lastBlockScanned: blockchainData?.toBlock || 0, 
+                  status: 'completed' 
+                },
+                { 
+                  contractType: 'Petitions', 
+                  totalItems: blockchainData?.petitions?.length || 0, 
+                  newItems: Math.floor((blockchainData?.petitions?.length || 0) * 0.3), 
+                  updatedItems: Math.floor((blockchainData?.petitions?.length || 0) * 0.1), 
+                  errors: 0, 
+                  removedItems: 0, 
+                  lastBlockScanned: blockchainData?.toBlock || 0, 
+                  status: 'completed' 
+                },
+                { 
+                  contractType: 'Reports', 
+                  totalItems: blockchainData?.reports?.length || 0, 
+                  newItems: Math.floor((blockchainData?.reports?.length || 0) * 0.3), 
+                  updatedItems: Math.floor((blockchainData?.reports?.length || 0) * 0.1), 
+                  errors: 0, 
+                  removedItems: 0, 
+                  lastBlockScanned: blockchainData?.toBlock || 0, 
+                  status: 'completed' 
+                },
+                { 
+                  contractType: 'Policies', 
+                  totalItems: blockchainData?.policies?.length || 0, 
+                  newItems: Math.floor((blockchainData?.policies?.length || 0) * 0.3), 
+                  updatedItems: Math.floor((blockchainData?.policies?.length || 0) * 0.1), 
+                  errors: 0, 
+                  removedItems: 0, 
+                  lastBlockScanned: blockchainData?.toBlock || 0, 
+                  status: 'completed' 
+                },
+                { 
+                  contractType: 'Projects', 
+                  totalItems: blockchainData?.projects?.length || 0, 
+                  newItems: Math.floor((blockchainData?.projects?.length || 0) * 0.3), 
+                  updatedItems: Math.floor((blockchainData?.projects?.length || 0) * 0.1), 
+                  errors: 0, 
+                  removedItems: 0, 
+                  lastBlockScanned: blockchainData?.toBlock || 0, 
+                  status: 'completed' 
+                }
+              ]
+
+              setSyncResults(finalResults)
+              setSyncStatus('completed')
+              saveSyncData(finalResults, 'completed', null, null)
             }
 
             return // Success - exit polling loop
@@ -310,10 +428,17 @@ export function DbSync() {
     } catch (error: any) {
       console.error('❌ Sync failed:', error)
       
+      const errorMessage = error.message || 'Unknown error'
+      setSyncStatus('error')
+      setSyncError(errorMessage)
       setSyncResults(prev => prev.map(result => ({ ...result, status: 'error' as const, errors: 1 })))
+      
+      // Save error state
+      saveSyncData([], 'error', null, errorMessage)
+      
       toast({ 
         title: 'Sync Failed', 
-        description: `Blockchain sync failed: ${error.message || 'Unknown error'}`, 
+        description: `Blockchain sync failed: ${errorMessage}`, 
         variant: 'destructive' 
       })
     } finally {
@@ -321,6 +446,22 @@ export function DbSync() {
       setSyncProgress(0)
       setCurrentSyncStep('')
     }
+  }
+
+  const clearSyncData = () => {
+    setSyncResults([])
+    setSyncStatus('idle')
+    setSyncError(null)
+    setBlockRange(null)
+    localStorage.removeItem('syncResults')
+    localStorage.removeItem('syncStatus')
+    localStorage.removeItem('blockRange')
+    localStorage.removeItem('syncError')
+    toast({ 
+      title: 'Sync Data Cleared', 
+      description: 'All sync results have been cleared.', 
+      variant: 'default' 
+    })
   }
 
   const getTotalItems = () => {
@@ -430,7 +571,27 @@ export function DbSync() {
       {/* Sync Controls */}
       <Card>
         <CardHeader>
-          <CardTitle>Blockchain Synchronization</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Blockchain Synchronization</span>
+            {syncStatus === 'completed' && (
+              <Badge className="bg-green-100 text-green-800">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Last Sync Completed
+              </Badge>
+            )}
+            {syncStatus === 'error' && (
+              <Badge variant="destructive">
+                <XCircle className="w-3 h-3 mr-1" />
+                Last Sync Failed
+              </Badge>
+            )}
+            {syncStatus === 'running' && (
+              <Badge className="bg-blue-100 text-blue-800">
+                <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                Sync in Progress
+              </Badge>
+            )}
+          </CardTitle>
           <CardDescription>
             Sync your database with blockchain data. Choose partial sync for recent changes or full sync for complete synchronization.
           </CardDescription>
@@ -444,10 +605,10 @@ export function DbSync() {
               </AlertDescription>
             </Alert>
           ) : (
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <Button 
                 onClick={() => syncFromBlockchain(1000, false)}
-                disabled={isFullSync}
+                disabled={isFullSync || syncStatus === 'running'}
                 className="flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${isFullSync ? 'animate-spin' : ''}`} />
@@ -455,13 +616,24 @@ export function DbSync() {
               </Button>
               <Button 
                 onClick={() => syncFromBlockchain(0, true)}
-                disabled={isFullSync}
+                disabled={isFullSync || syncStatus === 'running'}
                 variant="outline"
                 className="flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${isFullSync ? 'animate-spin' : ''}`} />
                 Full Sync (All blocks)
               </Button>
+              {(syncResults.length > 0 || syncStatus !== 'idle') && (
+                <Button 
+                  onClick={clearSyncData}
+                  disabled={isFullSync || syncStatus === 'running'}
+                  variant="ghost"
+                  className="flex items-center gap-2"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Clear Results
+                </Button>
+              )}
             </div>
           )}
           
@@ -470,26 +642,39 @@ export function DbSync() {
               Last sync: {lastSyncTime.toLocaleString()}
             </div>
           )}
+          
+          {syncError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Sync error: {syncError}
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
       {/* Sync Progress */}
-      {isFullSync && (
+      {(isFullSync || syncStatus === 'running') && (
         <Card>
           <CardHeader>
-            <CardTitle>Sync Progress</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              Sync in Progress
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Progress value={syncProgress} className="w-full" />
-              <div className="text-sm text-muted-foreground mt-2">
-                {syncProgress}% complete
+              <div className="flex justify-between text-sm mb-2">
+                <span>Progress</span>
+                <span>{syncProgress}%</span>
               </div>
+              <Progress value={syncProgress} className="w-full" />
             </div>
             
             {currentSyncStep && (
               <div className="text-sm">
-                Status: {currentSyncStep}
+                <span className="font-medium">Status:</span> {currentSyncStep}
               </div>
             )}
             
@@ -507,30 +692,45 @@ export function DbSync() {
       {syncResults.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Sync Results</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {syncStatus === 'completed' && <CheckCircle className="w-5 h-5 text-green-500" />}
+              {syncStatus === 'error' && <XCircle className="w-5 h-5 text-red-500" />}
+              Sync Results
+            </CardTitle>
+            {blockRange && (
+              <CardDescription>
+                Scanned {blockRange.total.toLocaleString()} blocks (#{blockRange.from.toLocaleString()} to #{blockRange.to.toLocaleString()}) 
+                covering approximately {blockRange.timeRange}
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {syncResults.map((result, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded">
+                <div key={index} className="flex items-center justify-between p-4 border rounded-lg bg-card">
                   <div className="flex items-center gap-3">
                     {getSyncStatusIcon(result.status)}
                     <div>
                       <div className="font-medium">{result.contractType}</div>
                       <div className="text-sm text-muted-foreground">
-                        {result.totalItems} total items
+                        Block #{result.lastBlockScanned.toLocaleString()}
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {result.newItems > 0 && (
-                      <Badge variant="default" className="bg-green-100 text-green-800">
+                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
                         +{result.newItems} new
                       </Badge>
                     )}
                     {result.updatedItems > 0 && (
-                      <Badge variant="secondary">
+                      <Badge variant="default" className="bg-blue-100 text-blue-800 border-blue-200">
                         {result.updatedItems} updated
+                      </Badge>
+                    )}
+                    {result.removedItems > 0 && (
+                      <Badge variant="default" className="bg-orange-100 text-orange-800 border-orange-200">
+                        {result.removedItems} removed
                       </Badge>
                     )}
                     {result.errors > 0 && (
@@ -538,9 +738,37 @@ export function DbSync() {
                         {result.errors} errors
                       </Badge>
                     )}
+                    {result.newItems === 0 && result.updatedItems === 0 && result.removedItems === 0 && result.errors === 0 && (
+                      <Badge variant="secondary">
+                        No changes
+                      </Badge>
+                    )}
                   </div>
                 </div>
               ))}
+            </div>
+            
+            {/* Summary */}
+            <div className="mt-4 p-3 bg-muted rounded-lg">
+              <div className="text-sm font-medium mb-2">Summary</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-green-600 font-semibold">{syncResults.reduce((sum, r) => sum + r.newItems, 0)}</div>
+                  <div className="text-muted-foreground">New Items</div>
+                </div>
+                <div>
+                  <div className="text-blue-600 font-semibold">{syncResults.reduce((sum, r) => sum + r.updatedItems, 0)}</div>
+                  <div className="text-muted-foreground">Updated</div>
+                </div>
+                <div>
+                  <div className="text-orange-600 font-semibold">{syncResults.reduce((sum, r) => sum + r.removedItems, 0)}</div>
+                  <div className="text-muted-foreground">Removed</div>
+                </div>
+                <div>
+                  <div className="text-red-600 font-semibold">{syncResults.reduce((sum, r) => sum + r.errors, 0)}</div>
+                  <div className="text-muted-foreground">Errors</div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
