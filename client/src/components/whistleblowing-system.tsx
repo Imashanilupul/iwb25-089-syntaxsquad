@@ -1578,7 +1578,6 @@ Timestamp: ${timestamp}
           <TabsTrigger value="reports">Whistleblowing Reports</TabsTrigger>
           <TabsTrigger value="petitions">Smart Contract Petitions</TabsTrigger>
           <TabsTrigger value="submit">Submit Report/Petition</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">
@@ -1692,37 +1691,7 @@ Timestamp: ${timestamp}
             )}
           </div>
 
-          {/* Dynamic Priority System Explanation */}
-          <Card className="border-0 shadow-md bg-gradient-to-r from-blue-50 to-indigo-50">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">
-                  🎯 Dynamic Priority System
-                </h3>
-                <p className="text-sm text-blue-700 mb-4">
-                  Report priorities automatically adjust based on community votes. Your votes help determine which issues need immediate attention.
-                </p>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 text-xs">
-                  <div className="bg-white p-2 rounded">
-                    <div className="font-bold text-red-600">CRITICAL</div>
-                    <div>50+ net votes</div>
-                  </div>
-                  <div className="bg-white p-2 rounded">
-                    <div className="font-bold text-orange-600">HIGH</div>
-                    <div>20+ net votes</div>
-                  </div>
-                  <div className="bg-white p-2 rounded">
-                    <div className="font-bold text-yellow-600">MEDIUM</div>
-                    <div>5+ net votes</div>
-                  </div>
-                  <div className="bg-white p-2 rounded">
-                    <div className="font-bold text-green-600">LOW</div>
-                    <div>0+ net votes</div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          
 
           {/* Reports List */}
           <div className="space-y-4">
@@ -2340,7 +2309,7 @@ Timestamp: ${timestamp}
                   ) : lastError === "metamask_busy" ? (
                     "⏰ Retry - Create Petition"
                   ) : (
-                    "��️ Create Petition"
+                    "Create Petition"
                   )}
                 </Button>
               </CardContent>
@@ -2348,92 +2317,7 @@ Timestamp: ${timestamp}
           </div>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Report Resolution Trends</CardTitle>
-                <CardDescription>Monthly report submissions and resolutions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    reports: { label: "Reports", color: "#ef4444" },
-                    resolved: { label: "Resolved", color: "#22c55e" },
-                  }}
-                  className="h-64"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={reportStats}>
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="reports" fill="#ef4444" />
-                      <Bar dataKey="resolved" fill="#22c55e" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Petition Signature Activity</CardTitle>
-                <CardDescription>Daily signature collection patterns</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    signatures: { label: "Signatures", color: "#3b82f6" },
-                  }}
-                  className="h-64"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={petitionActivity}>
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line type="monotone" dataKey="signatures" stroke="#3b82f6" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          
-
-          {/* Priority Distribution */}
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Dynamic Priority Distribution
-              </CardTitle>
-              <CardDescription>
-                Priority levels automatically adjusted based on community votes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {Object.entries(getDynamicPriorityStats()).map(([priority, count]) => (
-                  <div key={priority} className="text-center">
-                    <div className={`text-2xl font-bold ${getPriorityColor(priority)}`}>
-                      {count}
-                    </div>
-                    <div className="text-sm text-slate-600">{priority}</div>
-                    <div className="text-xs text-slate-500">
-                      {reports.length > 0 ? Math.round((count / reports.length) * 100) : 0}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 text-xs text-slate-500 text-center">
-                Priority is automatically calculated: CRITICAL (50+ net votes), HIGH (20+ net votes), MEDIUM (5+ net votes), LOW (0+ net votes)
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        
       </Tabs>
     </div>
   )

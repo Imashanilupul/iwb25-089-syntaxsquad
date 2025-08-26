@@ -12,11 +12,14 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
+
+
 # Environment variables configuration
 configurable int port = ?;
 configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
+
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
@@ -30,7 +33,7 @@ http:Client web3Service = check new ("http://localhost:3001", {
         backOffFactor: 2.0
     }
 });
-http:Client chatbot = check new ("http://localhost:8001");
+http:Client fastapiChat = check new ("http://localhost:8001");
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
@@ -2224,23 +2227,7 @@ service /petitions on newListener {
         check caller->respond(response);
     }
 
-    //RAG chatbot integration api 
-    // Resource to forward user chat requests to FastAPI
-    resource function post chat(http:Caller caller, http:Request req) returns error? {
-        json payload = check req.getJsonPayload();
 
-        // Send payload to FastAPI chatbot endpoint (/chat)
-        json|error res = chatbot->post("/chat", payload);
-
-        if res is json {
-            // Send back response from FastAPI
-            check caller->respond(res);
-        } else {
-            // Handle errors gracefully
-            log:printError("Error calling FastAPI chatbot", 'error = res);
-            check caller->respond({ "error": "Chatbot service unavailable" });
-        }
-    }
 
     resource function get health() returns string {
         return "Ballerina service is running!";
@@ -2258,6 +2245,37 @@ function getHeaders() returns map<string> {
         "Content-Type": "application/json"
     };
 }
+
+
+
+# Ballerina service to connect to FastAPI chat endpoint
+service / on new http:Listener(9090) {
+    
+    resource function post chat(http:Caller caller, http:Request req) returns error? {
+        // Read JSON payload from frontend
+        json payload = check req.getJsonPayload();
+
+        // Forward to FastAPI with explicit application/json header
+        http:Request forwardReq = new;
+        forwardReq.setJsonPayload(payload);
+        forwardReq.setHeader("Content-Type", "application/json");
+
+    
+
+        // Send request to FastAPI
+        http:Response res = check fastapiChat->post("/chat", forwardReq);
+
+        // Convert response to JSON
+        json response = check res.getJsonPayload();
+
+        // Send back to frontend
+        check caller->respond(response);
+    }
+}
+
+
+
+
 
 # Check database health via HTTP
 #
@@ -3329,6 +3347,7 @@ public function main() returns error? {
     log:printInfo("  ➤ Petitions CRUD: http://localhost:" + port.toString() + "/api/petitions");
     log:printInfo("  ➤ Petition Activities CRUD: http://localhost:" + port.toString() + "/api/petitionactivities");
     log:printInfo("  ➤ Policy Comments CRUD: http://localhost:" + port.toString() + "/api/policycomments");
+    log:printInfo("  ➤ Chat endpoint: http://localhost:" + port.toString() + "/chat");
     log:printInfo("🎉 Server is ready to accept requests!");
     log:printInfo("💡 Note: Now using environment variables for configuration");
 
