@@ -809,6 +809,14 @@ service /api on apiListener {
         }
     }
 
+    # Get voter demographics
+    #
+    # + return - Voter demographics data by age groups
+    resource function get proposals/voterdemographics() returns json|error {
+        log:printInfo("Get voter demographics endpoint called");
+        return proposalsService.getVoterDemographics();
+    }
+
     # Get all users
     #
     # + return - Users list or error

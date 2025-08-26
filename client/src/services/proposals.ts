@@ -40,6 +40,19 @@ export interface VoteRequest {
   voteType: "yes" | "no"
 }
 
+export interface VoterDemographicsData {
+  name: string
+  value: number
+  color: string
+}
+
+export interface VoterDemographicsResponse {
+  success: boolean
+  message: string
+  data: VoterDemographicsData[]
+  timestamp: number
+}
+
 class ProposalsService {
   async getAllProposals(): Promise<ProposalResponse> {
     return apiService.get<ProposalResponse>("/api/proposals")
@@ -91,6 +104,10 @@ class ProposalsService {
 
   async voteOnProposal(proposalId: number, voteType: "yes" | "no"): Promise<ProposalResponse> {
     return apiService.post<ProposalResponse>(`/api/proposals/${proposalId}/vote/${voteType}`)
+  }
+
+  async getVoterDemographics(): Promise<VoterDemographicsResponse> {
+    return apiService.get<VoterDemographicsResponse>("/api/proposals/voterdemographics")
   }
 
   // Helper methods for vote calculations
