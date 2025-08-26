@@ -4,7 +4,8 @@ const authRouter = require("./auth");
 const reportsRouter = require("./reports");
 const policyRouter = require("./policy");
 const proposalsRouter = require("./proposals");
-const projectRouter=require("./project")
+const projectRouter=require("./project");
+const blockchainSyncRouter = require("./blockchain-sync");
 
 const app = express();
 
@@ -30,6 +31,9 @@ app.use("/report", reportsRouter);
 app.use("/policy", policyRouter);
 app.use("/proposal", proposalsRouter);
 app.use("/project", projectRouter);
+// Mount blockchain sync router at root so endpoints like
+// /proposals/blockchain-data and /all/blockchain-data are available.
+app.use('/', blockchainSyncRouter);
 
 
 

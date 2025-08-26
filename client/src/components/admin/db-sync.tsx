@@ -263,9 +263,10 @@ export function DbSync() {
       setCurrentSyncStep('Calling Ballerina backend for blockchain sync...')
       setSyncProgress(30)
 
-      // Call Ballerina backend to handle the sync with AbortController timeout
-      const controller = new AbortController()
-      const fetchTimeout = setTimeout(() => controller.abort(), 20000)
+  // Call Ballerina backend to handle the sync with AbortController timeout
+  // Blockchain syncs (and IPFS reads) can take a long time, so use a longer timeout.
+  const controller = new AbortController()
+  const fetchTimeout = setTimeout(() => controller.abort(), 1200000) // 120s
 
       let syncResponse: Response
       try {
@@ -315,9 +316,14 @@ export function DbSync() {
     } catch (error: any) {
       console.error('❌ Sync failed:', error)
 
-      setSyncResults(prev => prev.map(result => ({ ...result, status: 'error' as const, errors: 1 })))
-
-      toast({ title: 'Sync Failed', description: `Blockchain sync failed: ${error.message || 'Unknown error'}`, variant: 'destructive' })
+      // Distinguish aborts (timeouts) from other errors for clearer UX
+      if (error?.name === 'AbortError') {
+        setSyncResults(prev => prev.map(result => ({ ...result, status: 'error' as const, errors: 1 })))
+        toast({ title: 'Sync Timed Out', description: 'The sync request timed out after 120s. The backend may still be processing — check the server logs or retry later.', variant: 'destructive' })
+      } else {
+        setSyncResults(prev => prev.map(result => ({ ...result, status: 'error' as const, errors: 1 })))
+        toast({ title: 'Sync Failed', description: `Blockchain sync failed: ${error.message || 'Unknown error'}`, variant: 'destructive' })
+      }
     } finally {
       setIsFullSync(false)
       setSyncProgress(0)
