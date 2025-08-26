@@ -364,10 +364,10 @@ export function PolicyHub() {
         </div>
       </div>
       <Tabs defaultValue="discussions" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        {/* <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="discussions">Policy Discussions</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        </TabsList> */}
 
         <TabsContent value="discussions" className="space-y-6">
           {/* Policy Stats */}
@@ -522,42 +522,7 @@ export function PolicyHub() {
         <TabsContent value="analytics" className="space-y-6">
           {/* Analytics placeholder */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Sentiment Analysis</CardTitle>
-                <CardDescription>Public opinion trends over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    positive: {
-                      label: "Positive",
-                      color: "#10b981",
-                    },
-                    negative: {
-                      label: "Negative", 
-                      color: "#ef4444",
-                    },
-                    neutral: {
-                      label: "Neutral",
-                      color: "#6b7280",
-                    },
-                  }}
-                  className="h-[200px]"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sentimentData}>
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={2} />
-                      <Line type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={2} />
-                      <Line type="monotone" dataKey="neutral" stroke="#6b7280" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+          
 
             <Card className="border-0 shadow-md">
               <CardHeader>

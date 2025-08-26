@@ -1,4 +1,4 @@
-import { apiService } from './api'
+import { apiService, ApiService } from './api'
 
 // Report interface matching the backend structure
 export interface Report {
@@ -13,6 +13,8 @@ export interface Report {
   created_time: string
   last_updated_time?: string
   resolved_time?: string
+  likes?: number
+  dislikes?: number
 }
 
 export interface ReportStatistics {
@@ -52,9 +54,10 @@ export const reportService = {
         return response.data
       }
       throw new Error(response.message || 'Failed to fetch reports')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching reports:', error)
-      throw error
+      const errorMessage = ApiService.getErrorMessage(error)
+      throw new Error(errorMessage)
     }
   },
 
@@ -66,9 +69,10 @@ export const reportService = {
         return response.data
       }
       throw new Error(response.message || 'Failed to fetch report')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching report:', error)
-      throw error
+      const errorMessage = ApiService.getErrorMessage(error)
+      throw new Error(errorMessage)
     }
   },
 
@@ -80,9 +84,10 @@ export const reportService = {
         return response.data
       }
       throw new Error(response.message || 'Failed to search reports')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error searching reports:', error)
-      throw error
+      const errorMessage = ApiService.getErrorMessage(error)
+      throw new Error(errorMessage)
     }
   },
 
@@ -201,5 +206,113 @@ export const reportService = {
       console.error('Error fetching recent reports:', error)
       throw error
     }
-  }
+  },
+
+  // Like a report
+  async likeReport(reportId: number, walletAddress: string): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/like`, {
+        wallet_address: walletAddress
+      });
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to like report');
+    } catch (error: any) {
+      console.error('Error liking report:', error);
+      
+      // Handle specific server errors gracefully
+      if (error.response?.status === 500) {
+        const errorMsg = (error.response?.data as any)?.message || 
+                        error.userMessage || 
+                        'Server error when liking report - database may need migration';
+        throw new Error(errorMsg);
+      } else if (error.response?.status === 404) {
+        throw new Error('Report not found or voting endpoint not available');
+      } else if (error.response?.status === 403) {
+        throw new Error('Access denied - you may not have permission to vote on this report');
+      } else if (!error.response) {
+        throw new Error('Network error - unable to connect to server');
+      }
+      
+      // Use the utility method for other errors
+      throw new Error(ApiService.getErrorMessage(error));
+    }
+  },
+
+  // Dislike a report
+  async dislikeReport(reportId: number, walletAddress: string): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/dislike`, {
+        wallet_address: walletAddress
+      });
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to dislike report');
+    } catch (error: any) {
+      console.error('Error disliking report:', error);
+      
+      // Handle specific server errors gracefully
+      if (error.response?.status === 500) {
+        const errorMsg = (error.response?.data as any)?.message || 
+                        error.userMessage || 
+                        'Server error when disliking report - database may need migration';
+        throw new Error(errorMsg);
+      } else if (error.response?.status === 404) {
+        throw new Error('Report not found or voting endpoint not available');
+      } else if (error.response?.status === 403) {
+        throw new Error('Access denied - you may not have permission to vote on this report');
+      } else if (!error.response) {
+        throw new Error('Network error - unable to connect to server');
+      }
+      
+      // Use the utility method for other errors
+      throw new Error(ApiService.getErrorMessage(error));
+    }
+  },
+
+  // Check user vote on a report
+  async checkUserVote(reportId: number, walletAddress: string): Promise<string | null> {
+    try {
+      const response = await apiService.get<{ success: boolean; data: { vote: string | null } }>(
+        `/api/reports/${reportId}/vote/${walletAddress}`
+      );
+      if (response.success) {
+        return response.data.vote;
+      }
+      return null;
+    } catch (error: any) {
+      console.error('Error checking user vote:', error);
+      
+      // Handle specific server errors gracefully
+      if (error.response?.status === 500) {
+        const errorMsg = (error.response?.data as any)?.message || 
+                        error.userMessage || 
+                        'Server error when checking user vote - user_votes table may not exist';
+        console.warn(errorMsg + '. Returning null.');
+        return null;
+      } else if (error.response?.status === 404) {
+        console.warn('User vote endpoint not found or user has not voted yet. Returning null.');
+        return null;
+      } else if (error.response?.status === 403) {
+        console.warn('Access denied when checking user vote. Returning null.');
+        return null;
+      } else if (!error.response) {
+        console.warn('Network error when checking user vote. Returning null.');
+        return null;
+      }
+      
+      return null;
+    }
+  },
+
+  // Utility: Determine priority from likes/dislikes
+  getPriorityFromVotes(likes: number = 0, dislikes: number = 0): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+    const net = likes - dislikes;
+    if (net > 50) return 'CRITICAL';
+    if (net > 20) return 'HIGH';
+    if (net > 0) return 'MEDIUM';
+    return 'LOW';
+  },
 }

@@ -156,7 +156,7 @@ public class UsersService {
 
             // Add Province if provided
             if province is string && province.trim().length() > 0 {
-                payload = check payload.mergeJson({"Province": province});
+                payload = check payload.mergeJson({"province": province});
             }
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
@@ -190,8 +190,24 @@ public class UsersService {
                         };
                     }
                 }
+            } else if response.statusCode == 400 {
+                // Get detailed error from Supabase
+                json|error errorResponse = response.getJsonPayload();
+                string errorMsg = "Bad request to database";
+                if errorResponse is json {
+                    json|error messageField = errorResponse.message;
+                    if messageField is json {
+                        string supabaseError = messageField.toString();
+                        errorMsg = "Database error: " + supabaseError;
+                        // Check if it's a column not found error related to Province
+                        if supabaseError.includes("Province") || supabaseError.includes("column") {
+                            errorMsg = "Database schema needs update. Please run the migration script to add the Province column to the users table. Error: " + supabaseError;
+                        }
+                    }
+                }
+                return error(errorMsg);
             } else {
-                return error("Failed to create user: " + response.statusCode.toString());
+                return error("Failed to create user: HTTP " + response.statusCode.toString());
             }
 
         } on fail error e {
@@ -266,11 +282,11 @@ public class UsersService {
                 }
             }
             
-            json|error province = updateData.Province;
+            json|error province = updateData.province;
             if province is json {
                 string|error provinceStr = province.ensureType(string);
                 if provinceStr is string && provinceStr.trim().length() > 0 {
-                    payloadMap["Province"] = provinceStr;
+                    payloadMap["province"] = provinceStr;
                 }
             }
             
@@ -301,6 +317,7 @@ public class UsersService {
                 };
             } else {
                 return error("User not found");
+                
             }
             
         } on fail error e {
@@ -559,7 +576,7 @@ public class UsersService {
         }
         
         // Validate Province if provided
-        json|error province = userData.Province;
+        json|error province = userData.province;
         if province is json && province.toString().trim().length() > 0 {
             string[] validProvinces = ["Western", "Central", "Southern", "Northern", "Eastern", "North Western", "North Central", "Uva", "Sabaragamuwa"];
             string provinceStr = province.toString();
@@ -662,7 +679,8 @@ public class UsersService {
     public function getProvinceStatistics() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/users?select=Province&Province=not.is.null";
+            // Use the correct lowercase column name
+            string endpoint = "/rest/v1/users?select=province";
             
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
@@ -678,7 +696,7 @@ public class UsersService {
             int totalUsers = users.length();
             
             foreach json user in users {
-                json|error provinceResult = user.Province;
+                json|error provinceResult = user.province;
                 if provinceResult is json && provinceResult != () {
                     string rawProvince = provinceResult.toString();
                     // Normalize province name: trim whitespace, remove "Province" suffix, standardize

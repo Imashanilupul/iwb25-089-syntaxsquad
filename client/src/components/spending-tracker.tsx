@@ -64,6 +64,13 @@ interface Project {
   progress?: number
 }
 
+interface Category {
+  category_id: number
+  category_name: string
+  allocated_budget?: number
+  spent_budget?: number
+}
+
 // ------------------ Component ------------------
 export function SpendingTracker() {
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -75,6 +82,7 @@ export function SpendingTracker() {
   >([])
   const [spendingTrend, setSpendingTrend] = useState<Array<{ month: string; amount: number }>>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
 
   const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
@@ -86,6 +94,9 @@ export function SpendingTracker() {
       .then((res) => {
         if (!isMounted) return
         const categories = (res?.data || [])
+        
+        // Store categories for dropdown
+        setCategories(categories)
         
         // Totals from categories
         const totalAllocated = categories.reduce(
@@ -143,7 +154,20 @@ export function SpendingTracker() {
       .then((res) => {
         if (!isMounted) return
         const projectsData = (res?.data || []) as any[]
-        setProjects(projectsData)
+        
+        // Calculate progress based on budget spent percentage
+        const projectsWithProgress = projectsData.map(project => {
+          const allocatedBudget = Number(project.allocated_budget) || 0
+          const spentBudget = Number(project.spent_budget) || 0
+          const progress = allocatedBudget > 0 ? Math.round((spentBudget / allocatedBudget) * 100) : 0
+          
+          return {
+            ...project,
+            progress: Math.min(progress, 100) // Cap at 100%
+          }
+        })
+        
+        setProjects(projectsWithProgress)
       })
       .catch(() => {})
     return () => {
@@ -230,59 +254,75 @@ export function SpendingTracker() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border-0 shadow-md">
-          <CardHeader>
-            <CardTitle>Budget Allocation by Category</CardTitle>
-            <CardDescription>Current fiscal year distribution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                allocated: { label: "Allocated", color: "#0088FE" },
-                spent: { label: "Spent", color: "#00C49F" },
-                remaining: { label: "Remaining", color: "#FFBB28" },
-              }}
-              className="h-64"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={budgetData}>
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="allocated" fill="#0088FE" />
-                  <Bar dataKey="spent" fill="#00C49F" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+      <Card className="border-0 shadow-md">
+  <CardHeader>
+    <CardTitle>Budget Allocation by Category</CardTitle>
+    <CardDescription>Current fiscal year distribution</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ChartContainer
+      config={{
+        allocated: { label: "Allocated", color: "#0088FE" },
+        spent: { label: "Spent", color: "#00C49F" },
+        remaining: { label: "Remaining", color: "#FFBB28" },
+      }}
+      className="h-64"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={budgetData}>
+          <XAxis dataKey="category" />
+          <YAxis
+            tickFormatter={(value: number) => {
+              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+              return String(value)
+            }}
+          />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar dataKey="allocated" fill="#0088FE" />
+          <Bar dataKey="spent" fill="#00C49F" />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
 
-        <Card className="border-0 shadow-md">
-          <CardHeader>
-            <CardTitle>Monthly Spending Trend</CardTitle>
-            <CardDescription>Expenditure pattern over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{ amount: { label: "Amount", color: "#8884D8" } }}
-              className="h-64"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={spendingTrend}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="#8884D8"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+
+<Card className="border-0 shadow-md">
+  <CardHeader>
+    <CardTitle>Monthly Spending Trend</CardTitle>
+    <CardDescription>Expenditure pattern over time</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ChartContainer
+      config={{ amount: { label: "Amount", color: "#8884D8" } }}
+      className="h-64"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={spendingTrend}>
+          <XAxis dataKey="month" />
+          <YAxis
+            tickFormatter={(value: number) => {
+              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+              return String(value)
+            }}
+          />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Line
+            type="monotone"
+            dataKey="amount"
+            stroke="#8884D8"
+            strokeWidth={2}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
+
       </div>
 
       {/* Project List with Search & Filter */}
@@ -318,10 +358,14 @@ export function SpendingTracker() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="education">Education</SelectItem>
-                  <SelectItem value="infrastructure">Infrastructure</SelectItem>
-                  <SelectItem value="healthcare">Healthcare</SelectItem>
-                  <SelectItem value="safety">Public Safety</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem 
+                      key={category.category_id} 
+                      value={category.category_name.toLowerCase()}
+                    >
+                      {category.category_name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -377,6 +421,9 @@ export function SpendingTracker() {
                           {project.progress || 0}%
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Budget utilization
+                      </p>
                     </div>
                   </div>
 

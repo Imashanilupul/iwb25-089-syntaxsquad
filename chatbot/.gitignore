@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pycache/
+*.pyc
+*.pyd
+*.pyo
+*.env
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# ChromaDB local files (if any)
+chromadb/
+*.db
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python packaging
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Optional: MacOS files
+*.DS_Store
