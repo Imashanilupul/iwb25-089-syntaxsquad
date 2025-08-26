@@ -14,12 +14,13 @@ import ballerina/log;
 import ballerina/time;
 
 
+
 # Environment variables configuration
 configurable int port = ?;
 configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
-configurable string fastApiEndpoint = "http://localhost:8001/chat";
+
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
@@ -27,6 +28,8 @@ listener http:Listener apiListener = new (port);
 # web3 service URL
 http:Client web3Service = check new ("http://localhost:3001");
 
+#FAstapi python Rag based chatbot API
+http:Client fastapiChat = check new ("http://localhost:8001");
 
 # Global HTTP client for Supabase API
 http:Client supabaseClient = check new (supabaseUrl);
@@ -1674,39 +1677,30 @@ function getHeaders() returns map<string> {
     };
 }
 
-#Rag chatbot parts
-# A record to represent the chat request payload
-type ChatRequest record {|
-    string question;
-    int top_k = 3;
-|};
 
-# A record to represent the chat response
-type ChatResponse record {|
-    string answer;
-|};
 
 # Ballerina service to connect to FastAPI chat endpoint
 service / on new http:Listener(9090) {
     
-    resource function post chat(string question, int top_k = 3) returns ChatResponse|error {
-        // Create HTTP client
-        http:Client chatClient = check new(fastApiEndpoint);
-        
-        // Prepare request payload
-        ChatRequest requestPayload = {
-            question: question,
-            top_k: top_k
-        };
-        
-        // Make POST request to FastAPI endpoint
-        ChatResponse response = check chatClient->post(
-            "/",
-            requestPayload,
-            mediaType = "application/json"
-        );
-        
-        return response;
+    resource function post chat(http:Caller caller, http:Request req) returns error? {
+        // Read JSON payload from frontend
+        json payload = check req.getJsonPayload();
+
+        // Forward to FastAPI with explicit application/json header
+        http:Request forwardReq = new;
+        forwardReq.setJsonPayload(payload);
+        forwardReq.setHeader("Content-Type", "application/json");
+
+    
+
+        // Send request to FastAPI
+        http:Response res = check fastapiChat->post("/chat", forwardReq);
+
+        // Convert response to JSON
+        json response = check res.getJsonPayload();
+
+        // Send back to frontend
+        check caller->respond(response);
     }
 }
 
