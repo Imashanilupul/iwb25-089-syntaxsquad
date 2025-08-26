@@ -364,10 +364,10 @@ export function PolicyHub() {
         </div>
       </div>
       <Tabs defaultValue="discussions" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        {/* <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="discussions">Policy Discussions</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        </TabsList> */}
 
         <TabsContent value="discussions" className="space-y-6">
           {/* Policy Stats */}

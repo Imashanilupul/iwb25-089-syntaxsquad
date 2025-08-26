@@ -64,6 +64,13 @@ interface Project {
   progress?: number
 }
 
+interface Category {
+  category_id: number
+  category_name: string
+  allocated_budget?: number
+  spent_budget?: number
+}
+
 // ------------------ Component ------------------
 export function SpendingTracker() {
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -75,6 +82,7 @@ export function SpendingTracker() {
   >([])
   const [spendingTrend, setSpendingTrend] = useState<Array<{ month: string; amount: number }>>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
 
   const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
@@ -86,6 +94,9 @@ export function SpendingTracker() {
       .then((res) => {
         if (!isMounted) return
         const categories = (res?.data || [])
+        
+        // Store categories for dropdown
+        setCategories(categories)
         
         // Totals from categories
         const totalAllocated = categories.reduce(
@@ -143,7 +154,20 @@ export function SpendingTracker() {
       .then((res) => {
         if (!isMounted) return
         const projectsData = (res?.data || []) as any[]
-        setProjects(projectsData)
+        
+        // Calculate progress based on budget spent percentage
+        const projectsWithProgress = projectsData.map(project => {
+          const allocatedBudget = Number(project.allocated_budget) || 0
+          const spentBudget = Number(project.spent_budget) || 0
+          const progress = allocatedBudget > 0 ? Math.round((spentBudget / allocatedBudget) * 100) : 0
+          
+          return {
+            ...project,
+            progress: Math.min(progress, 100) // Cap at 100%
+          }
+        })
+        
+        setProjects(projectsWithProgress)
       })
       .catch(() => {})
     return () => {
@@ -252,7 +276,7 @@ export function SpendingTracker() {
               if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
               if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
               if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-              return value
+              return String(value)
             }}
           />
           <ChartTooltip content={<ChartTooltipContent />} />
@@ -283,7 +307,7 @@ export function SpendingTracker() {
               if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
               if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
               if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-              return value
+              return String(value)
             }}
           />
           <ChartTooltip content={<ChartTooltipContent />} />
@@ -334,10 +358,14 @@ export function SpendingTracker() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="education">Education</SelectItem>
-                  <SelectItem value="infrastructure">Infrastructure</SelectItem>
-                  <SelectItem value="healthcare">Healthcare</SelectItem>
-                  <SelectItem value="safety">Public Safety</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem 
+                      key={category.category_id} 
+                      value={category.category_name.toLowerCase()}
+                    >
+                      {category.category_name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -393,6 +421,9 @@ export function SpendingTracker() {
                           {project.progress || 0}%
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Budget utilization
+                      </p>
                     </div>
                   </div>
 

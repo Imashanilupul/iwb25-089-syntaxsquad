@@ -68,6 +68,7 @@ function createUsersTable(postgresql:Client dbClient) returns error? {
             nic VARCHAR(20) UNIQUE NOT NULL,
             mobile_no VARCHAR(15) NOT NULL,
             evm VARCHAR(255),
+            Province VARCHAR(100),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
