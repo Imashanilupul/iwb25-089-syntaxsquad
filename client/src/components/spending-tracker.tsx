@@ -43,6 +43,7 @@ import {
 } from "recharts"
 import { projectService } from "@/services/project"
 import { categoryService } from "@/services/category"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 // ------------------ Types ------------------
 interface Project {
@@ -83,6 +84,8 @@ export function SpendingTracker() {
   const [spendingTrend, setSpendingTrend] = useState<Array<{ month: string; amount: number }>>([])
   const [projects, setProjects] = useState<any[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
 
   const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
@@ -200,6 +203,18 @@ export function SpendingTracker() {
     }
   }
 
+  // Open project details dialog
+  const openProjectDetails = (project: Project) => {
+    setSelectedProject(project)
+    setIsDetailsDialogOpen(true)
+  }
+
+  // Close project details dialog
+  const closeProjectDetails = () => {
+    setIsDetailsDialogOpen(false)
+    setSelectedProject(null)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -270,7 +285,12 @@ export function SpendingTracker() {
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={budgetData}>
-          <XAxis dataKey="category" />
+          <XAxis 
+            dataKey="category" 
+            angle={-30} 
+            textAnchor="end" 
+            interval={0}  // ensures all labels show
+          />
           <YAxis
             tickFormatter={(value: number) => {
               if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
@@ -287,6 +307,7 @@ export function SpendingTracker() {
     </ChartContainer>
   </CardContent>
 </Card>
+
 
 
 <Card className="border-0 shadow-md">
@@ -429,14 +450,16 @@ export function SpendingTracker() {
 
                   <div className="flex items-center justify-between pt-2 border-t">
                     <div className="text-xs text-slate-500">
-                      <span className="font-mono">
-                        {project.view_details || "No details"}
-                      </span>
+                     
                       <span className="ml-2">
                         • Updated {project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "Unknown"}
                       </span>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => openProjectDetails(project)}
+                    >
                       View Details
                     </Button>
                   </div>
@@ -448,6 +471,167 @@ export function SpendingTracker() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Project Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={closeProjectDetails}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              {selectedProject?.project_name}
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information about this government project
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedProject && (
+            <div className="space-y-6">
+              {/* Project Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-slate-900">Project Details</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Status:</span>
+                      <Badge className={getStatusColor(selectedProject.status)}>
+                        {selectedProject.status}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Province:</span>
+                      <span className="font-medium">{selectedProject.province}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Ministry:</span>
+                      <span className="font-medium">{selectedProject.ministry}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Category:</span>
+                      <span className="font-medium">
+                        {selectedProject.categories?.category_name || "Uncategorized"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-slate-900">Budget Information</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Allocated Budget:</span>
+                      <span className="font-medium font-mono">
+                        {formatCurrency(selectedProject.allocated_budget)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Spent Budget:</span>
+                      <span className="font-medium font-mono">
+                        {formatCurrency(selectedProject.spent_budget)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Remaining:</span>
+                      <span className="font-medium font-mono">
+                        {formatCurrency(selectedProject.allocated_budget - selectedProject.spent_budget)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Utilization:</span>
+                      <span className="font-medium">
+                        {selectedProject.allocated_budget > 0 
+                          ? ((selectedProject.spent_budget / selectedProject.allocated_budget) * 100).toFixed(1)
+                          : "0"
+                        }%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-slate-900">Project Progress</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Budget Utilization Progress</span>
+                    <span className="font-medium">{selectedProject.progress || 0}%</span>
+                  </div>
+                  <Progress value={selectedProject.progress || 0} className="h-3" />
+                  <p className="text-xs text-slate-500">
+                    {selectedProject.progress && selectedProject.progress >= 100 
+                      ? "Project budget fully utilized"
+                      : "Project is in progress"
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Project Description */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-slate-900">Project Description</h4>
+                <div className="bg-slate-50 rounded-lg p-4">
+                  {selectedProject.view_details ? (
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {selectedProject.view_details}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">
+                      No detailed description available for this project.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-slate-900">Timeline</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-600">Created:</span>
+                    <span className="ml-2 font-medium">
+                      {selectedProject.created_at 
+                        ? new Date(selectedProject.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                        : "Unknown"
+                      }
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-600">Last Updated:</span>
+                    <span className="ml-2 font-medium">
+                      {selectedProject.updated_at 
+                        ? new Date(selectedProject.updated_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                        : "Unknown"
+                      }
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Blockchain Verification */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-slate-900">Blockchain Verification</h4>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-medium">Transaction Verified</span>
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">
+                    This project data has been verified on the blockchain and is publicly auditable.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

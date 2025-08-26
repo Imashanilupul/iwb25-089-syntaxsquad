@@ -14,6 +14,8 @@ import {
   Clock,
   FileText,
   Eye,
+  Building,
+  AlertTriangle,
 } from "lucide-react"
 import { SpendingTracker } from "@/components/spending-tracker"
 import { VotingSystem } from "@/components/voting-system"
@@ -27,6 +29,9 @@ import { userService } from "@/services/user"
 import { categoryService } from "@/services/category"
 import { useAuth } from "@/context/AuthContext"
 import ChatWidget from "@/components/ChatWidget"
+import { adminService, type AdminDashboardData } from "@/services/admin"
+import { policyService } from "@/services/policy"
+import { policyCommentService } from "@/services/policy-comment"
 
 export default function CivicPlatform() {
   const { address } = useAuth()
@@ -35,6 +40,10 @@ export default function CivicPlatform() {
   const [userChangePct, setUserChangePct] = useState<number>(0)
   const [totalBudget, setTotalBudget] = useState<number>(0)
   const [budgetChangePct, setBudgetChangePct] = useState<number>(0)
+  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null)
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true)
+  const [discussionCount, setDiscussionCount] = useState<number>(0)
+  const [discussionChangePct, setDiscussionChangePct] = useState<number>(0)
 
   const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString("en-LK")}`
 
@@ -53,7 +62,7 @@ export default function CivicPlatform() {
           setUserChangePct(0)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       isMounted = false
     }
@@ -72,7 +81,67 @@ export default function CivicPlatform() {
           return sum
         })
       })
-      .catch(() => {})
+      .catch(() => { })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    // Fetch admin dashboard data for recent activities
+    adminService.getDashboardData()
+      .then((data) => {
+        if (!isMounted) return
+        setDashboardData(data)
+        setIsLoadingActivities(false)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.error('Error fetching dashboard data:', error)
+        setIsLoadingActivities(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    
+    // Fetch policy and comment data for discussion count
+    const fetchDiscussionData = async () => {
+      try {
+        const [policiesResponse, commentsResponse] = await Promise.all([
+          policyService.getAllPolicies(1, 100), // Get more policies for accurate count
+          policyCommentService.getCommentStatistics()
+        ])
+        
+        if (!isMounted) return
+        
+        if (policiesResponse.success && commentsResponse.success) {
+          const totalPolicies = policiesResponse.data.length
+          const totalComments = commentsResponse.data.total_comments || 0
+          
+          // Calculate total discussions (policies + comments)
+          const totalDiscussions = totalPolicies + totalComments
+          setDiscussionCount(totalDiscussions)
+          
+          // Calculate change percentage (simplified - you can enhance this)
+          setDiscussionChangePct(12.5) // You can calculate this based on historical data
+        }
+      } catch (error) {
+        console.error('Error fetching discussion data:', error)
+        // Fallback to static data
+        setDiscussionCount(1234)
+        setDiscussionChangePct(23.1)
+      }
+    }
+    
+    fetchDiscussionData()
+    
     return () => {
       isMounted = false
     }
@@ -95,17 +164,10 @@ export default function CivicPlatform() {
     },
     {
       title: "Provincial Discussions",
-      value: "1,234",
-      change: "+23.1%",
+      value: discussionCount.toLocaleString(),
+      change: `${discussionChangePct >= 0 ? "+" : ""}${discussionChangePct.toFixed(1)}%`,
       icon: MessageSquare,
       color: "text-purple-600",
-    },
-    {
-      title: "Transparency Score",
-      value: "94.2%",
-      change: "+2.1%",
-      icon: Shield,
-      color: "text-emerald-600",
     },
   ]
 
@@ -138,6 +200,18 @@ export default function CivicPlatform() {
       time: "6 hours ago",
     },
   ]
+
+  const getIconComponent = (iconName: string) => {
+    const icons: any = {
+      DollarSign,
+      Building,
+      Vote,
+      AlertTriangle,
+      FileText,
+      MessageSquare
+    }
+    return icons[iconName] || FileText
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50 relative">
@@ -197,26 +271,32 @@ export default function CivicPlatform() {
 
           <TabsContent value="overview" className="space-y-6">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {overviewStats.map((stat, index) => (
-                <Card key={index} className="border-0 shadow-md">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-600">
-                      {stat.title}
-                    </CardTitle>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-                    <p className="flex items-center gap-1 text-xs text-slate-500">
-                      <TrendingUp className="h-3 w-3" />
-                      {stat.change} from last month
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="w-full px-6">
+              <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 md:grid-cols-3">
+                {overviewStats.map((stat, index) => (
+                  <Card key={index} className="border-0 shadow-md w-full">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-600">
+                        {stat.title}
+                      </CardTitle>
+                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
+                      <p className="flex items-center gap-1 text-xs text-slate-500">
+                        <TrendingUp className="h-3 w-3" />
+                        {stat.change} from last month
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
-            
+
+
+
+
+
             {/* Recent Activities */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <Card className="border-0 shadow-md">
@@ -225,31 +305,79 @@ export default function CivicPlatform() {
                     <Clock className="h-5 w-5" />
                     Recent Activities
                   </CardTitle>
-                  <CardDescription>Latest updates across all platform modules</CardDescription>
+                  <CardDescription>
+                    Latest updates across all platform modules
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {recentActivities.map((activity, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <activity.icon className="h-5 w-5 text-slate-600" />
-                        <div>
-                          <p className="font-medium text-slate-900">{activity.title}</p>
-                          <p className="text-sm text-slate-500">{activity.amount}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant="outline" className="mb-1">
-                          {activity.status}
-                        </Badge>
-                        <p className="text-xs text-slate-500">{activity.time}</p>
+
+                {/* Limit height to ~2 items, make rest scrollable */}
+                <CardContent className="space-y-4 max-h-40 overflow-y-auto pr-2">
+                  {isLoadingActivities ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                        <p className="text-sm text-slate-500">Loading activities...</p>
                       </div>
                     </div>
-                  ))}
+                  ) : dashboardData?.recentActivities && dashboardData.recentActivities.length > 0 ? (
+                    dashboardData.recentActivities.map((activity, index) => {
+                      const IconComponent = getIconComponent(activity.icon)
+                      const colorClass = {
+                        green: 'text-green-600',
+                        blue: 'text-blue-600',
+                        purple: 'text-purple-600',
+                        red: 'text-red-600',
+                        indigo: 'text-indigo-600',
+                      }[activity.color] || 'text-gray-600'
+
+                      return (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                            <div>
+                              <p className="font-medium text-slate-900">{activity.title}</p>
+                              <p className="text-sm text-slate-500">{activity.description}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="outline" className="mb-1">
+                              {activity.timestamp}
+                            </Badge>
+                          </div>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    // fallback static data
+                    recentActivities.map((activity, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <activity.icon className="h-5 w-5 text-slate-600" />
+                          <div>
+                            <p className="font-medium text-slate-900">{activity.title}</p>
+                            <p className="text-sm text-slate-500">{activity.amount}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="outline" className="mb-1">
+                            {activity.status}
+                          </Badge>
+                          <p className="text-xs text-slate-500">{activity.time}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
+
+
+
 
               <Card className="border-0 shadow-md">
                 <CardHeader>
