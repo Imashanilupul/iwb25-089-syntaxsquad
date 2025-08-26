@@ -791,7 +791,7 @@ Timestamp: ${timestamp}
                     </span>
                   ) : voterDemographics.reduce((sum, item) => sum + item.value, 0) < stats.totalVoters ? (
                     <span className="text-blue-600 text-xs block mt-1">
-                      * Showing estimated demographics - actual voter data will display when users with linked NICs vote
+                      * Showing estimated demographics - actual voter data will display when users with linked Blockchain's vote
                     </span>
                   ) : (
                     <span className="text-amber-600 text-xs block mt-1">
@@ -835,7 +835,7 @@ Timestamp: ${timestamp}
                   Hourly voting patterns today
                   {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
                     <span className="text-green-600 text-xs block mt-1">
-                      ✓ Showing real-time data from proposal_votes table
+                      ✓ Showing real-time data 
                     </span>
                   ) : (
                     <span className="text-blue-600 text-xs block mt-1">
