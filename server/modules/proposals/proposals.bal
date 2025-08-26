@@ -671,72 +671,88 @@ public class ProposalsService {
         do {
             log:printInfo("🗳️ Processing vote: " + voteType + " for proposal ID: " + proposalId.toString());
             
-            if walletAddress is string {
+            if walletAddress is string && walletAddress.trim().length() > 0 {
                 log:printInfo("👤 Voter wallet: " + walletAddress);
                 
                 // Use the new database function for proper vote handling
                 map<string> headers = self.getHeaders();
                 
-                // Prepare the function call
+                // Prepare the function call with correct parameter names
                 json functionPayload = {
-                    "proposal_id": proposalId,
-                    "wallet_address": walletAddress,
-                    "vote_type": voteType
+                    "proposal_id_param": proposalId,
+                    "wallet_address_param": walletAddress,
+                    "vote_type_param": voteType
                 };
                 
                 if userId is int {
-                    functionPayload = check functionPayload.mergeJson({"user_id": userId});
+                    functionPayload = check functionPayload.mergeJson({"user_id_param": userId});
                 }
+                
+                log:printInfo("📤 Calling database function with payload: " + functionPayload.toJsonString());
                 
                 // Call the database function
                 string endpoint = "/rest/v1/rpc/record_proposal_vote";
                 http:Response response = check self.supabaseClient->post(endpoint, functionPayload, headers);
                 
                 if response.statusCode != 200 {
-                    log:printError("❌ Database function call failed with status: " + response.statusCode.toString());
-                    return error("Failed to record vote: " + response.statusCode.toString());
+                    string errorBody = "Unknown error";
+                    string|error textPayload = response.getTextPayload();
+                    if textPayload is string {
+                        errorBody = textPayload;
+                    }
+                    log:printError("❌ Database function call failed with status: " + response.statusCode.toString() + ", body: " + errorBody);
+                    return error("Failed to record vote: HTTP " + response.statusCode.toString() + " - " + errorBody);
                 }
                 
                 json result = check response.getJsonPayload();
-                json[] functionResults = check result.ensureType();
+                log:printInfo("📥 Database function response: " + result.toJsonString());
                 
-                if functionResults.length() > 0 {
-                    map<json> voteResult = check functionResults[0].ensureType();
-                    boolean success = check voteResult["success"].ensureType(boolean);
+                // The response should be an array of objects from the function
+                if result is json[] {
+                    json[] functionResults = result;
                     
-                    if success {
-                        string message = check voteResult["message"].ensureType(string);
-                        string previousVote = check voteResult["previous_vote"].ensureType(string);
-                        string newVote = check voteResult["new_vote"].ensureType(string);
-                        int yesVotes = check voteResult["yes_votes"].ensureType(int);
-                        int noVotes = check voteResult["no_votes"].ensureType(int);
+                    if functionResults.length() > 0 {
+                        map<json> voteResult = check functionResults[0].ensureType();
+                        boolean success = check voteResult["success"].ensureType(boolean);
                         
-                        log:printInfo("✅ Vote recorded successfully");
-                        log:printInfo("📊 Vote change: " + previousVote + " → " + newVote);
-                        log:printInfo("📊 Final counts - Yes: " + yesVotes.toString() + ", No: " + noVotes.toString());
-                        
-                        return {
-                            "success": true,
-                            "message": message,
-                            "data": {
-                                "proposal_id": proposalId,
-                                "wallet_address": walletAddress,
-                                "previous_vote": previousVote,
-                                "new_vote": newVote,
-                                "vote_change": previousVote != newVote && previousVote != "none",
-                                "yes_votes": yesVotes,
-                                "no_votes": noVotes
-                            },
-                            "timestamp": time:utcNow()[0]
-                        };
+                        if success {
+                            string message = check voteResult["message"].ensureType(string);
+                            string previousVote = check voteResult["previous_vote"].ensureType(string);
+                            string newVote = check voteResult["new_vote"].ensureType(string);
+                            int yesVotes = check voteResult["yes_votes"].ensureType(int);
+                            int noVotes = check voteResult["no_votes"].ensureType(int);
+                            
+                            log:printInfo("✅ Vote recorded successfully");
+                            log:printInfo("📊 Vote change: " + previousVote + " → " + newVote);
+                            log:printInfo("📊 Final counts - Yes: " + yesVotes.toString() + ", No: " + noVotes.toString());
+                            
+                            return {
+                                "success": true,
+                                "message": message,
+                                "data": {
+                                    "proposal_id": proposalId,
+                                    "wallet_address": walletAddress,
+                                    "previous_vote": previousVote,
+                                    "new_vote": newVote,
+                                    "vote_change": previousVote != newVote && previousVote != "none",
+                                    "yes_votes": yesVotes,
+                                    "no_votes": noVotes
+                                },
+                                "timestamp": time:utcNow()[0]
+                            };
+                        } else {
+                            string errorMessage = check voteResult["message"].ensureType(string);
+                            log:printError("❌ Vote recording failed: " + errorMessage);
+                            return error(errorMessage);
+                        }
                     } else {
-                        string errorMessage = check voteResult["message"].ensureType(string);
-                        log:printError("❌ Vote recording failed: " + errorMessage);
-                        return error(errorMessage);
+                        log:printError("❌ No result returned from database function");
+                        return error("No result returned from vote recording function");
                     }
                 } else {
-                    log:printError("❌ No result returned from database function");
-                    return error("No result returned from vote recording function");
+                    log:printError("❌ Unexpected response format from database function");
+                    log:printError("Response: " + result.toJsonString());
+                    return error("Unexpected response format from database function");
                 }
                 
             } else {

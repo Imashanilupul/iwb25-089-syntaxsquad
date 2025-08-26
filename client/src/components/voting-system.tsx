@@ -249,45 +249,47 @@ Timestamp: ${timestamp}
         } else {
           const errorText = await apiResponse.text()
           console.warn(`Smart contract API call failed: ${apiResponse.status} - ${errorText}`)
-          
-          // Fallback: Try direct database update
-          toast.info("🔄 Attempting direct database update...")
-          try {
-            const fallbackResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                proposalId: proposalId,
-                voteType: voteType,
-                walletAddress: walletAddress // Include wallet address for proper vote tracking
-              })
-            })
+        }
 
-            if (fallbackResponse.ok) {
-              const fallbackData = await fallbackResponse.json()
-              console.log("Direct database vote confirmed:", fallbackData)
+        // ALWAYS update the database regardless of smart contract API success/failure
+        toast.info("� Updating database with vote...")
+        try {
+          const databaseResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              proposalId: proposalId,
+              voteType: voteType,
+              walletAddress: walletAddress // Include wallet address for proper vote tracking
+            })
+          })
+
+          if (databaseResponse.ok) {
+            const databaseData = await databaseResponse.json()
+            console.log("Database vote update confirmed:", databaseData)
+            
+            // Show detailed vote info if available
+            if (databaseData.success && databaseData.data) {
+              const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = databaseData.data;
               
-              // Show detailed vote info if available
-              if (fallbackData.success && fallbackData.data) {
-                const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = fallbackData.data;
-                
-                if (vote_change) {
-                  toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
-                } else if (previous_vote === 'none') {
-                  toast.success(`✅ ${new_vote === 'yes' ? 'Yes' : 'No'} vote recorded! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
-                } else {
-                  toast.success(`✅ Vote confirmed: ${new_vote} (Totals: Yes: ${yes_votes}, No: ${no_votes})`)
-                }
+              if (vote_change) {
+                toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Database updated: Yes: ${yes_votes}, No: ${no_votes}`)
+              } else if (previous_vote === 'none') {
+                toast.success(`✅ ${new_vote === 'yes' ? 'Yes' : 'No'} vote recorded in database! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
               } else {
-                toast.success(`✅ Vote recorded via database backup (blockchain vote already confirmed)`)
+                toast.success(`✅ Vote confirmed in database: ${new_vote} (Totals: Yes: ${yes_votes}, No: ${no_votes})`)
               }
             } else {
-              toast.warning(`⚠️ Vote recorded on blockchain but database update failed`)
+              toast.success(`✅ Vote recorded in database (blockchain vote already confirmed)`)
             }
-          } catch (fallbackError) {
-            console.error("Fallback database update failed:", fallbackError)
-            toast.warning(`⚠️ Vote recorded on blockchain but database update failed`)
+          } else {
+            const errorText = await databaseResponse.text()
+            console.error("Database update failed:", errorText)
+            toast.error(`❌ Database update failed: ${errorText}`)
           }
+        } catch (databaseError) {
+          console.error("Database update error:", databaseError)
+          toast.error(`❌ Database update failed: ${databaseError instanceof Error ? databaseError.message : 'Unknown error'}`)
         }
 
         // Refresh proposal data to get updated vote counts
@@ -298,8 +300,8 @@ Timestamp: ${timestamp}
       } catch (apiError: any) {
         console.error("Smart contract API call failed:", apiError)
         
-        // Fallback: Try direct database update
-        toast.info("🔄 Attempting direct database update as fallback...")
+        // Even if smart contract API fails, still try to update the database
+        toast.info("🔄 Updating database despite API failure...")
         try {
           const fallbackResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
             method: "POST",
@@ -307,27 +309,38 @@ Timestamp: ${timestamp}
             body: JSON.stringify({
               proposalId: proposalId,
               voteType: voteType,
-              walletAddress: walletAddress // Include wallet address for proper vote tracking
+              walletAddress: walletAddress
             })
           })
 
           if (fallbackResponse.ok) {
             const fallbackData = await fallbackResponse.json()
-            console.log("Direct database vote confirmed:", fallbackData)
-            toast.success(`✅ Vote recorded via database (blockchain vote already confirmed)`)
+            console.log("Fallback database vote confirmed:", fallbackData)
+            
+            if (fallbackData.success && fallbackData.data) {
+              const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = fallbackData.data;
+              
+              if (vote_change) {
+                toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Database updated: Yes: ${yes_votes}, No: ${no_votes}`)
+              } else if (previous_vote === 'none') {
+                toast.success(`✅ ${new_vote === 'yes' ? 'Yes' : 'No'} vote recorded in database! Totals: Yes: ${yes_votes}, No: ${no_votes}`)
+              } else {
+                toast.success(`✅ Vote confirmed in database: ${new_vote} (Totals: Yes: ${yes_votes}, No: ${no_votes})`)
+              }
+            } else {
+              toast.success(`✅ Vote recorded in database (blockchain failed but database updated)`)
+            }
+            
+            // Refresh data after successful database update
+            await refreshData()
           } else {
-            toast.warning(`⚠️ Vote recorded on blockchain but database sync failed`)
+            const errorText = await fallbackResponse.text()
+            console.error("Fallback database update failed:", errorText)
+            toast.error(`❌ Both blockchain API and database update failed: ${errorText}`)
           }
         } catch (fallbackError) {
           console.error("Fallback database update failed:", fallbackError)
-          toast.warning(`⚠️ Vote recorded on blockchain but database sync failed`)
-        }
-        
-        // Still try to refresh data even if API call failed
-        try {
-          await refreshData()
-        } catch (refreshError) {
-          console.error("Failed to refresh data:", refreshError)
+          toast.error(`❌ Both blockchain API and database update failed`)
         }
       }
 
