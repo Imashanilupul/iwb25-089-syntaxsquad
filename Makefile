@@ -2,7 +2,7 @@
 
 
 e:
-	cd smart-contracts && node scripts/app.js
+	cd smart-contracts && npx hardhat run --network sepolia scripts/app.js
 
 
 s:
