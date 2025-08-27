@@ -71,9 +71,14 @@ export function ReportManagement() {
     if (debouncedSearchTerm) {
       performSearch()
     } else {
-      loadReports()
+      loadAndFilterReports()
     }
   }, [debouncedSearchTerm, filterPriority, filterStatus])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterPriority, filterStatus, debouncedSearchTerm])
 
   // Load all reports from backend
   const loadReports = async () => {
@@ -93,6 +98,62 @@ export function ReportManagement() {
       setAssignmentInputs(initialAssignments)
       
       // Load statistics
+      const statsData = await reportService.getReportStatistics()
+      setStatistics(statsData)
+    } catch (error) {
+      console.error('Failed to load reports:', error)
+      toast.error('Failed to load reports. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+      // Load and filter reports when no search term is provided
+  const loadAndFilterReports = async () => {
+    try {
+      setLoading(true)
+      const reportsData = await reportService.getAllReports()
+      
+      // Apply filters
+      let filteredReports = reportsData
+      
+      // Apply priority filter
+      if (filterPriority !== "all") {
+        filteredReports = filteredReports.filter(report => report.priority === filterPriority)
+      }
+      
+      // Apply status filter
+      if (filterStatus !== "all") {
+        const isResolved = filterStatus === "resolved"
+        filteredReports = filteredReports.filter(report => report.resolved_status === isResolved)
+      }
+      
+      const sortedReports = sortReports(filteredReports)
+      setReports(sortedReports)
+      setTotalItems(sortedReports.length)
+      
+      // Set filter results message
+      if (filterPriority !== "all" || filterStatus !== "all") {
+        let filterMessage = `Filtered ${filteredReports.length} report(s)`
+        const appliedFilters: string[] = []
+        if (filterPriority !== "all") appliedFilters.push(`Priority: ${formatPriority(filterPriority)}`)
+        if (filterStatus !== "all") appliedFilters.push(`Status: ${filterStatus === "resolved" ? "Resolved" : "Pending"}`)
+        if (appliedFilters.length > 0) {
+          filterMessage += ` (${appliedFilters.join(", ")})`
+        }
+        setSearchResults(filterMessage)
+      } else {
+        setSearchResults("")
+      }
+      
+      // Initialize assignment inputs with current assignments
+      const initialAssignments: { [reportId: number]: string } = {}
+      sortedReports.forEach(report => {
+        initialAssignments[report.report_id] = report.assigned_to || ''
+      })
+      setAssignmentInputs(initialAssignments)
+      
+      // Load statistics (use original data for accurate stats)
       const statsData = await reportService.getReportStatistics()
       setStatistics(statsData)
     } catch (error) {
@@ -237,6 +298,7 @@ export function ReportManagement() {
     setDebouncedSearchTerm("")
     setFilterPriority("all")
     setFilterStatus("all")
+    setCurrentPage(1) // Reset to first page when clearing filters
     loadReports()
   }
 
