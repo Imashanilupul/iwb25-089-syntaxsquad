@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from models.chat_models import ChatRequest, ChatResponse
 from db import get_chroma_client
 from embeddings import get_embedding
 import google.generativeai as genai
@@ -11,12 +11,7 @@ collection = client.get_or_create_collection(config.CHROMA_COLLECTION)
 
 genai.configure(api_key=config.GEMINI_API_KEY)
 
-class ChatRequest(BaseModel):
-    question: str
-    top_k: int = 3
 
-class ChatResponse(BaseModel):
-    answer: str
 
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest):

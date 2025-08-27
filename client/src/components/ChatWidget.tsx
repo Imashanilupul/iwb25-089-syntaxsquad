@@ -60,7 +60,7 @@ const ChatWidget: React.FC = () => {
     try {
       // Send message to the backend /chat endpoint using Axios
       const response = await axios.post<ChatResponse>(
-        "http://localhost:9090/chat",
+        "http://localhost:8001/chat",
         { question: inputMessage, top_k: 3 } as ChatRequest,
         {
           headers: {
