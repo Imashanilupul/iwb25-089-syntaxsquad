@@ -838,7 +838,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002] max-h-[200px]" position="popper">
                       {categories.map((category) => (
                         <SelectItem key={category.category_id} value={category.category_id.toString()}>
                           {category.category_name}
@@ -880,7 +880,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002]">
                       {projectStatuses.map((status) => (
                         <SelectItem key={status.value} value={status.value}>
                           {status.label}
@@ -898,7 +898,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select province" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002]">
                       {provinces.map((province) => (
                         <SelectItem key={province} value={province}>
                           {province}
@@ -929,7 +929,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select ministry" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002]">
                       {ministries.map((ministry) => (
                         <SelectItem key={ministry} value={ministry}>
                           {ministry}
