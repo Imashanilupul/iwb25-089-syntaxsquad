@@ -2248,33 +2248,34 @@ function getHeaders() returns map<string> {
 
 
 
-# Ballerina service to connect to FastAPI chat endpoint
 service / on new http:Listener(9090) {
-    
+
+    // Proxy POST /chat endpoint
     resource function post chat(http:Caller caller, http:Request req) returns error? {
         // Read JSON payload from frontend
         json payload = check req.getJsonPayload();
 
-        // Forward to FastAPI with explicit application/json header
+        // Log incoming payload for debugging
+        log:printInfo("Received payload from frontend: " + payload.toJsonString());
+
+        // Forward request to FastAPI
         http:Request forwardReq = new;
         forwardReq.setJsonPayload(payload);
         forwardReq.setHeader("Content-Type", "application/json");
 
-    
-
-        // Send request to FastAPI
+        // Call FastAPI backend
         http:Response res = check fastapiChat->post("/chat", forwardReq);
 
-        // Convert response to JSON
+        // Extract JSON response
         json response = check res.getJsonPayload();
+
+        // Log FastAPI response for debugging
+        log:printInfo("Response from FastAPI: " + response.toJsonString());
 
         // Send back to frontend
         check caller->respond(response);
     }
 }
-
-
-
 
 
 # Check database health via HTTP
