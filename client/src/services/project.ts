@@ -100,6 +100,11 @@ class ProjectService {
   async getProjectStatistics(): Promise<ApiResponse<any>> {
     return await apiService.get<ApiResponse<any>>(`${this.baseUrl}/statistics`)
   }
+
+  // Get distinct ministries from existing projects
+  async getDistinctMinistries(): Promise<ApiResponse<string[]>> {
+    return await apiService.get<ApiResponse<string[]>>(`${this.baseUrl}/ministries`)
+  }
 }
 
 export const projectService = new ProjectService()

@@ -738,6 +738,57 @@ public class ProjectsService {
         }
     }
 
+    # Get distinct ministries from projects
+    #
+    # + return - List of distinct ministries or error
+    public function getDistinctMinistries() returns json|error {
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/projects?select=ministry&order=ministry.asc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            
+            if response.statusCode != 200 {
+                return error("Failed to get distinct ministries: " + response.statusCode.toString());
+            }
+            
+            json result = check response.getJsonPayload();
+            json[] projects = check result.ensureType();
+            
+            // Extract distinct ministries
+            string[] distinctMinistries = [];
+            foreach json project in projects {
+                if project is map<json> {
+                    json|error ministryJson = project["ministry"];
+                    if ministryJson is json {
+                        string ministry = ministryJson.toString();
+                        // Check if ministry is already in the list
+                        boolean exists = false;
+                        foreach string existingMinistry in distinctMinistries {
+                            if existingMinistry == ministry {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if !exists && ministry.trim().length() > 0 {
+                            distinctMinistries.push(ministry);
+                        }
+                    }
+                }
+            }
+            
+            return {
+                "success": true,
+                "message": "Distinct ministries retrieved successfully",
+                "data": distinctMinistries,
+                "count": distinctMinistries.length(),
+                "timestamp": time:utcNow()[0]
+            };
+            
+        } on fail error e {
+            return error("Failed to get distinct ministries: " + e.message());
+        }
+    }
+
     # Validate project data
     #
     # + projectData - Project data to validate

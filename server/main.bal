@@ -126,6 +126,7 @@ service /api on apiListener {
                 "GET /api/projects/province/{province} - Get projects by province",
                 "GET /api/projects/search/{keyword} - Search projects by keyword",
                 "GET /api/projects/statistics - Get project statistics",
+                "GET /api/projects/ministries - Get distinct ministries from projects",
                 "GET /api/transactions - List all transactions",
                 "POST /api/transactions - Create a new transaction",
                 "GET /api/transactions/{id} - Get transaction by ID",
@@ -672,6 +673,22 @@ service /api on apiListener {
         return projectsService.getAllProjects();
     }
 
+    # Get distinct ministries from projects
+    #
+    # + return - Distinct ministries list or error
+    resource function get projects/ministries() returns json|error {
+        log:printInfo("Get distinct ministries endpoint called");
+        return projectsService.getDistinctMinistries();
+    }
+
+    # Get project statistics
+    #
+    # + return - Project statistics or error
+    resource function get projects/statistics() returns json|error {
+        log:printInfo("Get project statistics endpoint called");
+        return projectsService.getProjectStatistics();
+    }
+
     # Get project by ID
     #
     # + projectId - Project ID to retrieve
@@ -779,14 +796,6 @@ service /api on apiListener {
     resource function get projects/search/[string keyword]() returns json|error {
         log:printInfo("Search projects endpoint called for keyword: " + keyword);
         return projectsService.searchProjects(keyword);
-    }
-
-    # Get project statistics
-    #
-    # + return - Project statistics or error
-    resource function get projects/statistics() returns json|error {
-        log:printInfo("Get project statistics endpoint called");
-        return projectsService.getProjectStatistics();
     }
 
     # Get all transactions
