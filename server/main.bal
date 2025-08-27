@@ -126,6 +126,7 @@ service /api on apiListener {
                 "GET /api/projects/province/{province} - Get projects by province",
                 "GET /api/projects/search/{keyword} - Search projects by keyword",
                 "GET /api/projects/statistics - Get project statistics",
+                "GET /api/projects/ministries - Get distinct ministries from projects",
                 "GET /api/transactions - List all transactions",
                 "POST /api/transactions - Create a new transaction",
                 "GET /api/transactions/{id} - Get transaction by ID",
@@ -160,7 +161,26 @@ service /api on apiListener {
                 "GET /api/policycomments/recent - Get recent comments",
                 "POST /api/policycomments/{id}/like - Like a comment",
                 "POST /api/policycomments/{id}/unlike - Unlike a comment",
-                "GET /api/policycomments/top/{limit} - Get top liked comments"
+                "GET /api/policycomments/top/{limit} - Get top liked comments",
+                "GET /api/reports - List all reports",
+                "POST /api/reports - Create a new report",
+                "GET /api/reports/{id} - Get report by ID",
+                "PUT /api/reports/{id} - Update report by ID",
+                "DELETE /api/reports/{id} - Delete report by ID",
+                "GET /api/reports/user/{userId} - Get reports by user ID",
+                "GET /api/reports/priority/{priority} - Get reports by priority",
+                "GET /api/reports/status/{resolved} - Get reports by status",
+                "GET /api/reports/evidence/{hash} - Get reports by evidence hash",
+                "GET /api/reports/search/{keyword} - Search reports by keyword",
+                "GET /api/reports/statistics - Get report statistics",
+                "GET /api/reports/recent - Get recent reports",
+                "POST /api/reports/{id}/resolve - Mark report as resolved",
+                "POST /api/reports/{id}/unresolve - Mark report as pending",
+                "POST /api/reports/{id}/like - Like a report",
+                "POST /api/reports/{id}/dislike - Dislike a report",
+                "GET /api/reports/{id}/vote/{wallet} - Check user vote on report",
+                "POST /api/reports/{id}/assign - Assign report to a user",
+                "POST /api/reports/{id}/unassign - Unassign report from user"
             ],
             "features": [
                 "Environment-based configuration",
@@ -170,6 +190,7 @@ service /api on apiListener {
                 "Project management",
                 "Transaction management",
                 "User management",
+                "Report management",
                 "Petition management",
                 "Petition activities tracking",
                 "Policy comments and engagement",
@@ -672,6 +693,22 @@ service /api on apiListener {
         return projectsService.getAllProjects();
     }
 
+    # Get distinct ministries from projects
+    #
+    # + return - Distinct ministries list or error
+    resource function get projects/ministries() returns json|error {
+        log:printInfo("Get distinct ministries endpoint called");
+        return projectsService.getDistinctMinistries();
+    }
+
+    # Get project statistics
+    #
+    # + return - Project statistics or error
+    resource function get projects/statistics() returns json|error {
+        log:printInfo("Get project statistics endpoint called");
+        return projectsService.getProjectStatistics();
+    }
+
     # Get project by ID
     #
     # + projectId - Project ID to retrieve
@@ -779,14 +816,6 @@ service /api on apiListener {
     resource function get projects/search/[string keyword]() returns json|error {
         log:printInfo("Search projects endpoint called for keyword: " + keyword);
         return projectsService.searchProjects(keyword);
-    }
-
-    # Get project statistics
-    #
-    # + return - Project statistics or error
-    resource function get projects/statistics() returns json|error {
-        log:printInfo("Get project statistics endpoint called");
-        return projectsService.getProjectStatistics();
     }
 
     # Get all transactions
@@ -1510,6 +1539,58 @@ service /api on apiListener {
             },
             "timestamp": time:utcNow()[0]
         };
+    }
+
+    # Assign report to a user
+    #
+    # + reportId - Report ID to assign
+    # + request - HTTP request containing assignment data
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/assign(http:Request request) returns json|error {
+        log:printInfo("Assign report endpoint called for report ID: " + reportId.toString());
+        
+        json payload = check request.getJsonPayload();
+        
+        // Extract assigned_to from payload
+        json|error assignedToValue = payload.assigned_to;
+        if assignedToValue is error {
+            return {
+                "success": false,
+                "message": "assigned_to field is required",
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        string|error assignedToStr = assignedToValue.ensureType(string);
+        if assignedToStr is error {
+            return {
+                "success": false,
+                "message": "assigned_to must be a string",
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        // Create update payload
+        json updatePayload = {
+            "assigned_to": assignedToStr.trim()
+        };
+        
+        return reportsService.updateReport(reportId, updatePayload);
+    }
+
+    # Unassign report (remove assignment)
+    #
+    # + reportId - Report ID to unassign
+    # + return - Updated report data or error
+    resource function post reports/[int reportId]/unassign() returns json|error {
+        log:printInfo("Unassign report endpoint called for report ID: " + reportId.toString());
+        
+        // Create update payload to clear assignment
+        json updatePayload = {
+            "assigned_to": ()
+        };
+        
+        return reportsService.updateReport(reportId, updatePayload);
     }
 
     # Get all petitions

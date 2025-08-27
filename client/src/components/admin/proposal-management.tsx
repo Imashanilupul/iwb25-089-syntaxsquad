@@ -676,7 +676,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger className={editingId ? "bg-gray-50 text-gray-600" : ""}>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002] max-h-[200px]" position="popper">
                       {categories.map((category) => (
                         <SelectItem key={category.category_id} value={category.category_id.toString()}>
                           {category.category_name}

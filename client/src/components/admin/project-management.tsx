@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MinistryCombobox } from "@/components/ui/ministry-combobox"
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ import { useAppKitAccount } from '@reown/appkit/react'
 export function ProjectManagement() {
   const [projects, setProjects] = useState<Project[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [ministries, setMinistries] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     projectName: "",
@@ -87,18 +89,6 @@ export function ProjectManagement() {
     "All Provinces",
   ]
 
-  const ministries = [
-    "Ministry of Finance",
-    "Ministry of Education",
-    "Ministry of Health",
-    "Ministry of Transport",
-    "Ministry of Agriculture",
-    "Ministry of Technology",
-    "Ministry of Environment",
-    "Ministry of Defense",
-    "Ministry of Water Supply",
-  ]
-
   const projectStatuses = [
     { value: "PLANNED", label: "Planning" },
     { value: "IN_PROGRESS", label: "In Progress" },
@@ -139,9 +129,10 @@ export function ProjectManagement() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [projectsResponse, categoriesResponse] = await Promise.all([
+      const [projectsResponse, categoriesResponse, ministriesResponse] = await Promise.all([
         projectService.getAllProjects(),
         categoryService.getAllCategories(),
+        projectService.getDistinctMinistries(),
       ])
 
       if (projectsResponse.success) {
@@ -163,6 +154,14 @@ export function ProjectManagement() {
           description: "Failed to load categories",
           variant: "destructive",
         })
+      }
+
+      if (ministriesResponse.success) {
+        setMinistries(ministriesResponse.data)
+      } else {
+        // If ministries fail to load, we can still continue with an empty array
+        console.warn("Failed to load ministries:", ministriesResponse.message)
+        setMinistries([])
       }
     } catch (error) {
       console.error("Error loading data:", error)
@@ -838,7 +837,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002] max-h-[200px]" position="popper">
                       {categories.map((category) => (
                         <SelectItem key={category.category_id} value={category.category_id.toString()}>
                           {category.category_name}
@@ -880,7 +879,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002] max-h-[200px]" position="popper">
                       {projectStatuses.map((status) => (
                         <SelectItem key={status.value} value={status.value}>
                           {status.label}
@@ -898,7 +897,7 @@ Timestamp: ${timestamp}
                     <SelectTrigger>
                       <SelectValue placeholder="Select province" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10002] max-h-[200px]" position="popper">
                       {provinces.map((province) => (
                         <SelectItem key={province} value={province}>
                           {province}
@@ -922,21 +921,13 @@ Timestamp: ${timestamp}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ministry">Responsible Ministry</Label>
-                  <Select
+                  <MinistryCombobox
                     value={formData.ministry}
                     onValueChange={(value) => setFormData({ ...formData, ministry: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select ministry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ministries.map((ministry) => (
-                        <SelectItem key={ministry} value={ministry}>
-                          {ministry}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    ministries={ministries}
+                    placeholder="Select or type ministry name..."
+                    disabled={isCreatingProject}
+                  />
                 </div>
               </div>
 

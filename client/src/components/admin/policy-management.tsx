@@ -703,7 +703,7 @@ Timestamp: ${timestamp}
                 Add Policy
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
                 <DialogDescription>
@@ -789,7 +789,7 @@ Timestamp: ${timestamp}
                       <SelectTrigger>
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[10002]" position="popper" sideOffset={4}>
                         {policyStatuses.map((status) => (
                           <SelectItem key={status} value={status}>
                             {formatStatus(status)}
@@ -892,7 +892,7 @@ Timestamp: ${timestamp}
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="z-[10002]" position="popper" sideOffset={4}>
             <SelectItem value="all">All Statuses</SelectItem>
             {policyStatuses.map((status) => (
               <SelectItem key={status} value={status}>
