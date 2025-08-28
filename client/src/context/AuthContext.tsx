@@ -10,6 +10,7 @@ type AuthState = {
   // Wallet authentication
   address: string | null;
   walletVerified: boolean;
+  verified: boolean; // Legacy compatibility property
   
   // Asgardeo user validation
   asgardeoUser: any | null;
@@ -27,6 +28,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState>({
   address: null,
   walletVerified: false,
+  verified: false,
   asgardeoUser: null,
   isRegisteredUser: false,
   isFullyAuthenticated: false,
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({
     address: null,
     walletVerified: false,
+    verified: false,
     asgardeoUser: null,
     isRegisteredUser: false,
     isFullyAuthenticated: false,
@@ -109,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuth({
             address,
             walletVerified: validation.walletVerified,
+            verified: validation.walletVerified, // Legacy compatibility
             asgardeoUser,
             isRegisteredUser: validation.isRegisteredUser,
             isFullyAuthenticated: validation.walletVerified && validation.isRegisteredUser,
@@ -121,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuth({
             address: null,
             walletVerified: false,
+            verified: false, // Legacy compatibility
             asgardeoUser,
             isRegisteredUser: false,
             isFullyAuthenticated: false,

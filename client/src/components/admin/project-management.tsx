@@ -27,6 +27,7 @@ import { projectService, type Project, type ProjectFormData } from "@/services/p
 import { categoryService, type Category } from "@/services/category"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAppKitAccount } from '@reown/appkit/react'
+import { useAuth } from "@/context/AuthContext"
 
 export function ProjectManagement() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -50,7 +51,7 @@ export function ProjectManagement() {
 
   // Wallet connection state
   const { address, isConnected } = useAppKitAccount()
-  const [verified, setVerified] = useState(false)
+  const { verified } = useAuth() // Use shared AuthContext
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
 
@@ -101,30 +102,6 @@ export function ProjectManagement() {
   useEffect(() => {
     loadData()
   }, [])
-
-  // Check wallet authorization when connected
-  useEffect(() => {
-    const checkAuthorization = async () => {
-      if (isConnected && address) {
-        try {
-          const response = await fetch(`http://localhost:3001/auth/is-authorized/${address}`)
-          if (response.ok) {
-            const data = await response.json()
-            setVerified(data.isAuthorized || false)
-          } else {
-            setVerified(false)
-          }
-        } catch (error) {
-          console.warn("Could not check authorization:", error)
-          setVerified(false)
-        }
-      } else {
-        setVerified(false)
-      }
-    }
-
-    checkAuthorization()
-  }, [isConnected, address])
 
   const loadData = async () => {
     try {
