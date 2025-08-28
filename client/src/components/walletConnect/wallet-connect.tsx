@@ -13,7 +13,7 @@ export const ConnectButton = () => {
 }
 
 export const DisconnectButton = ({ 
-  variant = "outline", 
+  variant = "default", 
   size = "default",
   className = "",
   children 
@@ -41,7 +41,7 @@ export const DisconnectButton = ({
       variant={variant} 
       size={size} 
       onClick={handleDisconnect}
-      className={className}
+      className={`bg-black text-white hover:bg-black/90 ${className}`}
     >
       {children || (
         <>

@@ -130,10 +130,10 @@ export default function AdminPortal() {
 
               {/* Disconnect Wallet Button */}
               <Button 
-                variant="outline" 
+                variant="default" 
                 size="sm" 
                 onClick={handleWalletDisconnect}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 bg-black text-white hover:bg-black/90"
               >
                 <Wallet className="h-4 w-4" />
                 Disconnect Wallet
