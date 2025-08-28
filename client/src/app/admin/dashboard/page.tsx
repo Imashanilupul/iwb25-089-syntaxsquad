@@ -15,7 +15,7 @@ import { UserAnalytics } from "@/components/admin/user-analytics"
 import { DbSync } from "@/components/admin/db-sync"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAuth } from "@/context/AuthContext"
-import { useAppKitAccount } from "@reown/appkit/react"
+import { useAppKitAccount, useDisconnect } from "@reown/appkit/react"
 import { useRouter } from "next/navigation"
 import {
   LayoutDashboard,
@@ -28,12 +28,12 @@ import {
   Users,
   Wallet,
   Database,
-  LogOut,
 } from "lucide-react"
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const { address, isConnected } = useAppKitAccount()
+  const { disconnect } = useDisconnect()
   const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
   const router = useRouter()
 
@@ -43,9 +43,18 @@ export default function AdminDashboard() {
     return null
   }
 
-  const handleLogout = () => {
-    // Redirect to admin login page
-    router.push('/adminLogin')
+  const handleWalletDisconnect = async () => {
+    try {
+      // First disconnect the wallet
+      await disconnect()
+      
+      // Then sign out from Asgardeo session and redirect to adminLogin
+      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
+    } catch (error) {
+      console.error("Failed to disconnect wallet:", error)
+      // Still redirect and sign out even if wallet disconnect fails
+      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
+    }
   }
 
   return (
@@ -93,15 +102,15 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Logout Button */}
+              {/* Disconnect Wallet Button */}
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={handleLogout}
+                onClick={handleWalletDisconnect}
                 className="flex items-center gap-2"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
+                <Wallet className="h-4 w-4" />
+                Disconnect Wallet
               </Button>
             </div>
           </div>

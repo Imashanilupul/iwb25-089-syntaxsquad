@@ -49,6 +49,13 @@ export function AdminWelcome() {
       setTimeout(() => {
         router.push('/admin')
       }, 1500)
+    } else if (asgardeoUser && !isConnected) {
+      // User has Asgardeo session but no wallet connected - sign out from Asgardeo
+      toast({
+        title: "Session Cleared",
+        description: "Please connect your wallet to continue.",
+      })
+      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
     }
   }, [isConnected, verified, asgardeoUser, isFullyAuthenticated, router])
 
