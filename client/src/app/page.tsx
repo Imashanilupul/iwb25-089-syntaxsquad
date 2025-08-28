@@ -24,7 +24,6 @@ import { WhistleblowingSystem } from "@/components/whistleblowing-system"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { BlockchainVisualization } from "@/components/blockchain-visualization"
 import { RegistrationDialog } from "@/components/registration-dialog"
-import SignUpPage from "@/components/signup"
 import { userService } from "@/services/user"
 import { categoryService } from "@/services/category"
 import { useAuth } from "@/context/AuthContext"
@@ -478,8 +477,4 @@ export default function CivicPlatform() {
       </div>
     </div>
   )
-}
-
-export function Signup() {
-  return <SignUpPage />
 }

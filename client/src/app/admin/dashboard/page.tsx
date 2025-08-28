@@ -39,13 +39,13 @@ export default function AdminDashboard() {
 
   // Redirect if not authenticated
   if (!isFullyAuthenticated) {
-    router.push('/admin')
+    router.push('/adminLogin')
     return null
   }
 
   const handleLogout = () => {
-    // You can add logout logic here if needed
-    router.push('/admin')
+    // Redirect to admin login page
+    router.push('/adminLogin')
   }
 
   return (

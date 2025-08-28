@@ -32,8 +32,15 @@ export async function GET(request: NextRequest) {
   }
   
   if (pathname.includes('/signout')) {
-    // Handle sign out
-    const response = NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/auth-test`);
+    // Handle sign out - check referer to determine redirect
+    const referer = request.headers.get('referer') || '';
+    const isAdminLogout = referer.includes('/admin');
+    
+    const redirectUrl = isAdminLogout 
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=true`
+      : `${process.env.NEXT_PUBLIC_APP_URL}/auth-test`;
+    
+    const response = NextResponse.redirect(redirectUrl);
     response.cookies.delete('asgardeo_session');
     response.cookies.delete('oauth_state');
     return response;

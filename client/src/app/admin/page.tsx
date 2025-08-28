@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +14,6 @@ import { PetitionManagement } from "@/components/admin/petition-management"
 import { ReportManagement } from "@/components/admin/report-management"
 import { UserAnalytics } from "@/components/admin/user-analytics"
 import { DbSync } from "@/components/admin/db-sync"
-import { AdminWelcome } from "@/components/admin/admin-welcome"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAuth } from "@/context/AuthContext"
 import { useAppKitAccount } from "@reown/appkit/react"
@@ -28,16 +28,37 @@ import {
   Users,
   Wallet,
   Database,
+  LogOut,
 } from "lucide-react"
 
 export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("overview")
   const { address, isConnected } = useAppKitAccount()
-  const { verified, isFullyAuthenticated } = useAuth()
+  const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
+  const router = useRouter()
 
-  // Show welcome page if not fully authenticated
+  // Redirect to adminLogin if not fully authenticated
+  useEffect(() => {
+    if (!isFullyAuthenticated) {
+      router.push('/adminLogin')
+    }
+  }, [isFullyAuthenticated, router])
+
+  // Show loading or redirect if not authenticated
   if (!isFullyAuthenticated) {
-    return <AdminWelcome />
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const handleLogout = () => {
+    // Redirect to admin login page
+    router.push('/adminLogin')
   }
 
   return (
@@ -54,28 +75,47 @@ export default function AdminPortal() {
               />
               <div>
                 <h1 className="text-3xl font-bold text-slate-900">Admin Portal</h1>
-                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Data Management</p>
+                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
               </div>
             </div>
             
-            {/* Wallet Connection Section */}
+            {/* User Info & Controls */}
             <div className="flex items-center gap-4">
-              {isConnected && address ? (
+              {/* Welcome Message */}
+              {asgardeoUser && (
+                <div className="text-right">
+                  <p className="text-sm text-slate-600">Welcome back,</p>
+                  <p className="font-semibold text-slate-900">
+                    {asgardeoUser.given_name || 'Administrator'}
+                  </p>
+                </div>
+              )}
+
+              {/* Wallet Connection Section */}
+              {isConnected && address && (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border shadow-sm">
                     <Wallet className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-slate-700">
                       {address.slice(0, 6)}...{address.slice(-4)}
                     </span>
-                    <Badge variant={verified ? "default" : "secondary"}>
+                    <Badge variant={verified ? "default" : "secondary"} className="text-xs">
                       {verified ? "Verified" : "Unverified"}
                     </Badge>
                   </div>
                 </div>
-              ) : (
-                <div className="text-sm text-slate-500">Wallet not connected</div>
               )}
-              <ConnectButton />
+
+              {/* Logout Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLogout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
             </div>
           </div>
           
@@ -87,6 +127,9 @@ export default function AdminPortal() {
                 <span className="text-sm text-amber-800">
                   Connect your wallet to access all admin features and blockchain interactions.
                 </span>
+                <div className="ml-auto">
+                  <ConnectButton />
+                </div>
               </div>
             </div>
           )}

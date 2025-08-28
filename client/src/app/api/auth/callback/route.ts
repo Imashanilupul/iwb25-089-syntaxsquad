@@ -84,8 +84,19 @@ export async function GET(request: NextRequest) {
       expiresAt: Date.now() + ((tokens.expires_in || 3600) * 1000)
     };
     
-    // Redirect to auth test page with session cookie
-    const response = NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/auth-test?success=true`);
+    // Determine redirect URL based on state or session
+    let redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth-test?success=true`;
+    
+    // Check if this is an admin login (you can enhance this with better state management)
+    const referer = request.headers.get('referer') || '';
+    const isAdminLogin = referer.includes('/adminLogin') || referer.includes('/admin') || state?.includes('admin');
+    
+    if (isAdminLogin) {
+      redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/admin?auth=success`;
+    }
+    
+    // Redirect with session cookie
+    const response = NextResponse.redirect(redirectUrl);
     
     response.cookies.set('asgardeo_session', JSON.stringify(sessionData), {
       httpOnly: true,

@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
-import { useAppKitAccount } from '@reown/appkit/react'
+import { useAppKitAccount, useDisconnect } from '@reown/appkit/react'
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "@/hooks/use-toast"
-import { Wallet, Shield, CheckCircle, ArrowRight, Loader2 } from "lucide-react"
+import { Wallet, Shield, CheckCircle, ArrowRight, Loader2, XCircle } from "lucide-react"
 import Image from "next/image"
 
 export function AdminWelcome() {
   const router = useRouter()
   const { address, isConnected } = useAppKitAccount()
+  const { disconnect } = useDisconnect()
   const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false)
@@ -29,12 +30,13 @@ export function AdminWelcome() {
       // Show success notification
       toast({
         title: "🎉 Wallet Verified Successfully!",
-        description: "Redirecting to complete your registration...",
+        description: "Redirecting to Asgardeo login...",
       })
 
-      // Redirect to Asgardeo signup after animation
+      // Redirect to Asgardeo login after animation
       setTimeout(() => {
-        router.push('/signup?from=admin')
+        // Redirect to Asgardeo authentication with admin context
+        window.location.href = '/api/auth/signin?callbackUrl=' + encodeURIComponent(window.location.origin + '/admin')
       }, 2000)
     } else if (isFullyAuthenticated) {
       // Both wallet and Asgardeo authenticated - redirect to admin portal
@@ -45,10 +47,28 @@ export function AdminWelcome() {
       })
       
       setTimeout(() => {
-        router.push('/admin/dashboard')
+        router.push('/admin')
       }, 1500)
     }
   }, [isConnected, verified, asgardeoUser, isFullyAuthenticated, router])
+
+  // Handle wallet disconnection
+  const handleDisconnectWallet = async () => {
+    try {
+      await disconnect()
+      toast({
+        title: "Wallet Disconnected",
+        description: "You can now connect a different wallet.",
+      })
+    } catch (error) {
+      console.error("Failed to disconnect wallet:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect wallet. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -174,7 +194,7 @@ export function AdminWelcome() {
                         </Badge>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <p className="text-red-700 font-medium">
                           ❌ Wallet Not Authorized
                         </p>
@@ -182,9 +202,20 @@ export function AdminWelcome() {
                           Your wallet address is not authorized for admin access. 
                           Please contact a system administrator for authorization.
                         </p>
-                        <Badge variant="destructive">
-                          Unauthorized Access
-                        </Badge>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="destructive">
+                            Unauthorized Access
+                          </Badge>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleDisconnectWallet}
+                            className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            Disconnect Wallet
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -216,17 +247,17 @@ export function AdminWelcome() {
                   
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Step 3: Complete Registration
+                      Step 3: Complete Asgardeo Authentication
                     </h3>
                     
                     {!isConnected || !verified ? (
                       <p className="text-slate-500">
-                        Complete wallet verification to proceed with registration.
+                        Complete wallet verification to proceed with Asgardeo authentication.
                       </p>
                     ) : asgardeoUser ? (
                       <div className="space-y-2">
                         <p className="text-green-700 font-medium">
-                          ✅ Registration Complete
+                          ✅ Authentication Complete
                         </p>
                         <p className="text-sm text-green-600">
                           Welcome back, {asgardeoUser.given_name || 'Administrator'}!
@@ -237,7 +268,7 @@ export function AdminWelcome() {
                         <div className="flex items-center gap-3">
                           <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                           <p className="text-blue-700 font-medium">
-                            Redirecting to registration...
+                            Redirecting to Asgardeo login...
                           </p>
                         </div>
                         <div className="w-full bg-blue-100 rounded-full h-2">
@@ -250,14 +281,14 @@ export function AdminWelcome() {
                           🎉 Wallet verification successful!
                         </p>
                         <p className="text-sm text-blue-600">
-                          Please complete your registration to access the admin portal.
+                          Please complete your Asgardeo authentication to access the admin portal.
                         </p>
                         <Button 
-                          onClick={() => router.push('/signup?from=admin')} 
+                          onClick={() => window.location.href = '/api/auth/signin?callbackUrl=' + encodeURIComponent(window.location.origin + '/admin')} 
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
-                          Complete Registration
+                          Continue to Asgardeo Login
                         </Button>
                       </div>
                     )}
@@ -274,7 +305,7 @@ export function AdminWelcome() {
                       Verification Successful! 🎉
                     </h3>
                     <p className="text-green-700">
-                      Your wallet has been verified. Redirecting to complete registration...
+                      Your wallet has been verified. Redirecting to complete authentication...
                     </p>
                   </div>
                 )}
