@@ -1,4 +1,25 @@
 const express = require("express");
+const axios = require("axios");
+require('dotenv').config(); // Add this to load .env file
+
+// Database configuration from .env file
+const DB_CONFIG = {
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  serviceRoleKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ,
+  restEndpoint: "/rest/v1"
+};
+
+// Create database HTTP client with proper headers
+const dbClient = axios.create({
+  baseURL: DB_CONFIG.supabaseUrl + DB_CONFIG.restEndpoint,
+  headers: {
+    'apikey': DB_CONFIG.serviceRoleKey,
+    'Authorization': `Bearer ${DB_CONFIG.serviceRoleKey}`,
+    'Content-Type': 'application/json'
+  },
+  timeout: 30000
+});
+
 let ethers;
 let provider;
 try {
@@ -660,6 +681,632 @@ async function fetchIPFSContent(cid) {
     return `[IPFS Error: ${cid}]`;
   }
 }
+
+// ========================================
+// DATABASE ACCESS FUNCTIONS
+// ========================================
+
+// Generic database query function
+async function queryDatabase(table, options = {}) {
+  try {
+    let url = `/${table}`;
+    const params = new URLSearchParams();
+    
+    if (options.select) params.append('select', options.select);
+    if (options.filter) params.append(options.filter.column, `eq.${options.filter.value}`);
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.order) params.append('order', options.order);
+    
+    if (params.toString()) url += '?' + params.toString();
+    
+    const response = await dbClient.get(url);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Database query error for ${table}:`, error.response?.data || error.message);
+    throw new Error(`Database query failed: ${error.response?.data?.message || error.message}`);
+  }
+}
+
+// Create record in database
+async function createRecord(table, data) {
+  try {
+    const response = await dbClient.post(`/${table}`, data);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Database create error for ${table}:`, error.response?.data || error.message);
+    throw new Error(`Database create failed: ${error.response?.data?.message || error.message}`);
+  }
+}
+
+// Update record in database
+async function updateRecord(table, id, data, idColumn = 'id') {
+  try {
+    const response = await dbClient.patch(`/${table}?${idColumn}=eq.${id}`, data);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Database update error for ${table}:`, error.response?.data || error.message);
+    throw new Error(`Database update failed: ${error.response?.data?.message || error.message}`);
+  }
+}
+
+// Delete record from database
+async function deleteRecord(table, id, idColumn = 'id') {
+  try {
+    const response = await dbClient.delete(`/${table}?${idColumn}=eq.${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Database delete error for ${table}:`, error.response?.data || error.message);
+    throw new Error(`Database delete failed: ${error.response?.data?.message || error.message}`);
+  }
+}
+
+// ========================================
+// ENTITY-SPECIFIC DATABASE FUNCTIONS
+// ========================================
+
+// Proposals
+async function getAllProposals() {
+  return await queryDatabase('proposals', {
+    select: 'id,title,short_description,description_in_details,yes_votes,no_votes,blockchain_proposal_id,creator_id,expired_date,active_status',
+    order: 'id'
+  });
+}
+
+async function createProposal(data) {
+  const proposalData = {
+    title: data.title?.content || data.title || '',
+    short_description: data.short_description?.content || data.short_description || '',
+    description_in_details: data.description_in_details?.content || data.description_in_details || '',
+    yes_votes: data.yes_votes || 0,
+    no_votes: data.no_votes || 0,
+    blockchain_proposal_id: data.blockchain_proposal_id,
+    creator_id: data.created_by || data.creator_id || null,
+    expired_date: data.expired_date,
+    active_status: data.active_status !== undefined ? data.active_status : true,
+    category_id: data.category_id || null
+  };
+  
+  return await createRecord('proposals', proposalData);
+}
+
+// Petitions
+async function getAllPetitions() {
+  return await queryDatabase('petitions', {
+    select: 'id,title,description,required_signature_count,signature_count,blockchain_petition_id,creator_id,deadline,is_active',
+    order: 'id'
+  });
+}
+
+async function createPetition(data) {
+  const petitionData = {
+    title: data.title?.content || data.title || '',
+    description: data.description?.content || data.description || '',
+    required_signature_count: data.required_signature_count || 0,
+    signature_count: data.signature_count || 0,
+    blockchain_petition_id: data.blockchain_petition_id,
+    creator_id: data.creator_id || null,
+    deadline: data.deadline || null,
+    is_active: data.status === 'ACTIVE' || !data.is_completed
+  };
+  
+  return await createRecord('petitions', petitionData);
+}
+
+// Reports
+async function getAllReports() {
+  return await queryDatabase('reports', {
+    select: 'report_id,report_title,description,priority,upvotes,downvotes,blockchain_report_id,user_id,resolved_status,evidence_hash',
+    order: 'report_id'
+  });
+}
+
+async function createReport(data) {
+  const reportData = {
+    report_title: data.report_title?.content || data.report_title || '',
+    description: data.description?.content || data.description || '',
+    priority: data.priority || 'MEDIUM',
+    upvotes: data.upvotes || 0,
+    downvotes: data.downvotes || 0,
+    blockchain_report_id: data.blockchain_report_id,
+    user_id: data.user_id || null,
+    resolved_status: data.resolved_status || false,
+    evidence_hash: data.evidence_hash || `blockchain_${data.blockchain_report_id}`
+  };
+  
+  return await createRecord('reports', reportData);
+}
+
+// ========================================
+// FIELD COMPARISON FUNCTIONS  
+// ========================================
+
+function compareProposalFields(dbProposal, bcProposal) {
+  const updateData = {};
+  let hasChanges = false;
+  
+  // Extract title content
+  const bcTitle = bcProposal.title?.content || bcProposal.title || '';
+  if (dbProposal.title !== bcTitle) {
+    updateData.title = bcTitle;
+    hasChanges = true;
+  }
+  
+  // Extract description content
+  const bcShortDesc = bcProposal.short_description?.content || bcProposal.short_description || '';
+  if (dbProposal.short_description !== bcShortDesc) {
+    updateData.short_description = bcShortDesc;
+    hasChanges = true;
+  }
+  
+  const bcDetails = bcProposal.description_in_details?.content || bcProposal.description_in_details || '';
+  if (dbProposal.description_in_details !== bcDetails) {
+    updateData.description_in_details = bcDetails;
+    hasChanges = true;
+  }
+  
+  // Vote counts
+  if (dbProposal.yes_votes !== bcProposal.yes_votes) {
+    updateData.yes_votes = bcProposal.yes_votes;
+    hasChanges = true;
+  }
+  
+  if (dbProposal.no_votes !== bcProposal.no_votes) {
+    updateData.no_votes = bcProposal.no_votes;
+    hasChanges = true;
+  }
+  
+  // Active status
+  if (dbProposal.active_status !== bcProposal.active_status) {
+    updateData.active_status = bcProposal.active_status;
+    hasChanges = true;
+  }
+  
+  return { hasChanges, updateData };
+}
+
+function comparePetitionFields(dbPetition, bcPetition) {
+  const updateData = {};
+  let hasChanges = false;
+  
+  const bcTitle = bcPetition.title?.content || bcPetition.title || '';
+  if (dbPetition.title !== bcTitle) {
+    updateData.title = bcTitle;
+    hasChanges = true;
+  }
+  
+  const bcDesc = bcPetition.description?.content || bcPetition.description || '';
+  if (dbPetition.description !== bcDesc) {
+    updateData.description = bcDesc;
+    hasChanges = true;
+  }
+  
+  if (dbPetition.required_signature_count !== bcPetition.required_signature_count) {
+    updateData.required_signature_count = bcPetition.required_signature_count;
+    hasChanges = true;
+  }
+  
+  if (dbPetition.signature_count !== bcPetition.signature_count) {
+    updateData.signature_count = bcPetition.signature_count;
+    hasChanges = true;
+  }
+  
+  // Convert blockchain is_completed to database is_active
+  const bcIsActive = !bcPetition.is_completed;
+  if (dbPetition.is_active !== bcIsActive) {
+    updateData.is_active = bcIsActive;
+    hasChanges = true;
+  }
+  
+  return { hasChanges, updateData };
+}
+
+function compareReportFields(dbReport, bcReport) {
+  const updateData = {};
+  let hasChanges = false;
+  
+  const bcTitle = bcReport.report_title?.content || bcReport.report_title || '';
+  if (dbReport.report_title !== bcTitle) {
+    updateData.report_title = bcTitle;
+    hasChanges = true;
+  }
+  
+  const bcDesc = bcReport.description?.content || bcReport.description || '';
+  if (dbReport.description !== bcDesc) {
+    updateData.description = bcDesc;
+    hasChanges = true;
+  }
+  
+  if (dbReport.priority !== bcReport.priority) {
+    updateData.priority = bcReport.priority;
+    hasChanges = true;
+  }
+  
+  if (dbReport.upvotes !== bcReport.upvotes) {
+    updateData.upvotes = bcReport.upvotes;
+    hasChanges = true;
+  }
+  
+  if (dbReport.downvotes !== bcReport.downvotes) {
+    updateData.downvotes = bcReport.downvotes;
+    hasChanges = true;
+  }
+  
+  if (dbReport.resolved_status !== bcReport.resolved_status) {
+    updateData.resolved_status = bcReport.resolved_status;
+    hasChanges = true;
+  }
+  
+  return { hasChanges, updateData };
+}
+
+// ========================================
+// SYNC IMPLEMENTATION FUNCTIONS
+// ========================================
+
+// Two-phase sync for proposals
+async function syncProposalsWithData(fromBlock, toBlock, blockchainProposals) {
+  console.log('🗳️ Starting proposals sync with provided data...');
+  
+  let newCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+  const errors = [];
+  
+  try {
+    // Get existing DB data
+    const dbProposals = await getAllProposals();
+    console.log(`📊 Found ${blockchainProposals.length} proposals in blockchain and ${dbProposals.length} in database`);
+    
+    // Create lookup maps for O(1) access
+    const dbMap = new Map();
+    const bcMap = new Map();
+    
+    dbProposals.forEach(p => {
+      if (p.blockchain_proposal_id) {
+        dbMap.set(p.blockchain_proposal_id, p);
+      }
+    });
+    
+    blockchainProposals.forEach(p => {
+      if (p.blockchain_proposal_id) {
+        bcMap.set(p.blockchain_proposal_id, p);
+      }
+    });
+    
+    // Phase 1: Check DB records against blockchain
+    for (const dbProposal of dbProposals) {
+      if (!dbProposal.blockchain_proposal_id) continue;
+      
+      const bcId = dbProposal.blockchain_proposal_id;
+      const bcProposal = bcMap.get(bcId);
+      
+      if (!bcProposal) {
+        // Not found in blockchain - delete from DB
+        try {
+          await deleteRecord('proposals', dbProposal.id);
+          removedCount++;
+          console.log(`🗑️ Removed proposal ${bcId} (id: ${dbProposal.id}) - not found in blockchain`);
+        } catch (error) {
+          errors.push({ type: 'delete', id: bcId, error: error.message });
+        }
+        continue;
+      }
+      
+      // Compare and update if needed
+      const needsUpdate = compareProposalFields(dbProposal, bcProposal);
+      
+      if (needsUpdate.hasChanges) {
+        try {
+          await updateRecord('proposals', dbProposal.id, needsUpdate.updateData);
+          updatedCount++;
+          console.log(`🔄 Updated proposal ${bcId} (id: ${dbProposal.id})`);
+        } catch (error) {
+          errors.push({ type: 'update', id: bcId, error: error.message });
+        }
+      }
+    }
+    
+    // Phase 2: Create new blockchain records not in DB
+    for (const bcProposal of blockchainProposals) {
+      const bcId = bcProposal.blockchain_proposal_id;
+      if (!bcId || dbMap.has(bcId)) continue;
+      
+      try {
+        await createProposal(bcProposal);
+        newCount++;
+        console.log(`✅ Created new proposal ${bcId}`);
+      } catch (error) {
+        errors.push({ type: 'create', id: bcId, error: error.message });
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in proposals sync:', error);
+    errors.push({ type: 'general', error: error.message });
+  }
+  
+  return {
+    status: 'completed',
+    fromBlock,
+    toBlock,
+    results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
+  };
+}
+
+// Two-phase sync for petitions
+async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
+  console.log('📝 Starting petitions sync with provided data...');
+  
+  let newCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+  const errors = [];
+  
+  try {
+    const dbPetitions = await getAllPetitions();
+    console.log(`📊 Found ${blockchainPetitions.length} petitions in blockchain and ${dbPetitions.length} in database`);
+    
+    const dbMap = new Map();
+    const bcMap = new Map();
+    
+    dbPetitions.forEach(p => {
+      if (p.blockchain_petition_id) {
+        dbMap.set(p.blockchain_petition_id, p);
+      }
+    });
+    
+    blockchainPetitions.forEach(p => {
+      if (p.blockchain_petition_id) {
+        bcMap.set(p.blockchain_petition_id, p);
+      }
+    });
+    
+    // Phase 1: Check DB records
+    for (const dbPetition of dbPetitions) {
+      if (!dbPetition.blockchain_petition_id) continue;
+      
+      const bcId = dbPetition.blockchain_petition_id;
+      const bcPetition = bcMap.get(bcId);
+      
+      if (!bcPetition) {
+        try {
+          await deleteRecord('petitions', dbPetition.id);
+          removedCount++;
+          console.log(`🗑️ Removed petition ${bcId} (id: ${dbPetition.id})`);
+        } catch (error) {
+          errors.push({ type: 'delete', id: bcId, error: error.message });
+        }
+        continue;
+      }
+      
+      const needsUpdate = comparePetitionFields(dbPetition, bcPetition);
+      
+      if (needsUpdate.hasChanges) {
+        try {
+          await updateRecord('petitions', dbPetition.id, needsUpdate.updateData);
+          updatedCount++;
+          console.log(`🔄 Updated petition ${bcId} (id: ${dbPetition.id})`);
+        } catch (error) {
+          errors.push({ type: 'update', id: bcId, error: error.message });
+        }
+      }
+    }
+    
+    // Phase 2: Create new records
+    for (const bcPetition of blockchainPetitions) {
+      const bcId = bcPetition.blockchain_petition_id;
+      if (!bcId || dbMap.has(bcId)) continue;
+      
+      try {
+        await createPetition(bcPetition);
+        newCount++;
+        console.log(`✅ Created new petition ${bcId}`);
+      } catch (error) {
+        errors.push({ type: 'create', id: bcId, error: error.message });
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in petitions sync:', error);
+    errors.push({ type: 'general', error: error.message });
+  }
+  
+  return {
+    status: 'completed',
+    fromBlock,
+    toBlock,
+    results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
+  };
+}
+
+// Two-phase sync for reports
+async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
+  console.log('📊 Starting reports sync with provided data...');
+  
+  let newCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+  const errors = [];
+  
+  try {
+    const dbReports = await getAllReports();
+    console.log(`📊 Found ${blockchainReports.length} reports in blockchain and ${dbReports.length} in database`);
+    
+    const dbMap = new Map();
+    const bcMap = new Map();
+    
+    dbReports.forEach(r => {
+      if (r.blockchain_report_id) {
+        dbMap.set(r.blockchain_report_id, r);
+      }
+    });
+    
+    blockchainReports.forEach(r => {
+      if (r.blockchain_report_id) {
+        bcMap.set(r.blockchain_report_id, r);
+      }
+    });
+    
+    // Phase 1: Check DB records
+    for (const dbReport of dbReports) {
+      if (!dbReport.blockchain_report_id) continue;
+      
+      const bcId = dbReport.blockchain_report_id;
+      const bcReport = bcMap.get(bcId);
+      
+      if (!bcReport) {
+        try {
+          await deleteRecord('reports', dbReport.report_id, 'report_id');
+          removedCount++;
+          console.log(`🗑️ Removed report ${bcId} (report_id: ${dbReport.report_id})`);
+        } catch (error) {
+          errors.push({ type: 'delete', id: bcId, error: error.message });
+        }
+        continue;
+      }
+      
+      const needsUpdate = compareReportFields(dbReport, bcReport);
+      
+      if (needsUpdate.hasChanges) {
+        try {
+          await updateRecord('reports', dbReport.report_id, needsUpdate.updateData, 'report_id');
+          updatedCount++;
+          console.log(`🔄 Updated report ${bcId} (report_id: ${dbReport.report_id})`);
+        } catch (error) {
+          errors.push({ type: 'update', id: bcId, error: error.message });
+        }
+      }
+    }
+    
+    // Phase 2: Create new records
+    for (const bcReport of blockchainReports) {
+      const bcId = bcReport.blockchain_report_id;
+      if (!bcId || dbMap.has(bcId)) continue;
+      
+      try {
+        await createReport(bcReport);
+        newCount++;
+        console.log(`✅ Created new report ${bcId}`);
+      } catch (error) {
+        errors.push({ type: 'create', id: bcId, error: error.message });
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in reports sync:', error);
+    errors.push({ type: 'general', error: error.message });
+  }
+  
+  return {
+    status: 'completed',
+    fromBlock,
+    toBlock,
+    results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
+  };
+}
+
+// ========================================
+// COMPREHENSIVE SYNC ENDPOINT
+// ========================================
+
+// Main sync endpoint that implements the full two-phase sync procedure
+router.post('/sync/execute', async (req, res) => {
+  console.log('🚀 Starting comprehensive blockchain synchronization...');
+  
+  try {
+    const { blocksBack = 1000, isFullSync = false } = req.body;
+    
+    // Calculate block range
+    const latestBlock = await provider.getBlockNumber();
+    const toBlock = Number(latestBlock);
+    const fromBlock = Math.max(0, toBlock - blocksBack);
+    
+    console.log(`📊 Syncing blockchain data from block ${fromBlock} to ${toBlock}`);
+    
+    // Fetch all blockchain data once
+    const [proposals, petitions, reports] = await Promise.all([
+      fetchProposalsOptimized(blocksBack),
+      fetchPetitionsOptimized(blocksBack),  
+      fetchReportsOptimized(blocksBack)
+    ]);
+    
+    console.log('📋 Blockchain data fetched:', {
+      proposals: proposals.length,
+      petitions: petitions.length,
+      reports: reports.length
+    });
+    
+    // Execute all sync functions in parallel
+    const syncResults = await Promise.allSettled([
+      syncProposalsWithData(fromBlock, toBlock, proposals),
+      syncPetitionsWithData(fromBlock, toBlock, petitions),
+      syncReportsWithData(fromBlock, toBlock, reports)
+    ]);
+    
+    // Process results and calculate totals
+    let totalNew = 0;
+    let totalUpdated = 0;
+    let totalRemoved = 0;
+    let totalErrors = 0;
+    const detailedResults = [];
+    
+    const entityNames = ['proposals', 'petitions', 'reports'];
+    
+    syncResults.forEach((result, index) => {
+      const entityName = entityNames[index];
+      
+      if (result.status === 'fulfilled') {
+        const res = result.value;
+        totalNew += res.results.new;
+        totalUpdated += res.results.updated;
+        totalRemoved += res.results.removed;
+        totalErrors += res.results.errors.length;
+        
+        detailedResults.push({
+          type: entityName,
+          result: res
+        });
+        
+        console.log(`✅ ${entityName}: ${res.results.new} new, ${res.results.updated} updated, ${res.results.removed} removed`);
+      } else {
+        totalErrors++;
+        detailedResults.push({
+          type: entityName,
+          error: result.reason.message
+        });
+        
+        console.error(`❌ ${entityName} sync failed:`, result.reason.message);
+      }
+    });
+    
+    const finalResult = {
+      status: 'completed',
+      fromBlock,
+      toBlock,
+      isFullSync,
+      summary: {
+        totalNew,
+        totalUpdated,
+        totalRemoved,
+        totalErrors
+      },
+      details: detailedResults,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`✅ Blockchain sync completed! New: ${totalNew}, Updated: ${totalUpdated}, Removed: ${totalRemoved}, Errors: ${totalErrors}`);
+    
+    res.json(finalResult);
+    
+  } catch (error) {
+    console.error('❌ Error in comprehensive sync:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 module.exports = router;
 
