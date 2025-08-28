@@ -52,14 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to get Asgardeo user info from the client
   const getAsgardeoUserInfo = async () => {
     try {
-      // Try to get user info from Asgardeo session
       const response = await fetch('/api/auth/me');
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        return data.isAuthenticated ? data.user : null;
       }
       return null;
     } catch (error) {
-      console.log('No Asgardeo session found');
+      console.log('No Asgardeo session found:', error);
       return null;
     }
   };

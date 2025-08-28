@@ -2,12 +2,13 @@
 
 import React from 'react';
 import AuthenticationStatus from '@/components/auth/AuthenticationStatus';
+import UserRegistration from '@/components/auth/UserRegistration';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AuthTestPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-6xl mx-auto px-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Hybrid Authentication System
@@ -17,92 +18,121 @@ export default function AuthTestPage() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           {/* Authentication Status */}
           <div className="flex justify-center">
             <AuthenticationStatus />
           </div>
 
+          {/* User Registration */}
+          <div className="flex justify-center">
+            <UserRegistration />
+          </div>
+
           {/* System Information */}
           <Card className="w-full">
             <CardHeader>
-              <CardTitle>System Overview</CardTitle>
+              <CardTitle>Integration Status</CardTitle>
               <CardDescription>
-                How our hybrid authentication works
+                Current system capabilities
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-blue-600">Phase 1: Wallet Connection</h3>
+                <h3 className="text-sm font-semibold text-blue-600">✅ Wallet Authentication</h3>
                 <p className="text-sm text-gray-600">
-                  Connect your blockchain wallet to establish your identity on the network.
+                  Connect and verify blockchain wallet identity.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-green-600">Phase 2: Wallet Verification</h3>
+                <h3 className="text-sm font-semibold text-green-600">✅ Asgardeo Integration</h3>
                 <p className="text-sm text-gray-600">
-                  Your wallet signature is verified through our Web3 authentication service.
+                  OAuth2 login with enterprise identity management.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-purple-600">Phase 3: User Registration (Future)</h3>
+                <h3 className="text-sm font-semibold text-purple-600">✅ User Registration</h3>
                 <p className="text-sm text-gray-600">
-                  Asgardeo will validate if your wallet is linked to a registered citizen account.
+                  Link wallet addresses with verified citizen accounts.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-orange-600">Phase 4: Enhanced Security (Future)</h3>
+                <h3 className="text-sm font-semibold text-orange-600">✅ Hybrid Validation</h3>
                 <p className="text-sm text-gray-600">
-                  Multi-factor authentication for sensitive governance actions like voting.
+                  Backend validates both wallet signatures and user registration.
+                </p>
+              </div>
+
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                <h4 className="text-sm font-semibold text-green-800 mb-1">System Ready!</h4>
+                <p className="text-xs text-green-700">
+                  ✅ Complete authentication flow<br />
+                  ✅ User registration system<br />
+                  ✅ Backend API integration<br />
+                  ✅ Security validation
                 </p>
               </div>
 
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <h4 className="text-sm font-semibold text-blue-800 mb-1">Current Status</h4>
+                <h4 className="text-sm font-semibold text-blue-800 mb-1">Next: Enhanced Features</h4>
                 <p className="text-xs text-blue-700">
-                  ✅ Wallet authentication working<br />
-                  ✅ Backend validation endpoint ready<br />
-                  🚧 Asgardeo integration in progress<br />
-                  🚧 User registration system pending
+                  🚧 Multi-factor authentication<br />
+                  🚧 Role-based access control<br />
+                  🚧 Biometric verification<br />
+                  🚧 Conditional authentication
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="mt-8 text-center">
-          <Card className="max-w-2xl mx-auto">
+        <div className="mt-8">
+          <Card className="max-w-4xl mx-auto">
             <CardHeader>
-              <CardTitle>Next Steps</CardTitle>
+              <CardTitle>How to Test the System</CardTitle>
               <CardDescription>
-                Completing the Asgardeo integration
+                Step-by-step testing guide
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-left space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                  <div>
-                    <p className="text-sm font-medium">Configure Asgardeo Application</p>
-                    <p className="text-xs text-gray-600">Set up redirect URLs and proper scopes in your Asgardeo console</p>
-                  </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900">Step 1: Wallet Connection</h3>
+                  <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                    <li>Connect your Web3 wallet (MetaMask, etc.)</li>
+                    <li>Sign the verification message</li>
+                    <li>Check authentication status</li>
+                  </ol>
                 </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                  <div>
-                    <p className="text-sm font-medium">Create User Registration System</p>
-                    <p className="text-xs text-gray-600">Allow citizens to link their wallets with verified Asgardeo accounts</p>
-                  </div>
+                
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900">Step 2: Asgardeo Login</h3>
+                  <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                    <li>Click "Sign in with Asgardeo"</li>
+                    <li>Complete OAuth2 authentication</li>
+                    <li>Return to application</li>
+                  </ol>
                 </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                  <div>
-                    <p className="text-sm font-medium">Implement MFA for Critical Actions</p>
-                    <p className="text-xs text-gray-600">Add biometric or OTP verification for voting and sensitive operations</p>
-                  </div>
+                
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900">Step 3: User Registration</h3>
+                  <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                    <li>Fill in citizen information</li>
+                    <li>Submit registration form</li>
+                    <li>Link wallet to identity</li>
+                  </ol>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900">Step 4: Full Access</h3>
+                  <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                    <li>Verify full authentication status</li>
+                    <li>Access governance features</li>
+                    <li>Participate in voting</li>
+                  </ol>
                 </div>
               </div>
             </CardContent>

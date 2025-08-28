@@ -126,7 +126,10 @@ export function AuthenticationStatus() {
               </Badge>
               {auth.asgardeoUser && (
                 <div className="text-xs text-muted-foreground">
-                  User: {auth.asgardeoUser.username || auth.asgardeoUser.sub}
+                  User: {auth.asgardeoUser.preferred_username || auth.asgardeoUser.username || auth.asgardeoUser.sub}
+                  {auth.asgardeoUser.email && (
+                    <div>Email: {auth.asgardeoUser.email}</div>
+                  )}
                 </div>
               )}
               <a 
