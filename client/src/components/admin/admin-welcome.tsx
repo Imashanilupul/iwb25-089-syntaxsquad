@@ -9,6 +9,7 @@ import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAppKitAccount, useDisconnect } from '@reown/appkit/react'
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "@/hooks/use-toast"
+import { debugAuthenticationData, forceCleanupAuthData, getSessionStatus } from "@/utils/session-debug"
 import { Wallet, Shield, CheckCircle, ArrowRight, Loader2, XCircle } from "lucide-react"
 import Image from "next/image"
 
@@ -59,21 +60,100 @@ export function AdminWelcome() {
     }
   }, [isConnected, verified, asgardeoUser, isFullyAuthenticated, router])
 
-  // Handle wallet disconnection
+  // Handle wallet disconnection and clear Asgardeo session
   const handleDisconnectWallet = async () => {
     try {
-      await disconnect()
+      // Show loading state
       toast({
-        title: "Wallet Disconnected",
-        description: "You can now connect a different wallet.",
+        title: "Disconnecting...",
+        description: "Clearing wallet connection and session data...",
       })
+      
+      // Step 1: Clear Asgardeo session data first (including id_token, access_token)
+      const sessionCleared = await clearAsgardeoSession()
+      
+      // Step 2: Disconnect wallet
+      await disconnect()
+      
+      // Step 3: Show success message
+      if (sessionCleared) {
+        toast({
+          title: "Session Cleared Successfully",
+          description: "Wallet disconnected and all authentication data cleared.",
+        })
+      } else {
+        toast({
+          title: "Wallet Disconnected",
+          description: "Wallet disconnected. Some session data may need manual clearing.",
+          variant: "destructive"
+        })
+      }
+      
+      // Step 4: Redirect to admin login page after clearing session
+      setTimeout(() => {
+        window.location.href = '/adminLogin?cleared=true&timestamp=' + Date.now()
+      }, 1500)
+      
     } catch (error) {
-      console.error("Failed to disconnect wallet:", error)
+      console.error("Failed to disconnect wallet and clear session:", error)
       toast({
         title: "Error",
-        description: "Failed to disconnect wallet. Please try again.",
+        description: "Failed to disconnect wallet properly. Please refresh the page.",
         variant: "destructive"
       })
+      
+      // Fallback: try to redirect anyway after a delay
+      setTimeout(() => {
+        window.location.href = '/adminLogin?error=disconnect_failed'
+      }, 2000)
+    }
+  }
+
+  // Function to clear Asgardeo session data
+  const clearAsgardeoSession = async () => {
+    try {
+      // Show debug info before clearing
+      console.log('🔍 Session data before clearing:', debugAuthenticationData())
+      
+      // Step 1: Call server-side session clearing endpoint
+      const response = await fetch('/api/auth/clear-session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.warn('Server session clear failed, proceeding with client-side cleanup')
+      }
+      
+      // Step 2: Force cleanup all client-side authentication data
+      forceCleanupAuthData()
+      
+      // Step 3: Verify the cleanup was successful
+      const sessionStatus = getSessionStatus()
+      console.log('📊 Session status after clearing:', sessionStatus)
+      
+      if (sessionStatus.isCleared) {
+        console.log('✅ All Asgardeo session data and tokens cleared successfully')
+        return true
+      } else {
+        console.warn(`⚠️ ${sessionStatus.remainingAuthItems} authentication items still found:`, sessionStatus.details)
+        return false
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to clear Asgardeo session:', error)
+      
+      // Fallback: try force cleanup anyway
+      try {
+        forceCleanupAuthData()
+        return true
+      } catch (fallbackError) {
+        console.error('❌ Fallback cleanup also failed:', fallbackError)
+        return false
+      }
     }
   }
 
