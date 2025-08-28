@@ -324,9 +324,9 @@ export function AdminOverview() {
                     tick={{ fontSize: 12 }}
                   />
                   <YAxis 
-                    tickFormatter={(value) => formatCurrency(value)}
-                    fontSize={12}
-                  />
+  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+  fontSize={12}
+/>
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     formatter={(value) => [formatCurrency(Number(value)), ""]}
@@ -362,13 +362,13 @@ export function AdminOverview() {
                     tick={{ fontSize: 12 }}
                   />
                   <YAxis 
-                    tickFormatter={(value) => formatCurrency(value)}
-                    fontSize={12}
-                  />
-                  <ChartTooltip
-                    content={<ChartTooltipContent />}
-                    formatter={(value) => [formatCurrency(Number(value)), ""]}
-                  />
+  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+  fontSize={12}
+/>
+<ChartTooltip
+  content={<ChartTooltipContent />}
+  formatter={(value) => [`${(Number(value) / 1000000).toFixed(1)}M`, ""]}
+/>
                   <Line 
                     type="monotone" 
                     dataKey="amount" 
