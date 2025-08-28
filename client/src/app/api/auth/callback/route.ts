@@ -84,15 +84,27 @@ export async function GET(request: NextRequest) {
       expiresAt: Date.now() + ((tokens.expires_in || 3600) * 1000)
     };
     
-    // Determine redirect URL based on state or session
+    // Determine redirect URL based on stored callback or fallback methods
     let redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth-test?success=true`;
     
-    // Check if this is an admin login (you can enhance this with better state management)
-    const referer = request.headers.get('referer') || '';
-    const isAdminLogin = referer.includes('/adminLogin') || referer.includes('/admin') || state?.includes('admin');
-    
-    if (isAdminLogin) {
-      redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/admin?auth=success`;
+    // First, check for stored callback URL from cookie
+    const storedCallback = request.cookies.get('oauth_callback')?.value;
+    if (storedCallback) {
+      redirectUrl = `${storedCallback}?auth=success`;
+    } else {
+      // Fallback: check callbackUrl from query params
+      const callbackUrl = searchParams.get('callbackUrl');
+      if (callbackUrl && callbackUrl.includes('/admin')) {
+        redirectUrl = `${callbackUrl}?auth=success`;
+      } else {
+        // Final fallback: check referer
+        const referer = request.headers.get('referer') || '';
+        const isAdminLogin = referer.includes('/adminLogin') || referer.includes('/admin');
+        
+        if (isAdminLogin) {
+          redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/admin?auth=success`;
+        }
+      }
     }
     
     // Redirect with session cookie
@@ -107,6 +119,7 @@ export async function GET(request: NextRequest) {
     
     // Clean up temporary cookies
     response.cookies.delete('oauth_state');
+    response.cookies.delete('oauth_callback');
     response.cookies.delete('oauth_nonce');
     
     return response;

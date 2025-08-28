@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
     // Generate state for security
     const state = crypto.randomUUID();
     
-    // Redirect to Asgardeo for authentication
+    // Get the callback URL from query params
+    const callbackUrl = searchParams.get('callbackUrl');
+    
+    // Redirect to Asgardeo for authentication (keep redirect_uri consistent)
     const asgardeoLoginUrl = `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oauth2/authorize?` + 
       `response_type=code&` +
       `client_id=${process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID}&` +
@@ -20,13 +23,22 @@ export async function GET(request: NextRequest) {
     
     const response = NextResponse.redirect(asgardeoLoginUrl);
     
-    // Store state for verification
+    // Store state and callback URL for verification
     response.cookies.set('oauth_state', state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 10 // 10 minutes
     });
+    
+    if (callbackUrl) {
+      response.cookies.set('oauth_callback', callbackUrl, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 10 // 10 minutes
+      });
+    }
     
     return response;
   }

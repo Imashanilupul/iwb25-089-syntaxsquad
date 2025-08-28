@@ -37,6 +37,19 @@ export default function AdminPortal() {
   const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
   const router = useRouter()
 
+  // Handle successful auth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authSuccess = urlParams.get('auth');
+    
+    if (authSuccess === 'success') {
+      // Clean up the URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      window.history.replaceState({}, document.title, url.toString());
+    }
+  }, []);
+
   // Redirect to adminLogin if not fully authenticated
   useEffect(() => {
     if (!isFullyAuthenticated) {
