@@ -13,10 +13,10 @@ import { PetitionManagement } from "@/components/admin/petition-management"
 import { ReportManagement } from "@/components/admin/report-management"
 import { UserAnalytics } from "@/components/admin/user-analytics"
 import { DbSync } from "@/components/admin/db-sync"
-import { AdminWelcome } from "@/components/admin/admin-welcome"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 import { useAuth } from "@/context/AuthContext"
 import { useAppKitAccount } from "@reown/appkit/react"
+import { useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   DollarSign,
@@ -28,16 +28,24 @@ import {
   Users,
   Wallet,
   Database,
+  LogOut,
 } from "lucide-react"
 
-export default function AdminPortal() {
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const { address, isConnected } = useAppKitAccount()
-  const { verified, isFullyAuthenticated } = useAuth()
+  const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
+  const router = useRouter()
 
-  // Show welcome page if not fully authenticated
+  // Redirect if not authenticated
   if (!isFullyAuthenticated) {
-    return <AdminWelcome />
+    router.push('/admin')
+    return null
+  }
+
+  const handleLogout = () => {
+    // You can add logout logic here if needed
+    router.push('/admin')
   }
 
   return (
@@ -53,29 +61,48 @@ export default function AdminPortal() {
                 className="h-12 w-12 object-contain"
               />
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">Admin Portal</h1>
-                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Data Management</p>
+                <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
               </div>
             </div>
             
-            {/* Wallet Connection Section */}
+            {/* User Info & Controls */}
             <div className="flex items-center gap-4">
-              {isConnected && address ? (
+              {/* Welcome Message */}
+              {asgardeoUser && (
+                <div className="text-right">
+                  <p className="text-sm text-slate-600">Welcome back,</p>
+                  <p className="font-semibold text-slate-900">
+                    {asgardeoUser.given_name || 'Administrator'}
+                  </p>
+                </div>
+              )}
+
+              {/* Wallet Connection Section */}
+              {isConnected && address && (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border shadow-sm">
                     <Wallet className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-slate-700">
                       {address.slice(0, 6)}...{address.slice(-4)}
                     </span>
-                    <Badge variant={verified ? "default" : "secondary"}>
+                    <Badge variant={verified ? "default" : "secondary"} className="text-xs">
                       {verified ? "Verified" : "Unverified"}
                     </Badge>
                   </div>
                 </div>
-              ) : (
-                <div className="text-sm text-slate-500">Wallet not connected</div>
               )}
-              <ConnectButton />
+
+              {/* Logout Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLogout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
             </div>
           </div>
           
@@ -87,6 +114,9 @@ export default function AdminPortal() {
                 <span className="text-sm text-amber-800">
                   Connect your wallet to access all admin features and blockchain interactions.
                 </span>
+                <div className="ml-auto">
+                  <ConnectButton />
+                </div>
               </div>
             </div>
           )}
