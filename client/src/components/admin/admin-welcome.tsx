@@ -69,13 +69,17 @@ export function AdminWelcome() {
         description: "Clearing wallet connection and session data...",
       })
       
-      // Step 1: Clear Asgardeo session data first (including id_token, access_token)
+      // Step 1: Clear saved authentication state
+      localStorage.removeItem('adminAuthState')
+      localStorage.removeItem('adminAuthStateTime')
+      
+      // Step 2: Clear Asgardeo session data first (including id_token, access_token)
       const sessionCleared = await clearAsgardeoSession()
       
-      // Step 2: Disconnect wallet
+      // Step 3: Disconnect wallet
       await disconnect()
       
-      // Step 3: Show success message
+      // Step 4: Show success message
       if (sessionCleared) {
         toast({
           title: "Session Cleared Successfully",
@@ -89,13 +93,17 @@ export function AdminWelcome() {
         })
       }
       
-      // Step 4: Redirect to admin login page after clearing session
+      // Step 5: Redirect to admin login page after clearing session
       setTimeout(() => {
         window.location.href = '/adminLogin?cleared=true&timestamp=' + Date.now()
       }, 1500)
       
     } catch (error) {
       console.error("Failed to disconnect wallet and clear session:", error)
+      // Clear saved state even on error
+      localStorage.removeItem('adminAuthState')
+      localStorage.removeItem('adminAuthStateTime')
+      
       toast({
         title: "Error",
         description: "Failed to disconnect wallet properly. Please refresh the page.",

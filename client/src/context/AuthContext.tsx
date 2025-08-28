@@ -25,7 +25,12 @@ type AuthState = {
   error: string | null;
 };
 
-const AuthContext = createContext<AuthState>({
+type AuthContextType = AuthState & {
+  clearAuthState: () => void;
+  debugAuthState: () => void;
+};
+
+const AuthContext = createContext<AuthContextType>({
   address: null,
   walletVerified: false,
   verified: false,
@@ -35,12 +40,15 @@ const AuthContext = createContext<AuthState>({
   jwt: null,
   isLoading: false,
   error: null,
+  clearAuthState: () => {},
+  debugAuthState: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { address, isConnected } = useAppKitAccount();
   
-  const [auth, setAuth] = useState<AuthState>({
+  // Default auth state - consistent for SSR
+  const defaultAuthState: AuthState = {
     address: null,
     walletVerified: false,
     verified: false,
@@ -50,7 +58,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     jwt: null,
     isLoading: false,
     error: null,
-  });
+  };
+  
+  // Initialize with default state for SSR consistency
+  const [auth, setAuth] = useState<AuthState>(defaultAuthState);
+  const [isHydrated, setIsHydrated] = useState(false);
+  
+  // Restore from localStorage after hydration
+  useEffect(() => {
+    setIsHydrated(true);
+    
+    try {
+      const savedAuth = localStorage.getItem('adminAuthState');
+      if (savedAuth) {
+        const parsedAuth = JSON.parse(savedAuth);
+        // Only restore if it's not expired (check if saved within last 24 hours)
+        const saveTime = localStorage.getItem('adminAuthStateTime');
+        if (saveTime && Date.now() - parseInt(saveTime) < 24 * 60 * 60 * 1000) {
+          setAuth({
+            ...parsedAuth,
+            isLoading: true, // Still set loading to true to revalidate
+            error: null,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to restore auth state:', error);
+    }
+  }, []);
+
+  // Function to save auth state to localStorage
+  const saveAuthState = (authState: AuthState) => {
+    if (!isHydrated) return; // Don't save until hydrated
+    
+    try {
+      // Only save if fully authenticated to avoid storing incomplete states
+      if (authState.isFullyAuthenticated) {
+        localStorage.setItem('adminAuthState', JSON.stringify({
+          address: authState.address,
+          walletVerified: authState.walletVerified,
+          verified: authState.verified,
+          asgardeoUser: authState.asgardeoUser,
+          isRegisteredUser: authState.isRegisteredUser,
+          isFullyAuthenticated: authState.isFullyAuthenticated,
+          jwt: authState.jwt,
+        }));
+        localStorage.setItem('adminAuthStateTime', Date.now().toString());
+      } else {
+        // Clear saved state if not fully authenticated
+        localStorage.removeItem('adminAuthState');
+        localStorage.removeItem('adminAuthStateTime');
+      }
+    } catch (error) {
+      console.error('Failed to save auth state:', error);
+    }
+  };
+
+  // Function to clear saved auth state
+  const clearSavedAuthState = () => {
+    if (!isHydrated) return; // Don't clear until hydrated
+    
+    localStorage.removeItem('adminAuthState');
+    localStorage.removeItem('adminAuthStateTime');
+  };
 
   // Function to get Asgardeo user info from the client
   const getAsgardeoUserInfo = async () => {
@@ -109,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Wallet is connected, now validate user registration
           const validation = await validateUserRegistration(address, asgardeoUser);
           
-          setAuth({
+          const newAuthState = {
             address,
             walletVerified: validation.walletVerified,
             verified: validation.walletVerified, // Legacy compatibility
@@ -119,10 +189,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             jwt: validation.jwt,
             isLoading: false,
             error: null,
-          });
+          };
+          
+          setAuth(newAuthState);
+          saveAuthState(newAuthState);
         } else {
-          // No wallet connected
-          setAuth({
+          // No wallet connected - clear saved auth state
+          clearSavedAuthState();
+          
+          const newAuthState = {
             address: null,
             walletVerified: false,
             verified: false, // Legacy compatibility
@@ -132,9 +207,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             jwt: null,
             isLoading: false,
             error: null,
-          });
+          };
+          
+          setAuth(newAuthState);
         }
       } catch (error) {
+        clearSavedAuthState(); // Clear saved state on error
         setAuth(prev => ({
           ...prev,
           isLoading: false,
@@ -146,7 +224,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     handleAuthentication();
   }, [address, isConnected]);
 
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+  // Function to debug current auth state
+  const debugAuthState = () => {
+    if (!isHydrated) {
+      console.log('🔍 Auth State (not hydrated yet):', auth);
+      return;
+    }
+    
+    console.log('🔍 Current Auth State:', auth);
+    console.log('💾 Saved Auth State:', localStorage.getItem('adminAuthState'));
+    console.log('🕒 Save Time:', localStorage.getItem('adminAuthStateTime'));
+  };
+
+  return (
+    <AuthContext.Provider value={{
+      ...auth,
+      clearAuthState: clearSavedAuthState,
+      debugAuthState
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

@@ -32,13 +32,21 @@ import {
 
 export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [isHydrated, setIsHydrated] = useState(false)
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
-  const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
+  const { verified, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
   const router = useRouter()
+
+  // Handle hydration
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   // Handle successful auth callback
   useEffect(() => {
+    if (!isHydrated) return
+    
     const urlParams = new URLSearchParams(window.location.search);
     const authSuccess = urlParams.get('auth');
     
@@ -48,16 +56,28 @@ export default function AdminPortal() {
       url.searchParams.delete('auth');
       window.history.replaceState({}, document.title, url.toString());
     }
-  }, []);
+  }, [isHydrated]);
 
-  // Redirect to adminLogin if not fully authenticated
+  // Redirect to adminLogin if not fully authenticated (but only after loading is complete and hydrated)
   useEffect(() => {
-    if (!isFullyAuthenticated) {
+    if (isHydrated && !isLoading && !isFullyAuthenticated) {
       router.push('/adminLogin')
     }
-  }, [isFullyAuthenticated, router])
+  }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
-  // Show loading or redirect if not authenticated
+  // Show consistent loading screen during authentication check or before hydration
+  if (!isHydrated || isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Verifying authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading or redirect if not authenticated (only after hydration)
   if (!isFullyAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
@@ -71,6 +91,10 @@ export default function AdminPortal() {
 
   const handleWalletDisconnect = async () => {
     try {
+      // Clear saved authentication state
+      localStorage.removeItem('adminAuthState')
+      localStorage.removeItem('adminAuthStateTime')
+      
       // First disconnect the wallet
       await disconnect()
       
@@ -79,6 +103,8 @@ export default function AdminPortal() {
     } catch (error) {
       console.error("Failed to disconnect wallet:", error)
       // Still redirect and sign out even if wallet disconnect fails
+      localStorage.removeItem('adminAuthState')
+      localStorage.removeItem('adminAuthStateTime')
       window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
     }
   }
