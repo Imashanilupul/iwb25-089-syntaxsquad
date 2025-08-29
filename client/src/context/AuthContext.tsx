@@ -118,8 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearSavedAuthState = () => {
     if (!isHydrated) return; // Don't clear until hydrated
     
+    console.log('AuthContext: Clearing all saved authentication state');
     localStorage.removeItem('adminAuthState');
     localStorage.removeItem('adminAuthStateTime');
+    localStorage.removeItem('oauth_completed');
+    
+    // Reset auth state to default
+    setAuth(defaultAuthState);
   };
 
   // Function to get Asgardeo user info from the client

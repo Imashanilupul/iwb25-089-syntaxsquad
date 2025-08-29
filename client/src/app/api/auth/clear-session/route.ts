@@ -5,10 +5,29 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
+    console.log('Clear-session: Starting comprehensive session cleanup...');
+    
+    // Step 1: Try to get current session info before clearing
+    let idToken = null;
+    try {
+      const sessionData = request.cookies.get('asgardeo_session');
+      if (sessionData) {
+        const parsed = JSON.parse(sessionData.value);
+        idToken = parsed.id_token;
+      }
+    } catch (e) {
+      console.log('Clear-session: No valid session data found');
+    }
+    
     // Create response that clears all authentication-related cookies
     const response = NextResponse.json({ 
       success: true, 
-      message: 'Session cleared successfully' 
+      message: 'Session cleared successfully',
+      asgardeoLogoutUrl: idToken ? 
+        `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oidc/logout?` +
+        `id_token_hint=${idToken}&` +
+        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?cleared=true`)}`
+        : null
     });
 
     // Clear Asgardeo session cookie
@@ -27,7 +46,10 @@ export async function POST(request: NextRequest) {
       'access_token',
       'refresh_token',
       'auth_session',
-      'session_state'
+      'session_state',
+      'commonAuthId',
+      'sessionDataKey',
+      'opbs'
     ];
 
     cookiesToClear.forEach(cookieName => {
@@ -47,12 +69,22 @@ export async function POST(request: NextRequest) {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
       });
+
+      // Clear for root domain if different
+      response.cookies.set(cookieName, '', {
+        expires: new Date(0),
+        path: '/',
+        domain: 'localhost',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
     });
 
+    console.log('Clear-session: All authentication cookies cleared');
     return response;
 
   } catch (error) {
-    console.error('Session clear error:', error);
+    console.error('Clear-session: Session clear error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to clear session' },
       { status: 500 }

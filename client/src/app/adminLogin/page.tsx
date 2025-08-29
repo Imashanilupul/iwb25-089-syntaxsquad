@@ -14,7 +14,17 @@ function AdminLoginContent() {
     const error = searchParams?.get('error')
     const logout = searchParams?.get('logout')
     
-    if (cleared === 'true') {
+    if (logout === 'complete') {
+      toast({
+        title: "Complete Logout Successful",
+        description: "All sessions have been terminated. You must re-authenticate completely.",
+      })
+    } else if (logout === 'local') {
+      toast({
+        title: "Local Session Cleared",
+        description: "Local authentication data cleared. Please reconnect your wallet.",
+      })
+    } else if (cleared === 'true') {
       toast({
         title: "Session Cleared Successfully",
         description: "All authentication data has been cleared. You can now connect a different wallet.",

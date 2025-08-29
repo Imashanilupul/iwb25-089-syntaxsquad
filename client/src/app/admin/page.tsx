@@ -249,21 +249,62 @@ export default function AdminPortal() {
 
   const handleWalletDisconnect = async () => {
     try {
-      // Clear saved authentication state
+      console.log('Admin: Starting complete logout process...')
+      
+      // Clear saved authentication state immediately
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
+      localStorage.removeItem('oauth_completed')
       
-      // First disconnect the wallet
-      await disconnect()
+      // First disconnect the wallet to avoid any conflicts
+      try {
+        await disconnect()
+        console.log('Admin: Wallet disconnected successfully')
+      } catch (error) {
+        console.warn('Admin: Wallet disconnect failed, but continuing logout:', error)
+      }
       
-      // Then sign out from Asgardeo session and redirect to adminLogin
-      window.location.href = '/api/auth/signout'
+      // Call our comprehensive logout endpoint
+      const logoutResponse = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      
+      if (logoutResponse.ok) {
+        const logoutResult = await logoutResponse.json()
+        console.log('Admin: Logout endpoint called successfully')
+        
+        if (logoutResult.redirectUrl) {
+          console.log('Admin: Redirecting to complete logout:', logoutResult.redirectUrl)
+          // Redirect to the URL which will handle Asgardeo logout
+          window.location.href = logoutResult.redirectUrl
+          return
+        }
+      } else {
+        console.warn('Admin: Logout endpoint failed, falling back to direct redirect')
+      }
+      
+      // Fallback: direct redirect to logout route
+      console.log('Admin: Using fallback logout redirect')
+      window.location.href = '/api/auth/logout'
+      
     } catch (error) {
-      console.error("Failed to disconnect wallet:", error)
-      // Still redirect and sign out even if wallet disconnect fails
+      console.error("Admin: Complete logout failed:", error)
+      
+      // Emergency cleanup and redirect
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
-      window.location.href = '/api/auth/signout'
+      localStorage.removeItem('oauth_completed')
+      
+      // Try emergency wallet disconnect
+      try {
+        await disconnect()
+      } catch (e) {
+        console.error("Admin: Emergency wallet disconnect failed:", e)
+      }
+      
+      // Force redirect to logout route as last resort
+      window.location.href = '/api/auth/logout'
     }
   }
 
@@ -312,15 +353,15 @@ export default function AdminPortal() {
                 </div>
               )}
 
-              {/* Disconnect Wallet Button */}
+              {/* Logout Button */}
               <Button 
                 variant="default" 
                 size="sm" 
                 onClick={handleWalletDisconnect}
-                className="flex items-center gap-2 bg-black text-white hover:bg-black/90"
+                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
               >
                 <Wallet className="h-4 w-4" />
-                Disconnect Wallet
+                Logout
               </Button>
             </div>
           </div>
