@@ -33,6 +33,7 @@ import {
 export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("overview")
   const [isHydrated, setIsHydrated] = useState(false)
+  const [justAuthenticated, setJustAuthenticated] = useState(false)
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
   const { verified, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
@@ -66,6 +67,9 @@ export default function AdminPortal() {
       console.log('OAuth Callback: Token exchange successful:', result);
 
       if (result.success) {
+        // Set flag to indicate OAuth was just completed
+        localStorage.setItem('oauth_completed', Date.now().toString())
+        
         // Clean up URL
         const url = new URL(window.location.href);
         url.searchParams.delete('code');
@@ -90,6 +94,26 @@ export default function AdminPortal() {
   // Handle hydration
   useEffect(() => {
     setIsHydrated(true)
+    
+    // Check if we just completed OAuth authentication
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    if (oauthCompleted) {
+      const completedTime = parseInt(oauthCompleted)
+      const now = Date.now()
+      // If OAuth was completed within the last 30 seconds, consider us just authenticated
+      if (now - completedTime < 30000) {
+        console.log('Admin page: Detected recent OAuth completion')
+        setJustAuthenticated(true)
+        // Clear the flag after 10 seconds
+        setTimeout(() => {
+          localStorage.removeItem('oauth_completed')
+          setJustAuthenticated(false)
+        }, 10000)
+      } else {
+        // Clear old flag
+        localStorage.removeItem('oauth_completed')
+      }
+    }
   }, [])
 
   // Handle successful auth callback and OAuth response
@@ -130,28 +154,50 @@ export default function AdminPortal() {
 
   // Redirect to adminLogin if not fully authenticated (but only after loading is complete and hydrated)
   useEffect(() => {
-    // Add a delay to allow auth context to update after OAuth callback
+    // If we just completed OAuth, be more patient
+    const delay = justAuthenticated ? 5000 : 2000 // 5 seconds if just authenticated, 2 seconds otherwise
+    
     const checkAuthAfterDelay = setTimeout(() => {
       if (isHydrated && !isLoading && !isFullyAuthenticated) {
-        console.log('Admin page: Redirecting to adminLogin - not fully authenticated');
-        router.push('/adminLogin')
+        // Double-check if we have a session cookie before redirecting
+        const hasSessionCookie = document.cookie.includes('asgardeo_session')
+        
+        if (!hasSessionCookie && !justAuthenticated) {
+          console.log('Admin page: No session cookie and not just authenticated, redirecting to adminLogin')
+          router.push('/adminLogin')
+        } else if (!hasSessionCookie && justAuthenticated) {
+          console.log('Admin page: No session cookie but just authenticated, waiting longer...')
+          // Wait another 3 seconds before giving up
+          setTimeout(() => {
+            if (!document.cookie.includes('asgardeo_session')) {
+              console.log('Admin page: Still no session cookie after waiting, redirecting')
+              router.push('/adminLogin')
+            }
+          }, 3000)
+        } else {
+          console.log('Admin page: Has session cookie, waiting for auth context to update')
+        }
       }
-    }, 2000); // 2 second delay to allow auth context to update
+    }, delay)
 
     return () => clearTimeout(checkAuthAfterDelay);
-  }, [isFullyAuthenticated, isLoading, router, isHydrated])
+  }, [isFullyAuthenticated, isLoading, router, isHydrated, justAuthenticated])
 
   // Show consistent loading screen during authentication check or before hydration
-  if (!isHydrated || isLoading) {
+  if (!isHydrated || isLoading || (justAuthenticated && !isFullyAuthenticated)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600">
-            {!isHydrated ? 'Loading application...' : 'Verifying authentication...'}
+            {!isHydrated ? 'Loading application...' : 
+             justAuthenticated ? 'Completing authentication...' : 
+             'Verifying authentication...'}
           </p>
           <p className="text-sm text-slate-500 mt-2">
-            Please wait while we validate your credentials
+            {justAuthenticated ? 
+              'Please wait while we finalize your login' : 
+              'Please wait while we validate your credentials'}
           </p>
         </div>
       </div>
@@ -160,14 +206,33 @@ export default function AdminPortal() {
 
   // Show loading or redirect if not authenticated (only after hydration)
   if (!isFullyAuthenticated) {
+    const hasSessionCookie = document.cookie.includes('asgardeo_session')
+    
     console.log('Admin page: User not fully authenticated', {
       isHydrated,
       isLoading,
       isFullyAuthenticated,
       verified,
       asgardeoUser: !!asgardeoUser,
-      address: !!address
+      address: !!address,
+      justAuthenticated,
+      hasSessionCookie
     });
+    
+    // If we just authenticated and have a session cookie, show loading instead of redirecting
+    if (justAuthenticated && hasSessionCookie) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-slate-600">Finalizing authentication...</p>
+            <p className="text-sm text-slate-500 mt-2">
+              Almost there! Setting up your session
+            </p>
+          </div>
+        </div>
+      )
+    }
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">

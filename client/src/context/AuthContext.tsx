@@ -125,7 +125,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to get Asgardeo user info from the client
   const getAsgardeoUserInfo = async () => {
     try {
-      console.log('AuthContext: Fetching Asgardeo user info...');
+      // Quick check if we have a session cookie
+      const hasSessionCookie = document.cookie.includes('asgardeo_session');
+      if (!hasSessionCookie) {
+        console.log('AuthContext: No session cookie found, skipping API call');
+        return null;
+      }
+      
+      console.log('AuthContext: Session cookie found, fetching Asgardeo user info...');
       const response = await fetch('/api/auth/me');
       if (response.ok) {
         const data = await response.json();
