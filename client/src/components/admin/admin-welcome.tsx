@@ -18,7 +18,6 @@ export function AdminWelcome() {
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
   const { verified, asgardeoUser, isFullyAuthenticated } = useAuth()
-  const [isRedirecting, setIsRedirecting] = useState(false)
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false)
 
   // Handle verification success and redirect
@@ -26,22 +25,14 @@ export function AdminWelcome() {
     if (isConnected && verified && !asgardeoUser) {
       // Wallet is connected and verified, but no Asgardeo session
       setShowSuccessAnimation(true)
-      setIsRedirecting(true)
       
       // Show success notification
       toast({
         title: "🎉 Wallet Verified Successfully!",
-        description: "Redirecting to Asgardeo login...",
+        description: "You can now proceed to Asgardeo authentication.",
       })
-
-      // Redirect to Asgardeo login after animation
-      setTimeout(() => {
-        // Redirect to Asgardeo authentication with admin context
-        window.location.href = '/api/auth/signin?callbackUrl=' + encodeURIComponent(window.location.origin + '/admin')
-      }, 2000)
     } else if (isFullyAuthenticated) {
       // Both wallet and Asgardeo authenticated - redirect to admin portal
-      setIsRedirecting(true)
       toast({
         title: "🚀 Authentication Complete!",
         description: "Redirecting to admin portal...",
@@ -358,32 +349,20 @@ export function AdminWelcome() {
                           Welcome back, {asgardeoUser.given_name || 'Administrator'}!
                         </p>
                       </div>
-                    ) : isRedirecting ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                          <p className="text-blue-700 font-medium">
-                            Redirecting to Asgardeo login...
-                          </p>
-                        </div>
-                        <div className="w-full bg-blue-100 rounded-full h-2">
-                          <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '100%'}}></div>
-                        </div>
-                      </div>
                     ) : (
                       <div className="space-y-3">
                         <p className="text-blue-700 font-medium">
                           🎉 Wallet verification successful!
                         </p>
                         <p className="text-sm text-blue-600">
-                          Please complete your Asgardeo authentication to access the admin portal.
+                          Click the button below to proceed with Asgardeo authentication and access the admin portal.
                         </p>
                         <Button 
                           onClick={() => window.location.href = '/api/auth/signin?callbackUrl=' + encodeURIComponent(window.location.origin + '/admin')} 
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
-                          Continue to Asgardeo Login
+                          Continue to Asgardeo Authentication
                         </Button>
                       </div>
                     )}
