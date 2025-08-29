@@ -14,7 +14,7 @@ const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Add the admin addresses you want here
 const ADMIN_ADDRESSES = [
-  "0x88909D97aA7f55bdd70D74F21663d4FAaC09371d", // Replace with actual admin address
+  "0x67e046683ec00e611c7F3C2a4e6497e6A6069874", // Replace with actual admin address
    // Replace with actual admin address
 ];
 
@@ -27,11 +27,11 @@ async function addAdmin() {
       console.log(`\nAdding admin: ${adminAddress}`);
       
       // Check if already admin
-      const isAlreadyAdmin = await authRegistry.isAdmin(adminAddress);
-      if (isAlreadyAdmin) {
-        console.log("Already an admin, skipping...");
-        continue;
-      }
+      // const isAlreadyAdmin = await authRegistry.isAdmin(adminAddress);
+      // if (isAlreadyAdmin) {
+      //   console.log("Already an admin, skipping...");
+      //   continue;
+      // }
       
       // Add as admin
       const tx = await authRegistry.authorizeUser(adminAddress);

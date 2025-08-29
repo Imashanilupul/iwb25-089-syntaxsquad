@@ -865,6 +865,124 @@ async function getAllProjects() {
   });
 }
 
+  // Users
+  async function getAllUsers() {
+    return await queryDatabase('users', {
+      select: 'id,evm,revoked',
+      order: 'id'
+    });
+  }
+
+  async function revokeUser(id) {
+    return await updateRecord('users', id, { revoked: true });
+  }
+
+  async function removeUser(id) { 
+    return await deleteRecord('users', id);
+  }
+
+  // User sync: verify users in DB against blockchain
+  async function syncUsersWithBlockchain() {
+    console.log('🔑 Starting user sync with blockchain...');
+    const errors = [];
+    let revokedCount = 0;
+    let removedCount = 0;
+    try {
+      // Get all users from DB
+      const dbUsers = await getAllUsers();
+
+      // Get verified users from blockchain (not admins)
+      // Use AuthRegistry contract
+      let verifiedAddresses = [];
+      try {
+        const contractAddress = CONTRACT_ADDRESSES.AuthRegistry;
+        const abi = require(path.join(__dirname, '..', 'artifacts', 'contracts', 'auth', 'auth.sol', 'AuthRegistry.json')).abi;
+        const authRegistry = new ethers.Contract(contractAddress, abi, provider);
+
+        // Get all events for UserAuthorized and UserRevoked
+        const filterAuth = authRegistry.filters.UserAuthorized();
+        const filterRevoke = authRegistry.filters.UserRevoked();
+        const authEvents = await authRegistry.queryFilter(filterAuth, 0, 'latest');
+        const revokeEvents = await authRegistry.queryFilter(filterRevoke, 0, 'latest');
+
+        // Build address status map
+        const addressStatus = {};
+        authEvents.forEach(e => {
+          addressStatus[e.args.user.toLowerCase()] = true;
+        });
+        revokeEvents.forEach(e => {
+          addressStatus[e.args.user.toLowerCase()] = false;
+        });
+
+        // Only include addresses that are authorized and not revoked
+        verifiedAddresses = Object.keys(addressStatus).filter(addr => addressStatus[addr]);
+
+        // Remove admin addresses
+        // Get AdminAuthorized events
+        const filterAdmin = authRegistry.filters.AdminAuthorized();
+        const adminEvents = await authRegistry.queryFilter(filterAdmin, 0, 'latest');
+        const adminAddresses = adminEvents.map(e => e.args.admin.toLowerCase());
+        verifiedAddresses = verifiedAddresses.filter(addr => !adminAddresses.includes(addr));
+      } catch (err) {
+        errors.push({ type: 'blockchain', error: err.message });
+        console.error('Error fetching verified users from blockchain:', err);
+      }
+
+      // Build DB user map by evm
+      const dbUserMap = new Map();
+      dbUsers.forEach(u => {
+        if (u.evm) dbUserMap.set(u.evm.toLowerCase(), u);
+      });
+
+      // 1. Remove/revoke users in DB not in blockchain
+      for (const user of dbUsers) {
+        const evmAddr = user.evm ? user.evm.toLowerCase() : null;
+        if (!evmAddr) continue;
+        const isVerified = verifiedAddresses.includes(evmAddr);
+        if (!isVerified) {
+          // Remove user record if not verified in blockchain
+          try {
+            await deleteRecord('users', user.id);
+            removedCount++;
+            console.log(`🗑️ Removed user with id ${user.id} evm ${evmAddr} (not verified in blockchain)`);
+          } catch (err) {
+            errors.push({ type: 'remove', id: user.id, evm: evmAddr, error: err.message });
+          }
+        } else if (user.revoked === true) {
+          // If user is verified but marked revoked in DB, un-revoke
+          try {
+            await updateRecord('users', user.id, { revoked: false });
+            console.log(`✅ Un-revoked user with id ${user.id} evm ${evmAddr} (verified in blockchain)`);
+          } catch (err) {
+            errors.push({ type: 'unrevoke', id: user.id, evm: evmAddr, error: err.message });
+          }
+        }
+      }
+
+      // 2. Add users from blockchain if not in DB
+      for (const bcAddr of verifiedAddresses) {
+        if (!dbUserMap.has(bcAddr)) {
+          try {
+            // Create minimal user record with evm and revoked=false
+            await createRecord('users', { evm: bcAddr, revoked: false });
+            console.log(`➕ Added user with evm ${bcAddr} from blockchain`);
+          } catch (err) {
+            errors.push({ type: 'add', evm: bcAddr, error: err.message });
+          }
+        }
+      }
+    } catch (err) {
+      errors.push({ type: 'general', error: err.message });
+      console.error('Error in user sync:', err);
+    }
+    return {
+      status: 'completed',
+      revoked: revokedCount,
+      removed: removedCount,
+      errors
+    };
+  }
+
 async function createProject(data) {
   const projectData = {
     project_id: data.projectId || data.project_id,
@@ -1526,7 +1644,8 @@ router.post('/sync/execute', async (req, res) => {
       syncPetitionsWithData(fromBlock, toBlock, petitions),
       syncReportsWithData(fromBlock, toBlock, reports),
       syncPoliciesWithData(fromBlock, toBlock, policies),
-      syncProjectsWithData(fromBlock, toBlock, projects)
+      syncProjectsWithData(fromBlock, toBlock, projects),
+      syncUsersWithBlockchain()
     ]);
 
     // Process results and calculate totals
@@ -1536,13 +1655,38 @@ router.post('/sync/execute', async (req, res) => {
     let totalErrors = 0;
     const detailedResults = [];
 
-    const entityNames = ['proposals', 'petitions', 'reports', 'policies', 'projects'];
+  const entityNames = ['proposals', 'petitions', 'reports', 'policies', 'projects', 'users'];
+
+    function normalizeSyncResult(res) {
+      if (!res || typeof res !== 'object') {
+        return { results: { new: 0, updated: 0, removed: 0, errors: [] } };
+      }
+      if (res.results && typeof res.results === 'object') {
+        return {
+          results: {
+            new: res.results.new || 0,
+            updated: res.results.updated || 0,
+            removed: res.results.removed || 0,
+            errors: Array.isArray(res.results.errors) ? res.results.errors : []
+          }
+        };
+      }
+      // fallback for user sync or other
+      return {
+        results: {
+          new: res.new || 0,
+          updated: res.updated || 0,
+          removed: res.removed || 0,
+          errors: Array.isArray(res.errors) ? res.errors : []
+        }
+      };
+    }
 
     syncResults.forEach((result, index) => {
       const entityName = entityNames[index];
 
       if (result.status === 'fulfilled') {
-        const res = result.value;
+        const res = normalizeSyncResult(result.value);
         totalNew += res.results.new;
         totalUpdated += res.results.updated;
         totalRemoved += res.results.removed;
@@ -1558,10 +1702,10 @@ router.post('/sync/execute', async (req, res) => {
         totalErrors++;
         detailedResults.push({
           type: entityName,
-          error: result.reason.message
+          error: result.reason && result.reason.message ? result.reason.message : String(result.reason)
         });
 
-        console.error(`❌ ${entityName} sync failed:`, result.reason.message);
+        console.error(`❌ ${entityName} sync failed:`, result.reason && result.reason.message ? result.reason.message : String(result.reason));
       }
     });
 

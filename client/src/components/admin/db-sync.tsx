@@ -262,6 +262,19 @@ export function DbSync() {
               const details = blockchainData.details
               const syncResults: SyncResult[] = details.map((entity: any) => {
                 if (entity.result) {
+                  // Special handling for users sync result
+                  if (entity.type === "users") {
+                    return {
+                      contractType: "Users",
+                      totalItems: 0,
+                      newItems: 0,
+                      updatedItems: 0,
+                      errors: Array.isArray(entity.result.errors) ? entity.result.errors.length : 0,
+                      removedItems: entity.result.removed || 0,
+                      lastBlockScanned: blockchainData.toBlock || 0,
+                      status: "completed",
+                    }
+                  }
                   return {
                     contractType: entity.type.charAt(0).toUpperCase() + entity.type.slice(1),
                     totalItems:
