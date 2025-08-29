@@ -747,7 +747,7 @@ async function deleteRecord(table, id, idColumn = 'id') {
 // Proposals
 async function getAllProposals() {
   return await queryDatabase('proposals', {
-    select: 'id,title,short_description,description_in_details,yes_votes,no_votes,blockchain_proposal_id,creator_id,expired_date,active_status',
+    select: 'id,title,short_description,description_in_details,yes_votes,no_votes,blockchain_proposal_id,creator_id,expired_date,completed',
     order: 'id'
   });
 }
@@ -772,7 +772,7 @@ async function createProposal(data) {
 // Petitions
 async function getAllPetitions() {
   return await queryDatabase('petitions', {
-    select: 'id,title,description,required_signature_count,signature_count,blockchain_petition_id,creator_id,deadline,is_active',
+    select: 'id,title,description,required_signature_count,signature_count,creator,is_active',
     order: 'id'
   });
 }
