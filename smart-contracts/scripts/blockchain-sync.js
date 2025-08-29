@@ -832,6 +832,14 @@ async function createReport(data) {
   return await createRecord('reports', reportData);
 }
 
+// Policies
+async function getAllPolicies() {
+  return await queryDatabase('policies', {
+    select: 'id,name,description,ministry,status,creator,created_at,effective_date,updated_at,supportCount,isActive,removed',
+    order: 'id'
+  });
+}
+
 async function createPolicy(data) {
   const policyData = {
     name: data.name || '',
@@ -839,9 +847,9 @@ async function createPolicy(data) {
     ministry: data.ministry || '',
     status: data.status || '',
     creator: data.creator || null,
-    createdAt: data.createdAt || null,
-    effectiveDate: data.effectiveDate || null,
-    lastUpdated: data.lastUpdated || null,
+    created_at: data.createdAt || null,
+    effective_date: data.effectiveDate || null,
+    updated_at: data.lastUpdated || null,
     supportCount: data.supportCount || 0,
     isActive: data.isActive || false,
     removed: data.removed || false
@@ -852,7 +860,7 @@ async function createPolicy(data) {
 // Projects
 async function getAllProjects() {
   return await queryDatabase('projects', {
-    select: 'project_id,project_name,category_id,allocatedBudget,spentBudget,state,province,ministry,viewDetailsCid,status,createdAt,updatedAt,removed',
+    select: 'project_id,project_name,category_id,allocated_budget,spent_budget,state,province,ministry,view_details,status,createdAt,updatedAt,removed',
     order: 'project_id'
   });
 }
@@ -862,12 +870,12 @@ async function createProject(data) {
     project_id: data.projectId || data.project_id,
     project_name: data.projectName || '',
     category_id: data.categoryId || '',
-    allocatedBudget: data.allocatedBudget || 0,
-    spentBudget: data.spentBudget || 0,
+    allocated_budget: data.allocatedBudget || data.allocated_budget || 0,
+    spent_budget: data.spentBudget || 0,
     state: data.state || '',
     province: data.province || '',
     ministry: data.ministry || '',
-    viewDetailsCid: data.viewDetailsCid || '',
+    view_details: data.viewDetailsCid || '',
     status: data.status || '',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
@@ -930,8 +938,11 @@ function compareProjectFields(dbProject, bcProject) {
     updateData.category_id = bcProject.categoryId;
     hasChanges = true;
   }
-  if (dbProject.allocatedBudget !== bcProject.allocatedBudget) {
-    updateData.allocatedBudget = bcProject.allocatedBudget;
+  // Handle allocated_budget/allocatedBudget mapping
+  const dbAllocated = dbProject.allocated_budget !== undefined ? dbProject.allocated_budget : dbProject.allocatedBudget;
+  const bcAllocated = bcProject.allocatedBudget !== undefined ? bcProject.allocatedBudget : bcProject.allocated_budget;
+  if (dbAllocated !== bcAllocated) {
+    updateData.allocated_budget = bcAllocated;
     hasChanges = true;
   }
   if (dbProject.spentBudget !== bcProject.spentBudget) {

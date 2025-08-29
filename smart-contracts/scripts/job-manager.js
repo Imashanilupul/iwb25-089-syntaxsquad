@@ -149,21 +149,26 @@ async function executeJob(jobId) {
 
 // Execute blockchain sync job
 async function executeBlockchainSyncJob(jobId, params) {
-  const { fetchAllBlockchainDataOptimized } = require('./blockchain-sync-optimized');
-  
+  const axios = require('axios');
   updateJob(jobId, { progress: 10, message: 'Initializing blockchain sync...' });
-  
+
   const blocksBack = params.blocksBack || 1000;
-  
-  updateJob(jobId, { progress: 20, message: `Fetching data for ${blocksBack} blocks...` });
-  
-  const result = await fetchAllBlockchainDataOptimized(blocksBack, (progress, message) => {
-    updateJob(jobId, { progress: 20 + (progress * 0.7), message }); // Scale progress to 20-90%
-  });
-  
-  updateJob(jobId, { progress: 95, message: 'Finalizing results...' });
-  
-  completeJob(jobId, result);
+  const isFullSync = params.isFullSync || false;
+
+  updateJob(jobId, { progress: 20, message: `Starting comprehensive blockchain sync...` });
+
+  try {
+    // Call the comprehensive sync endpoint
+    const result = await axios.post('http://localhost:3001/sync/execute', {
+      blocksBack,
+      isFullSync
+    }, { timeout: 900000 });
+
+    updateJob(jobId, { progress: 95, message: 'Finalizing results...' });
+    completeJob(jobId, result.data);
+  } catch (error) {
+    failJob(jobId, error);
+  }
 }
 
 // Execute proposals sync job
