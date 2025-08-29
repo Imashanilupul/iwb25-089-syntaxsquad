@@ -16,12 +16,18 @@ function AdminLoginContent() {
     
     if (logout === 'complete') {
       toast({
-        title: "Complete Logout Successful",
-        description: "All sessions have been terminated. You must re-authenticate completely.",
+        title: "✅ Complete Logout Successful",
+        description: "All sessions terminated. You must re-authenticate completely with username, password, and wallet.",
+      })
+    } else if (logout === 'partial') {
+      toast({
+        title: "⚠️ Partial Logout",
+        description: "Local session cleared. If you still see saved login, please clear browser data.",
+        variant: "destructive"
       })
     } else if (logout === 'local') {
       toast({
-        title: "Local Session Cleared",
+        title: "🔄 Local Session Cleared",
         description: "Local authentication data cleared. Please reconnect your wallet.",
       })
     } else if (cleared === 'true') {

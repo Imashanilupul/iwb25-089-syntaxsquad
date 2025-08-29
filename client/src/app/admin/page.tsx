@@ -265,23 +265,32 @@ export default function AdminPortal() {
       }
       
       // Call our comprehensive logout endpoint
+      console.log('Admin: Calling logout API endpoint...')
       const logoutResponse = await fetch('/api/auth/logout', {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
       
       if (logoutResponse.ok) {
         const logoutResult = await logoutResponse.json()
-        console.log('Admin: Logout endpoint called successfully')
+        console.log('Admin: Logout endpoint response:', logoutResult)
         
         if (logoutResult.redirectUrl) {
-          console.log('Admin: Redirecting to complete logout:', logoutResult.redirectUrl)
-          // Redirect to the URL which will handle Asgardeo logout
-          window.location.href = logoutResult.redirectUrl
+          console.log('Admin: Redirecting to Asgardeo logout:', logoutResult.redirectUrl)
+          // Add a small delay to ensure local cleanup is complete
+          setTimeout(() => {
+            window.location.href = logoutResult.redirectUrl
+          }, 100)
           return
+        } else {
+          console.log('Admin: No redirect URL provided, using fallback')
         }
       } else {
-        console.warn('Admin: Logout endpoint failed, falling back to direct redirect')
+        const errorText = await logoutResponse.text()
+        console.warn('Admin: Logout endpoint failed:', logoutResponse.status, errorText)
       }
       
       // Fallback: direct redirect to logout route
