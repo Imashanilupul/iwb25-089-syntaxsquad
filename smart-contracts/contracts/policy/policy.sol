@@ -8,28 +8,28 @@ interface IAuthRegistry {
 
 contract Policies {
   struct Policy {
-    string name; // Policy name (stored directly as string)
-    string descriptionCid; // IPFS CID for policy description
-    string viewFullPolicy; // Full policy document URL (stored directly as string)
-    string ministry; // Ministry name (stored directly as string)
-    string status; // Policy status (DRAFT, UNDER_REVIEW, etc.)
-    address creator; // Address of policy creator
-    uint256 createdAt; // Creation timestamp
-    uint256 effectiveDate; // When policy becomes effective
-    uint256 lastUpdated; // Last update timestamp
-    mapping(address => bool) supporters; // Address => has supported
-    uint256 supportCount; // Number of supporters
-    bool isActive; // Whether policy is currently active
+    string name;
+    string descriptionCid;
+    string viewFullPolicy;
+    string ministry;
+    string status;
+    address creator;
+    uint256 createdAt;
+    uint256 effectiveDate;
+    uint256 lastUpdated;
+    mapping(address => bool) supporters;
+    uint256 supportCount;
+    bool isActive;
+    bool removed;
   }
 
   IAuthRegistry public authRegistry;
   uint256 public policyCount;
   mapping(uint256 => Policy) private policies;
   mapping(address => uint256) public lastCreatedAt;
-  mapping(string => uint256[]) public policiesByMinistry; // Ministry => Policy IDs
-  mapping(string => uint256[]) public policiesByStatus; // Status => Policy IDs
+  mapping(string => uint256[]) public policiesByMinistry;
+  mapping(string => uint256[]) public policiesByStatus;
 
-  // Events
   event PolicyCreated(
     uint256 indexed policyId,
     address indexed creator,
@@ -53,33 +53,30 @@ contract Policies {
     address indexed changer
   );
 
+  event PolicyRemoved(uint256 indexed policyId, address indexed remover);
+
   constructor(address _authRegistry) {
     require(_authRegistry != address(0), "Auth registry address cannot be zero");
     authRegistry = IAuthRegistry(_authRegistry);
   }
 
-  // Only authorized users can perform write operations
   modifier onlyAuthorized() {
-    require(authRegistry.isAdmin(msg.sender), "User not authorized");
+    require(authRegistry.isAdmin(msg.sender), "No Permission");
     _;
   }
 
-  // Check if policy exists
+  modifier onlyUser() {
+    require(authRegistry.isAuthorized(msg.sender), "User not authorized");
+    _;
+  }
+
   modifier policyExists(uint256 policyId) {
     require(policyId > 0 && policyId <= policyCount, "Policy does not exist");
     require(policies[policyId].creator != address(0), "Policy does not exist");
+    require(!policies[policyId].removed, "Policy has been removed");
     _;
   }
 
-  /**
-   * Create a new policy
-   * @param name Policy name (stored directly)
-   * @param descriptionCid IPFS CID for policy description
-   * @param viewFullPolicy Full policy document URL (stored directly)
-   * @param ministry Ministry responsible for the policy
-   * @param effectiveDate When the policy becomes effective (timestamp)
-   * @return policyId The ID of the created policy
-   */
   function createPolicy(
     string calldata name,
     string calldata descriptionCid,
@@ -100,14 +97,14 @@ contract Policies {
     p.descriptionCid = descriptionCid;
     p.viewFullPolicy = viewFullPolicy;
     p.ministry = ministry;
-    p.status = "DRAFT"; // Default status
+    p.status = "DRAFT";
     p.creator = msg.sender;
     p.createdAt = block.timestamp;
     p.effectiveDate = effectiveDate;
     p.lastUpdated = block.timestamp;
     p.isActive = false;
+    p.removed = false;
 
-    // Add to ministry and status mappings
     policiesByMinistry[ministry].push(policyId);
     policiesByStatus["DRAFT"].push(policyId);
 
@@ -117,12 +114,12 @@ contract Policies {
     return policyId;
   }
 
-  /**
-   * Update policy status and details
-   * @param policyId The policy to update
-   * @param newStatus New status for the policy
-   * @param newEffectiveDate New effective date (0 to keep current)
-   */
+  function removePolicy(uint256 policyId) external onlyAuthorized policyExists(policyId) {
+    Policy storage p = policies[policyId];
+    p.removed = true;
+    emit PolicyRemoved(policyId, msg.sender);
+  }
+
   function updatePolicyStatus(
     uint256 policyId,
     string calldata newStatus,
@@ -131,10 +128,8 @@ contract Policies {
     Policy storage p = policies[policyId];
     string memory oldStatus = p.status;
 
-    // Remove from old status mapping
     _removeFromStatusMapping(oldStatus, policyId);
 
-    // Update status
     p.status = newStatus;
     p.lastUpdated = block.timestamp;
 
@@ -142,10 +137,8 @@ contract Policies {
       p.effectiveDate = newEffectiveDate;
     }
 
-    // Add to new status mapping
     policiesByStatus[newStatus].push(policyId);
 
-    // Auto-activate if status is ACTIVE and effective date has passed
     if (
       keccak256(bytes(newStatus)) == keccak256(bytes("ACTIVE")) &&
       p.effectiveDate <= block.timestamp
@@ -167,7 +160,6 @@ contract Policies {
   )
     external
     view
-    policyExists(policyId)
     returns (
       string memory name,
       string memory descriptionCid,
@@ -179,10 +171,14 @@ contract Policies {
       uint256 effectiveDate,
       uint256 lastUpdated,
       uint256 supportCount,
-      bool isActive
+      bool isActive,
+      bool removed
     )
   {
+    require(policyId > 0 && policyId <= policyCount, "Policy does not exist");
     Policy storage p = policies[policyId];
+    require(p.creator != address(0), "Policy does not exist");
+
     return (
       p.name,
       p.descriptionCid,
@@ -194,8 +190,31 @@ contract Policies {
       p.effectiveDate,
       p.lastUpdated,
       p.supportCount,
-      p.isActive
+      p.isActive,
+      p.removed
     );
+  }
+  event PolicySupported(uint256 indexed policyId, address indexed supporter);
+  event PolicyUnsupported(uint256 indexed policyId, address indexed supporter);
+
+  function supportPolicy(uint256 policyId) external onlyUser policyExists(policyId) {
+    Policy storage p = policies[policyId];
+    require(!p.supporters[msg.sender], "You have already supported this policy");
+
+    p.supporters[msg.sender] = true;
+    p.supportCount++;
+
+    emit PolicySupported(policyId, msg.sender);
+  }
+
+  function unsupportPolicy(uint256 policyId) external onlyUser policyExists(policyId) {
+    Policy storage p = policies[policyId];
+    require(p.supporters[msg.sender], "You have not supported this policy");
+
+    p.supporters[msg.sender] = false;
+    p.supportCount--;
+
+    emit PolicyUnsupported(policyId, msg.sender);
   }
 
   function _removeFromStatusMapping(string memory status, uint256 policyId) internal {

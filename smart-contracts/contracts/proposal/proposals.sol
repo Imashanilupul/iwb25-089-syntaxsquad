@@ -20,6 +20,7 @@ contract Proposals {
         uint256 categoryId;
         uint256 createdAt;
         uint256 updatedAt;
+        bool removed;
         mapping(address => bool) hasVotedYes;
         mapping(address => bool) hasVotedNo;
     }
@@ -270,7 +271,8 @@ contract Proposals {
         uint256 expiredDate,
         uint256 categoryId,
         uint256 createdAt,
-        uint256 updatedAt
+        uint256 updatedAt,
+        bool removed
     ) {
         Proposal storage p = proposals[proposalId];
         require(p.creator != address(0), "Proposal does not exist");
@@ -286,7 +288,8 @@ contract Proposals {
             p.expiredDate,
             p.categoryId,
             p.createdAt,
-            p.updatedAt
+            p.updatedAt,
+            p.removed
         );
     }
 
@@ -297,15 +300,7 @@ contract Proposals {
      * @return hasVotedYes Whether user has voted YES
      * @return hasVotedNo Whether user has voted NO
      */
-    function getUserVote(uint256 proposalId, address user) external view returns (
-        bool hasVotedYes,
-        bool hasVotedNo
-    ) {
-        Proposal storage p = proposals[proposalId];
-        require(p.creator != address(0), "Proposal does not exist");
-        
-        return (p.hasVotedYes[user], p.hasVotedNo[user]);
-    }
+
 
     /**
      * Get proposal voting statistics
@@ -334,6 +329,17 @@ contract Proposals {
         
         return (yesVotes, noVotes, netVotes, totalVotes, yesPercentage);
     }
+
+    function removeProposal(uint256 proposalId) external {
+    Proposal storage p = proposals[proposalId];
+    require(p.creator != address(0), "Proposal does not exist");
+    require(msg.sender == p.creator || authRegistry.isAdmin(msg.sender), "Only creator or admin can remove proposal");
+    require(!p.removed, "Proposal already removed");
+    p.removed = true;
+    p.activeStatus = false;
+    p.updatedAt = block.timestamp;
+    emit ProposalStatusChanged(proposalId, false);
+}
 
 
 

@@ -3,7 +3,7 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, '../.env') });
 
 // Contract configuration
-const contractAddress = "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9";
+const contractAddress = "0x010Fa40999Fa27a1Ac4599b3eCecC3A716A2439b";
 const abi = require("../artifacts/contracts/auth/auth.sol/AuthRegistry.json").abi;
 
 // Setup provider and wallet
@@ -14,7 +14,7 @@ const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Add the admin addresses you want here
 const ADMIN_ADDRESSES = [
-  "0x36afe89160f0f25d0485d812c2637a69f427dceb", // Replace with actual admin address
+  "0x67e046683ec00e611c7F3C2a4e6497e6A6069874", // Replace with actual admin address
    // Replace with actual admin address
 ];
 
@@ -27,14 +27,14 @@ async function addAdmin() {
       console.log(`\nAdding admin: ${adminAddress}`);
       
       // Check if already admin
-      const isAlreadyAdmin = await authRegistry.isAdmin(adminAddress);
-      if (isAlreadyAdmin) {
-        console.log("Already an admin, skipping...");
-        continue;
-      }
+      // const isAlreadyAdmin = await authRegistry.isAdmin(adminAddress);
+      // if (isAlreadyAdmin) {
+      //   console.log("Already an admin, skipping...");
+      //   continue;
+      // }
       
       // Add as admin
-      const tx = await authRegistry.authorizeAdmin(adminAddress);
+      const tx = await authRegistry.authorizeUser(adminAddress);
       console.log(`Transaction: ${tx.hash}`);
       
       const receipt = await tx.wait();

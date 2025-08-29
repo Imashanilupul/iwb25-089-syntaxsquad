@@ -3,31 +3,36 @@ const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const fs = require('fs');
 const path = require('path');
-
 const router = express.Router();
 
-const contractAddress = "0x1577FD3B3E54cFA368F858d542920A0fefBaf807"; // Replace with real
 let petitions;
 let signers;
-
-async function init() {
-  const Petitions = await ethers.getContractFactory("Petitions");
-  petitions = await Petitions.attach(contractAddress);
-  signers = await ethers.getSigners();
-}
-init();
+let contractAddress;
 
 function loadDeployedAddresses() {
   try {
     const p = path.join(__dirname, '..', 'deployed-addresses.json');
     if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
+      const addresses = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return addresses.Petitions || null;
     }
   } catch (e) {
     console.warn('Could not load deployed-addresses.json', e.message);
   }
   return null;
 }
+async function init() {
+  contractAddress = loadDeployedAddresses();
+  if (!contractAddress) {
+    throw new Error('Petitions contract address not found in deployed-addresses.json');
+  }
+  const Petitions = await ethers.getContractFactory("Petitions");
+  petitions = await Petitions.attach(contractAddress);
+  signers = await ethers.getSigners();
+}
+init();
+
+
 
 function loadContractAbi() {
   try {
