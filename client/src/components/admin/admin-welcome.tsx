@@ -33,6 +33,7 @@ export function AdminWelcome() {
       })
     } else if (isFullyAuthenticated) {
       // Both wallet and Asgardeo authenticated - redirect to admin portal
+      console.log('AdminWelcome: User is fully authenticated, redirecting to admin portal');
       toast({
         title: "🚀 Authentication Complete!",
         description: "Redirecting to admin portal...",
@@ -43,6 +44,7 @@ export function AdminWelcome() {
       }, 1500)
     } else if (asgardeoUser && !isConnected) {
       // User has Asgardeo session but no wallet connected - sign out from Asgardeo
+      console.log('AdminWelcome: Asgardeo session found but no wallet connected, signing out');
       toast({
         title: "Session Cleared",
         description: "Please connect your wallet to continue.",

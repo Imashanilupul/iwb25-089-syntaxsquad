@@ -125,14 +125,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to get Asgardeo user info from the client
   const getAsgardeoUserInfo = async () => {
     try {
+      console.log('AuthContext: Fetching Asgardeo user info...');
       const response = await fetch('/api/auth/me');
       if (response.ok) {
         const data = await response.json();
+        console.log('AuthContext: Asgardeo user data:', data);
         return data.isAuthenticated ? data.user : null;
       }
+      console.log('AuthContext: No valid Asgardeo session');
       return null;
     } catch (error) {
-      console.log('No Asgardeo session found:', error);
+      console.log('AuthContext: No Asgardeo session found:', error);
       return null;
     }
   };
@@ -140,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to validate if wallet address is linked to a registered Asgardeo user
   const validateUserRegistration = async (walletAddress: string, asgardeoUser?: any) => {
     try {
+      console.log('AuthContext: Validating user registration for wallet:', walletAddress);
       // First check existing wallet verification
       const walletAuthRes = await axios.get(`http://localhost:8080/api/auth/isauthorized/${walletAddress}`);
       
@@ -150,14 +154,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         asgardeoUser
       });
       
-      return {
+      const result = {
         walletVerified: walletAuthRes.data.verified,
         isRegisteredUser: userValidationRes.data.isRegistered,
         jwt: userValidationRes.data.token || walletAuthRes.data.token,
         userData: userValidationRes.data.userData
       };
+      
+      console.log('AuthContext: User validation result:', result);
+      return result;
     } catch (error) {
-      console.error("User validation failed:", error);
+      console.error("AuthContext: User validation failed:", error);
       return {
         walletVerified: false,
         isRegisteredUser: false,
@@ -169,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function handleAuthentication() {
+      console.log('AuthContext: Starting authentication process...');
       setAuth(prev => ({ ...prev, isLoading: true, error: null }));
       
       try {
@@ -176,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const asgardeoUser = await getAsgardeoUserInfo();
         
         if (isConnected && address) {
+          console.log('AuthContext: Wallet connected, validating user...');
           // Wallet is connected, now validate user registration
           const validation = await validateUserRegistration(address, asgardeoUser);
           
@@ -191,9 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error: null,
           };
           
+          console.log('AuthContext: Setting new auth state:', newAuthState);
           setAuth(newAuthState);
           saveAuthState(newAuthState);
         } else {
+          console.log('AuthContext: No wallet connected, clearing auth state');
           // No wallet connected - clear saved auth state
           clearSavedAuthState();
           
@@ -212,6 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuth(newAuthState);
         }
       } catch (error) {
+        console.error('AuthContext: Authentication error:', error);
         clearSavedAuthState(); // Clear saved state on error
         setAuth(prev => ({
           ...prev,
@@ -221,8 +233,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
-    handleAuthentication();
-  }, [address, isConnected]);
+    // Only run if hydrated to avoid SSR issues
+    if (isHydrated) {
+      handleAuthentication();
+    }
+  }, [address, isConnected, isHydrated]);
 
   // Function to debug current auth state
   const debugAuthState = () => {

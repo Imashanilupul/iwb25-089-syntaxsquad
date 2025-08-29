@@ -41,6 +41,8 @@ export default function AdminPortal() {
   // Handle OAuth callback directly in the admin page
   const handleOAuthCallback = async (code: string, state: string) => {
     try {
+      console.log('OAuth Callback: Starting token exchange...');
+      
       // Call our server-side API to handle token exchange securely
       const response = await fetch('/api/auth/token-exchange', {
         method: 'POST',
@@ -55,10 +57,13 @@ export default function AdminPortal() {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OAuth Callback: Token exchange failed:', response.status, errorText);
         throw new Error('Token exchange failed');
       }
 
       const result = await response.json();
+      console.log('OAuth Callback: Token exchange successful:', result);
 
       if (result.success) {
         // Clean up URL
@@ -67,8 +72,11 @@ export default function AdminPortal() {
         url.searchParams.delete('state');
         window.history.replaceState({}, document.title, url.toString());
 
-        // Refresh the page to trigger auth context update
-        window.location.reload();
+        // Add a small delay to ensure the cookie is set, then refresh auth context
+        setTimeout(() => {
+          console.log('OAuth callback successful, reloading page to refresh auth context');
+          window.location.reload();
+        }, 500);
       } else {
         throw new Error(result.error || 'Authentication failed');
       }
@@ -96,13 +104,14 @@ export default function AdminPortal() {
     
     // Handle OAuth callback directly
     if (code && state) {
+      console.log('Admin page: Detected OAuth callback with code and state');
       handleOAuthCallback(code, state);
       return;
     }
     
     // Handle OAuth errors
     if (error) {
-      console.error('OAuth error:', error);
+      console.error('Admin page: OAuth error detected:', error);
       // Clean up URL and redirect to login
       const url = new URL(window.location.href);
       url.searchParams.delete('error');
@@ -121,9 +130,15 @@ export default function AdminPortal() {
 
   // Redirect to adminLogin if not fully authenticated (but only after loading is complete and hydrated)
   useEffect(() => {
-    if (isHydrated && !isLoading && !isFullyAuthenticated) {
-      router.push('/adminLogin')
-    }
+    // Add a delay to allow auth context to update after OAuth callback
+    const checkAuthAfterDelay = setTimeout(() => {
+      if (isHydrated && !isLoading && !isFullyAuthenticated) {
+        console.log('Admin page: Redirecting to adminLogin - not fully authenticated');
+        router.push('/adminLogin')
+      }
+    }, 2000); // 2 second delay to allow auth context to update
+
+    return () => clearTimeout(checkAuthAfterDelay);
   }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
   // Show consistent loading screen during authentication check or before hydration
@@ -132,7 +147,12 @@ export default function AdminPortal() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Verifying authentication...</p>
+          <p className="text-slate-600">
+            {!isHydrated ? 'Loading application...' : 'Verifying authentication...'}
+          </p>
+          <p className="text-sm text-slate-500 mt-2">
+            Please wait while we validate your credentials
+          </p>
         </div>
       </div>
     )
@@ -140,11 +160,23 @@ export default function AdminPortal() {
 
   // Show loading or redirect if not authenticated (only after hydration)
   if (!isFullyAuthenticated) {
+    console.log('Admin page: User not fully authenticated', {
+      isHydrated,
+      isLoading,
+      isFullyAuthenticated,
+      verified,
+      asgardeoUser: !!asgardeoUser,
+      address: !!address
+    });
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Redirecting to login...</p>
+          <p className="text-slate-600">Checking authentication status...</p>
+          <p className="text-sm text-slate-500 mt-2">
+            If this persists, you will be redirected to login
+          </p>
         </div>
       </div>
     )

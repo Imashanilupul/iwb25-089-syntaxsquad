@@ -67,13 +67,19 @@ export async function POST(request: NextRequest) {
     };
 
     // Create response with session cookie
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ 
+      success: true,
+      message: 'Authentication successful',
+      user: user.sub || user.username,
+      timestamp: new Date().toISOString()
+    });
     
     response.cookies.set('asgardeo_session', JSON.stringify(sessionData), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: tokens.expires_in || 3600
+      maxAge: tokens.expires_in || 3600,
+      path: '/' // Ensure cookie is available site-wide
     });
 
     // Clean up temporary cookies
