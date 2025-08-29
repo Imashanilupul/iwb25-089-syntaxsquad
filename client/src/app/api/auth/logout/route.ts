@@ -24,22 +24,26 @@ export async function POST(request: NextRequest) {
       console.log('Logout: Error parsing session data:', e);
     }
     
-    // Step 2: Build comprehensive Asgardeo logout URL
+    // Step 2: Build Asgardeo logout URL that shows logout confirmation page
     let asgardeoLogoutUrl = null;
+    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
+    
     if (idToken) {
-      // Use the proper Asgardeo logout endpoint with ID token hint
-      asgardeoLogoutUrl = `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oidc/logout?` +
+      // Use the specific Asgardeo logout API endpoint with ID token hint
+      asgardeoLogoutUrl = `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
         `id_token_hint=${idToken}&` +
-        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=complete&timestamp=${Date.now()}`)}`;
-      console.log('Logout: Built Asgardeo logout URL with ID token');
+        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
+        `prompt=logout`;
+      console.log('Logout: Built Asgardeo logout confirmation page URL with ID token');
     } else {
-      // Fallback: Use basic logout endpoint
-      asgardeoLogoutUrl = `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oidc/logout?` +
-        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=partial&timestamp=${Date.now()}`)}`;
-      console.log('Logout: Built basic Asgardeo logout URL (no ID token)');
+      // Fallback: Use specific Asgardeo logout endpoint without ID token
+      asgardeoLogoutUrl = `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
+        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
+        `client_id=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!)}`;
+      console.log('Logout: Built Asgardeo logout confirmation page URL (no ID token)');
     }
     
-    // Step 3: Clear all authentication cookies with aggressive cleanup
+    // Step 3: Return the Asgardeo logout URL for direct redirect
     const response = NextResponse.json({ 
       success: true, 
       message: 'Logout initiated',
@@ -122,22 +126,26 @@ export async function GET(request: NextRequest) {
     
     // Get ID token from cookies
     let idToken = null;
+    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
+    
     try {
       const sessionCookie = request.cookies.get('asgardeo_session');
       if (sessionCookie) {
         const sessionData = JSON.parse(sessionCookie.value);
-        idToken = sessionData.id_token;
+        idToken = sessionData.tokens?.id_token || sessionData.id_token;
       }
     } catch (e) {
       console.log('Logout: No session data for direct logout');
     }
     
-    // Clear cookies and redirect
+    // Redirect directly to Asgardeo logout page
     const redirectUrl = idToken 
-      ? `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oidc/logout?` +
+      ? `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
         `id_token_hint=${idToken}&` +
-        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=complete`)}`
-      : '/adminLogin?logout=local';
+        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}`
+      : `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
+        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
+        `client_id=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!)}`;
     
     const response = NextResponse.redirect(new URL(redirectUrl, request.url));
     

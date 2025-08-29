@@ -13,8 +13,14 @@ function AdminLoginContent() {
     const cleared = searchParams?.get('cleared')
     const error = searchParams?.get('error')
     const logout = searchParams?.get('logout')
+    const source = searchParams?.get('source')
     
-    if (logout === 'complete') {
+    if (logout === 'complete' && source === 'asgardeo') {
+      toast({
+        title: "✅ Successfully Signed Out",
+        description: "You have been signed out from Asgardeo. Please re-authenticate to continue.",
+      })
+    } else if (logout === 'complete') {
       toast({
         title: "✅ Complete Logout Successful",
         description: "All sessions terminated. You must re-authenticate completely with username, password, and wallet.",
