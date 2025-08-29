@@ -102,14 +102,29 @@ function timeoutPromise(promise, timeout, name) {
 }
 
 // Contract addresses on Sepolia
-const CONTRACT_ADDRESSES = {
-  AuthRegistry: "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9",
-  Petitions: "0x1577FD3B3E54cFA368F858d542920A0fefBaf807", 
-  Reports: "0xD8E110E021a9281b8ad7A6Cf93c2b14b3e3B2712",
-  Policies: "0x6a957A0D571b3Ed50AFc02Ac62CC061C6c533138",
-  Proposals: "0xff40F4C374c1038378c7044720B939a2a0219a2f",
-  Project: "0x1770c50E6Bc8bbFB662c7ec45924aE986473b970"
-};
+const fs = require('fs');
+const path = require('path');
+let CONTRACT_ADDRESSES = {};
+try {
+  const deployedPath = path.join(__dirname, '..', 'deployed-addresses.json');
+  if (fs.existsSync(deployedPath)) {
+    CONTRACT_ADDRESSES = JSON.parse(fs.readFileSync(deployedPath, 'utf8'));
+    console.log('Loaded contract addresses from deployed-addresses.json');
+  } else {
+    throw new Error('deployed-addresses.json not found');
+  }
+} catch (e) {
+  console.error('Error loading deployed-addresses.json:', e.message);
+  // fallback to hardcoded addresses if needed
+  // CONTRACT_ADDRESSES = {
+  //   AuthRegistry: "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9",
+  //   Petitions: "0x1577FD3B3E54cFA368F858d542920A0fefBaf807", 
+  //   Reports: "0xD8E110E021a9281b8ad7A6Cf93c2b14b3e3B2712",
+  //   Policies: "0x6a957A0D571b3Ed50AFc02Ac62CC061C6c533138",
+  //   Proposals: "0xff40F4C374c1038378c7044720B939a2a0219a2f",
+  //   Project: "0x1770c50E6Bc8bbFB662c7ec45924aE986473b970"
+  // };
+}
 
 // If a deployed-addresses.json exists, prefer it (useful after deployments)
 try {
@@ -230,7 +245,7 @@ async function processProposal(connectedContract, i) {
   ]);
   
   return {
-    blockchain_proposal_id: i,
+    id: i,
     title: title,
     short_description: shortDescription,
     description_in_details: descriptionInDetails,
@@ -305,7 +320,7 @@ async function processPetition(connectedContract, i) {
     creator_address: petition[4],
     is_completed: petition[5],
     status: petition[5] ? 'COMPLETED' : 'ACTIVE',
-    creator_id: 1,
+    creator: 1,
     created_at: new Date().toISOString()
   };
 }
@@ -361,8 +376,8 @@ async function processReport(connectedContract, i) {
   ]);
   
   return {
-    blockchain_report_id: i,
-    report_title: title,
+    id: i,
+    title: title,
     description: description,
     priority: 'MEDIUM',
     upvotes: Number(report[3].toString()),
@@ -372,7 +387,7 @@ async function processReport(connectedContract, i) {
     assigned_to: report[7],
     creation_time: Number(report[8].toString()),
     resolution_time: Number(report[9].toString()),
-    user_id: 1,
+    creator: 1,
     evidence_hash: `blockchain_${i}`,
     created_time: new Date().toISOString()
   };
@@ -747,7 +762,7 @@ async function deleteRecord(table, id, idColumn = 'id') {
 // Proposals
 async function getAllProposals() {
   return await queryDatabase('proposals', {
-    select: 'id,title,short_description,description_in_details,yes_votes,no_votes,blockchain_proposal_id,creator_id,expired_date,completed',
+    select: 'id,title,short_description,description_in_details,yes_votes,no_votes,id,creator,expired_date,removed',
     order: 'id'
   });
 }
@@ -759,20 +774,20 @@ async function createProposal(data) {
     description_in_details: data.description_in_details?.content || data.description_in_details || '',
     yes_votes: data.yes_votes || 0,
     no_votes: data.no_votes || 0,
-    blockchain_proposal_id: data.blockchain_proposal_id,
-    creator_id: data.created_by || data.creator_id || null,
+    id: data.id,
+    creator: data.created_by || data.creator || null,
     expired_date: data.expired_date,
     active_status: data.active_status !== undefined ? data.active_status : true,
-    category_id: data.category_id || null
+    category_id: data.category_id || null,
+    removed: data.removed || false
   };
-  
   return await createRecord('proposals', proposalData);
 }
 
 // Petitions
 async function getAllPetitions() {
   return await queryDatabase('petitions', {
-    select: 'id,title,description,required_signature_count,signature_count,creator,is_active',
+    select: 'id,title,description,required_signature_count,signature_count,creator,completed,removed',
     order: 'id'
   });
 }
@@ -784,9 +799,10 @@ async function createPetition(data) {
     required_signature_count: data.required_signature_count || 0,
     signature_count: data.signature_count || 0,
     blockchain_petition_id: data.blockchain_petition_id,
-    creator_id: data.creator_id || null,
+    creator: data.creator || null,
     deadline: data.deadline || null,
-    is_active: data.status === 'ACTIVE' || !data.is_completed
+    completed: data.is_completed || false,
+    removed: data.removed || false
   };
   
   return await createRecord('petitions', petitionData);
@@ -795,29 +811,155 @@ async function createPetition(data) {
 // Reports
 async function getAllReports() {
   return await queryDatabase('reports', {
-    select: 'report_id,report_title,description,priority,upvotes,downvotes,blockchain_report_id,user_id,resolved_status,evidence_hash',
-    order: 'report_id'
+    select: 'id,title,description,priority,upvotes,downvotes,creator,resolved_status,evidence_hash,removed',
+    order: 'id'
   });
 }
 
 async function createReport(data) {
   const reportData = {
-    report_title: data.report_title?.content || data.report_title || '',
+    title: data.title?.content || data.title || '',
     description: data.description?.content || data.description || '',
     priority: data.priority || 'MEDIUM',
     upvotes: data.upvotes || 0,
     downvotes: data.downvotes || 0,
-    blockchain_report_id: data.blockchain_report_id,
-    user_id: data.user_id || null,
+    id: data.id,
+    creator: data.creator || null,
     resolved_status: data.resolved_status || false,
-    evidence_hash: data.evidence_hash || `blockchain_${data.blockchain_report_id}`
+    evidence_hash: data.evidence_hash || `blockchain_${data.id}`,
+    removed: data.removed || false
   };
-  
   return await createRecord('reports', reportData);
 }
 
+async function createPolicy(data) {
+  const policyData = {
+    name: data.name || '',
+    description: data.description || '',
+    ministry: data.ministry || '',
+    status: data.status || '',
+    creator: data.creator || null,
+    createdAt: data.createdAt || null,
+    effectiveDate: data.effectiveDate || null,
+    lastUpdated: data.lastUpdated || null,
+    supportCount: data.supportCount || 0,
+    isActive: data.isActive || false,
+    removed: data.removed || false
+  };
+  return await createRecord('policies', policyData);
+}
+
+// Projects
+async function getAllProjects() {
+  return await queryDatabase('projects', {
+    select: 'project_id,project_name,category_id,allocatedBudget,spentBudget,state,province,ministry,viewDetailsCid,status,createdAt,updatedAt,removed',
+    order: 'project_id'
+  });
+}
+
+async function createProject(data) {
+  const projectData = {
+    project_id: data.projectId || data.project_id,
+    project_name: data.projectName || '',
+    category_id: data.categoryId || '',
+    allocatedBudget: data.allocatedBudget || 0,
+    spentBudget: data.spentBudget || 0,
+    state: data.state || '',
+    province: data.province || '',
+    ministry: data.ministry || '',
+    viewDetailsCid: data.viewDetailsCid || '',
+    status: data.status || '',
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+    removed: data.removed || false
+  };
+  return await createRecord('projects', projectData);
+}
+  
+
 // ========================================
 // FIELD COMPARISON FUNCTIONS  
+function comparePolicyFields(dbPolicy, bcPolicy) {
+  const updateData = {};
+  let hasChanges = false;
+  // Example field comparisons, adjust as needed for your schema
+  if (dbPolicy.name !== bcPolicy.name) {
+    updateData.name = bcPolicy.name;
+    hasChanges = true;
+  }
+  if (dbPolicy.description !== bcPolicy.description) {
+    updateData.description = bcPolicy.description;
+    hasChanges = true;
+  }
+  if (dbPolicy.ministry !== bcPolicy.ministry) {
+    updateData.ministry = bcPolicy.ministry;
+    hasChanges = true;
+  }
+  if (dbPolicy.status !== bcPolicy.status) {
+    updateData.status = bcPolicy.status;
+    hasChanges = true;
+  }
+  if (dbPolicy.supportCount !== bcPolicy.supportCount) {
+    updateData.supportCount = bcPolicy.supportCount;
+    hasChanges = true;
+  }
+  if (dbPolicy.isActive !== bcPolicy.isActive) {
+    updateData.isActive = bcPolicy.isActive;
+    hasChanges = true;
+  }
+  if (dbPolicy.removed !== bcPolicy.removed) {
+    updateData.removed = bcPolicy.removed;
+    hasChanges = true;
+  }
+  return { hasChanges, updateData };
+}
+
+function compareProjectFields(dbProject, bcProject) {
+  const updateData = {};
+  let hasChanges = false;
+  // Example field comparisons, adjust as needed for your schema
+  if (dbProject.project_id !== bcProject.projectId) {
+    updateData.project_id = bcProject.projectId;
+    hasChanges = true;
+  }
+  if (dbProject.project_name !== bcProject.projectName) {
+    updateData.project_name = bcProject.projectName;
+    hasChanges = true;
+  }
+  if (dbProject.category_id !== bcProject.categoryId) {
+    updateData.category_id = bcProject.categoryId;
+    hasChanges = true;
+  }
+  if (dbProject.allocatedBudget !== bcProject.allocatedBudget) {
+    updateData.allocatedBudget = bcProject.allocatedBudget;
+    hasChanges = true;
+  }
+  if (dbProject.spentBudget !== bcProject.spentBudget) {
+    updateData.spentBudget = bcProject.spentBudget;
+    hasChanges = true;
+  }
+  if (dbProject.state !== bcProject.state) {
+    updateData.state = bcProject.state;
+    hasChanges = true;
+  }
+  if (dbProject.province !== bcProject.province) {
+    updateData.province = bcProject.province;
+    hasChanges = true;
+  }
+  if (dbProject.ministry !== bcProject.ministry) {
+    updateData.ministry = bcProject.ministry;
+    hasChanges = true;
+  }
+  if (dbProject.status !== bcProject.status) {
+    updateData.status = bcProject.status;
+    hasChanges = true;
+  }
+  if (dbProject.removed !== bcProject.removed) {
+    updateData.removed = bcProject.removed;
+    hasChanges = true;
+  }
+  return { hasChanges, updateData };
+}
 // ========================================
 
 function compareProposalFields(dbProposal, bcProposal) {
@@ -890,10 +1032,9 @@ function comparePetitionFields(dbPetition, bcPetition) {
     hasChanges = true;
   }
   
-  // Convert blockchain is_completed to database is_active
-  const bcIsActive = !bcPetition.is_completed;
-  if (dbPetition.is_active !== bcIsActive) {
-    updateData.is_active = bcIsActive;
+  // Directly compare completed field
+  if (dbPetition.completed !== bcPetition.is_completed) {
+    updateData.completed = bcPetition.is_completed;
     hasChanges = true;
   }
   
@@ -904,9 +1045,9 @@ function compareReportFields(dbReport, bcReport) {
   const updateData = {};
   let hasChanges = false;
   
-  const bcTitle = bcReport.report_title?.content || bcReport.report_title || '';
-  if (dbReport.report_title !== bcTitle) {
-    updateData.report_title = bcTitle;
+  const bcTitle = bcReport.title?.content || bcReport.title || '';
+  if (dbReport.title !== bcTitle) {
+    updateData.title = bcTitle;
     hasChanges = true;
   }
   
@@ -941,6 +1082,134 @@ function compareReportFields(dbReport, bcReport) {
 
 // ========================================
 // SYNC IMPLEMENTATION FUNCTIONS
+
+// Two-phase sync for policies
+async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
+  console.log('📜 Starting policies sync with provided data...');
+  let newCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+  const errors = [];
+  try {
+    const dbPolicies = await getAllPolicies();
+    console.log(`📜 Found ${blockchainPolicies.length} policies in blockchain and ${dbPolicies.length} in database`);
+    const dbMap = new Map();
+    const bcMap = new Map();
+    dbPolicies.forEach(p => { if (p.id) dbMap.set(p.id, p); });
+    blockchainPolicies.forEach(p => { if (p.id) bcMap.set(p.id, p); });
+    // Phase 1: Check DB records
+    for (const dbPolicy of dbPolicies) {
+      if (!dbPolicy.id) continue;
+      const bcId = dbPolicy.id;
+      const bcPolicy = bcMap.get(bcId);
+      if (!bcPolicy) {
+        try {
+          await deleteRecord('policies', dbPolicy.id);
+          removedCount++;
+          console.log(`🗑️ Removed policy ${bcId} (id: ${dbPolicy.id})`);
+        } catch (error) {
+          errors.push({ type: 'delete', id: bcId, error: error.message });
+        }
+        continue;
+      }
+      const needsUpdate = comparePolicyFields(dbPolicy, bcPolicy);
+      if (needsUpdate.hasChanges) {
+        try {
+          await updateRecord('policies', dbPolicy.id, needsUpdate.updateData);
+          updatedCount++;
+          console.log(`🔄 Updated policy ${bcId} (id: ${dbPolicy.id})`);
+        } catch (error) {
+          errors.push({ type: 'update', id: bcId, error: error.message });
+        }
+      }
+    }
+    // Phase 2: Create new records
+    for (const bcPolicy of blockchainPolicies) {
+      const bcId = bcPolicy.id;
+      if (!bcId || dbMap.has(bcId)) continue;
+      try {
+        await createPolicy(bcPolicy);
+        newCount++;
+        console.log(`✅ Created new policy ${bcId}`);
+      } catch (error) {
+        errors.push({ type: 'create', id: bcId, error: error.message });
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in policies sync:', error);
+    errors.push({ type: 'general', error: error.message });
+  }
+  return {
+    status: 'completed',
+    fromBlock,
+    toBlock,
+    results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
+  };
+}
+
+// Two-phase sync for projects
+async function syncProjectsWithData(fromBlock, toBlock, blockchainProjects) {
+  console.log('🏗️ Starting projects sync with provided data...');
+  let newCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
+  const errors = [];
+  try {
+    const dbProjects = await getAllProjects();
+    console.log(`🏗️ Found ${blockchainProjects.length} projects in blockchain and ${dbProjects.length} in database`);
+    const dbMap = new Map();
+    const bcMap = new Map();
+  dbProjects.forEach(p => { if (p.project_id) dbMap.set(p.project_id, p); });
+  blockchainProjects.forEach(p => { if (p.projectId) bcMap.set(p.projectId, p); });
+    // Phase 1: Check DB records
+    for (const dbProject of dbProjects) {
+      if (!dbProject.project_id) continue;
+      const bcId = dbProject.project_id;
+      const bcProject = bcMap.get(bcId);
+      if (!bcProject) {
+        try {
+          await deleteRecord('projects', dbProject.project_id, 'project_id');
+          removedCount++;
+          console.log(`🗑️ Removed project ${bcId} (project_id: ${dbProject.project_id})`);
+        } catch (error) {
+          errors.push({ type: 'delete', id: bcId, error: error.message });
+        }
+        continue;
+      }
+      const needsUpdate = compareProjectFields(dbProject, bcProject);
+      if (needsUpdate.hasChanges) {
+        try {
+          await updateRecord('projects', dbProject.project_id, needsUpdate.updateData, 'project_id');
+          updatedCount++;
+          console.log(`🔄 Updated project ${bcId} (project_id: ${dbProject.project_id})`);
+        } catch (error) {
+          errors.push({ type: 'update', id: bcId, error: error.message });
+        }
+      }
+    }
+    // Phase 2: Create new records
+    for (const bcProject of blockchainProjects) {
+      const bcId = bcProject.projectId;
+      if (!bcId || dbMap.has(bcId)) continue;
+      try {
+        await createProject(bcProject);
+        newCount++;
+        console.log(`✅ Created new project ${bcId}`);
+      } catch (error) {
+        errors.push({ type: 'create', id: bcId, error: error.message });
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in projects sync:', error);
+    errors.push({ type: 'general', error: error.message });
+  }
+  return {
+    status: 'completed',
+    fromBlock,
+    toBlock,
+    results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
+  };
+}
 // ========================================
 
 // Two-phase sync for proposals
@@ -962,22 +1231,22 @@ async function syncProposalsWithData(fromBlock, toBlock, blockchainProposals) {
     const bcMap = new Map();
     
     dbProposals.forEach(p => {
-      if (p.blockchain_proposal_id) {
-        dbMap.set(p.blockchain_proposal_id, p);
+      if (p.id) {
+        dbMap.set(p.id, p);
       }
     });
     
     blockchainProposals.forEach(p => {
-      if (p.blockchain_proposal_id) {
-        bcMap.set(p.blockchain_proposal_id, p);
+      if (p.id) {
+        bcMap.set(p.id, p);
       }
     });
     
     // Phase 1: Check DB records against blockchain
     for (const dbProposal of dbProposals) {
-      if (!dbProposal.blockchain_proposal_id) continue;
+      if (!dbProposal.id) continue;
       
-      const bcId = dbProposal.blockchain_proposal_id;
+      const bcId = dbProposal.id;
       const bcProposal = bcMap.get(bcId);
       
       if (!bcProposal) {
@@ -1008,7 +1277,7 @@ async function syncProposalsWithData(fromBlock, toBlock, blockchainProposals) {
     
     // Phase 2: Create new blockchain records not in DB
     for (const bcProposal of blockchainProposals) {
-      const bcId = bcProposal.blockchain_proposal_id;
+      const bcId = bcProposal.id;
       if (!bcId || dbMap.has(bcId)) continue;
       
       try {
@@ -1136,29 +1405,29 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
     const bcMap = new Map();
     
     dbReports.forEach(r => {
-      if (r.blockchain_report_id) {
-        dbMap.set(r.blockchain_report_id, r);
+      if (r.id) {
+        dbMap.set(r.id, r);
       }
     });
     
     blockchainReports.forEach(r => {
-      if (r.blockchain_report_id) {
-        bcMap.set(r.blockchain_report_id, r);
+      if (r.id) {
+        bcMap.set(r.id, r);
       }
     });
     
     // Phase 1: Check DB records
     for (const dbReport of dbReports) {
-      if (!dbReport.blockchain_report_id) continue;
+      if (!dbReport.id) continue;
       
-      const bcId = dbReport.blockchain_report_id;
+      const bcId = dbReport.id;
       const bcReport = bcMap.get(bcId);
       
       if (!bcReport) {
         try {
-          await deleteRecord('reports', dbReport.report_id, 'report_id');
+          await deleteRecord('reports', dbReport.id, 'id');
           removedCount++;
-          console.log(`🗑️ Removed report ${bcId} (report_id: ${dbReport.report_id})`);
+          console.log(`🗑️ Removed report ${bcId} (id: ${dbReport.id})`);
         } catch (error) {
           errors.push({ type: 'delete', id: bcId, error: error.message });
         }
@@ -1169,9 +1438,9 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
       
       if (needsUpdate.hasChanges) {
         try {
-          await updateRecord('reports', dbReport.report_id, needsUpdate.updateData, 'report_id');
+          await updateRecord('reports', dbReport.id, needsUpdate.updateData, 'id');
           updatedCount++;
-          console.log(`🔄 Updated report ${bcId} (report_id: ${dbReport.report_id})`);
+          console.log(`🔄 Updated report ${bcId} (id: ${dbReport.id})`);
         } catch (error) {
           errors.push({ type: 'update', id: bcId, error: error.message });
         }
@@ -1180,7 +1449,7 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
     
     // Phase 2: Create new records
     for (const bcReport of blockchainReports) {
-      const bcId = bcReport.blockchain_report_id;
+      const bcId = bcReport.id;
       if (!bcId || dbMap.has(bcId)) continue;
       
       try {
@@ -1224,49 +1493,55 @@ router.post('/sync/execute', async (req, res) => {
     console.log(`📊 Syncing blockchain data from block ${fromBlock} to ${toBlock}`);
     
     // Fetch all blockchain data once
-    const [proposals, petitions, reports] = await Promise.all([
+    const [proposals, petitions, reports, policies, projects] = await Promise.all([
       fetchProposalsOptimized(blocksBack),
       fetchPetitionsOptimized(blocksBack),  
-      fetchReportsOptimized(blocksBack)
+      fetchReportsOptimized(blocksBack),
+      fetchPoliciesOptimized(blocksBack),
+      fetchProjectsOptimized(blocksBack)
     ]);
-    
+
     console.log('📋 Blockchain data fetched:', {
       proposals: proposals.length,
       petitions: petitions.length,
-      reports: reports.length
+      reports: reports.length,
+      policies: policies.length,
+      projects: projects.length
     });
-    
+
     // Execute all sync functions in parallel
     const syncResults = await Promise.allSettled([
       syncProposalsWithData(fromBlock, toBlock, proposals),
       syncPetitionsWithData(fromBlock, toBlock, petitions),
-      syncReportsWithData(fromBlock, toBlock, reports)
+      syncReportsWithData(fromBlock, toBlock, reports),
+      syncPoliciesWithData(fromBlock, toBlock, policies),
+      syncProjectsWithData(fromBlock, toBlock, projects)
     ]);
-    
+
     // Process results and calculate totals
     let totalNew = 0;
     let totalUpdated = 0;
     let totalRemoved = 0;
     let totalErrors = 0;
     const detailedResults = [];
-    
-    const entityNames = ['proposals', 'petitions', 'reports'];
-    
+
+    const entityNames = ['proposals', 'petitions', 'reports', 'policies', 'projects'];
+
     syncResults.forEach((result, index) => {
       const entityName = entityNames[index];
-      
+
       if (result.status === 'fulfilled') {
         const res = result.value;
         totalNew += res.results.new;
         totalUpdated += res.results.updated;
         totalRemoved += res.results.removed;
         totalErrors += res.results.errors.length;
-        
+
         detailedResults.push({
           type: entityName,
           result: res
         });
-        
+
         console.log(`✅ ${entityName}: ${res.results.new} new, ${res.results.updated} updated, ${res.results.removed} removed`);
       } else {
         totalErrors++;
@@ -1274,11 +1549,11 @@ router.post('/sync/execute', async (req, res) => {
           type: entityName,
           error: result.reason.message
         });
-        
+
         console.error(`❌ ${entityName} sync failed:`, result.reason.message);
       }
     });
-    
+
     const finalResult = {
       status: 'completed',
       fromBlock,
@@ -1293,9 +1568,9 @@ router.post('/sync/execute', async (req, res) => {
       details: detailedResults,
       timestamp: new Date().toISOString()
     };
-    
+
     console.log(`✅ Blockchain sync completed! New: ${totalNew}, Updated: ${totalUpdated}, Removed: ${totalRemoved}, Errors: ${totalErrors}`);
-    
+
     res.json(finalResult);
     
   } catch (error) {

@@ -30,6 +30,7 @@ async function main() {
   const reportsAddress = await reports.getAddress();
   console.log("✅ Reports deployed to:", reportsAddress);
 
+
   // Deploy Policies contract
   console.log("\n4. Deploying Policies...");
   const Policies = await hre.ethers.getContractFactory("Policies");
