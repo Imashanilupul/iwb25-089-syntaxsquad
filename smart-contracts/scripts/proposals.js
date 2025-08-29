@@ -2,12 +2,29 @@ const express = require("express");
 const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 
-const contractAddress = "0xff40F4C374c1038378c7044720B939a2a0219a2f"; // Replace with real Proposals contract address
 let proposals;
 let signers;
-
+let contractAddress;
+function loadDeployedAddresses() {
+  try {
+    const p = path.join(__dirname, '..', 'deployed-addresses.json');
+    if (fs.existsSync(p)) {
+      const addresses = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return addresses.Proposals || null;
+    }
+  } catch (e) {
+    console.warn('Could not load deployed-addresses.json', e.message);
+  }
+  return null;
+}
 async function init() {
+  contractAddress = loadDeployedAddresses();
+  if (!contractAddress) {
+    throw new Error('Proposals contract address not found in deployed-addresses.json');
+  }
   const Proposals = await ethers.getContractFactory("Proposals");
   proposals = await Proposals.attach(contractAddress);
   signers = await ethers.getSigners();

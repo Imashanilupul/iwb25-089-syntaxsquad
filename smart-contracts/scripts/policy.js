@@ -1,32 +1,36 @@
 const express = require("express");
 const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
+const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const router = express.Router();
 
-const contractAddress = "0x6a957A0D571b3Ed50AFc02Ac62CC061C6c533138"; // Your specified contract address
 let policies;
 let signers;
-
-async function init() {
-  const Policies = await ethers.getContractFactory("Policies");
-  policies = await Policies.attach(contractAddress);
-  signers = await ethers.getSigners();
-}
-init();
-
+let contractAddress;
 function loadDeployedAddresses() {
   try {
     const p = path.join(__dirname, '..', 'deployed-addresses.json');
     if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
+      const addresses = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return addresses.Policies || null;
     }
   } catch (e) {
     console.warn('Could not load deployed-addresses.json', e.message);
   }
   return null;
 }
+async function init() {
+  contractAddress = loadDeployedAddresses();
+  if (!contractAddress) {
+    throw new Error('Policies contract address not found in deployed-addresses.json');
+  }
+  const Policies = await ethers.getContractFactory("Policies");
+  policies = await Policies.attach(contractAddress);
+  signers = await ethers.getSigners();
+}
+init();
+
 
 function loadContractAbi() {
   try {
