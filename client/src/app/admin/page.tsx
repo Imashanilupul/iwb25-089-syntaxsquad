@@ -38,17 +38,78 @@ export default function AdminPortal() {
   const { verified, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
   const router = useRouter()
 
+  // Handle OAuth callback directly in the admin page
+  const handleOAuthCallback = async (code: string, state: string) => {
+    try {
+      // Call our server-side API to handle token exchange securely
+      const response = await fetch('/api/auth/token-exchange', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          state,
+          redirect_uri: `${window.location.origin}/admin`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Token exchange failed');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Clean up URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        window.history.replaceState({}, document.title, url.toString());
+
+        // Refresh the page to trigger auth context update
+        window.location.reload();
+      } else {
+        throw new Error(result.error || 'Authentication failed');
+      }
+
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      router.push('/adminLogin');
+    }
+  }
+
   // Handle hydration
   useEffect(() => {
     setIsHydrated(true)
   }, [])
 
-  // Handle successful auth callback
+  // Handle successful auth callback and OAuth response
   useEffect(() => {
     if (!isHydrated) return
     
     const urlParams = new URLSearchParams(window.location.search);
     const authSuccess = urlParams.get('auth');
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    
+    // Handle OAuth callback directly
+    if (code && state) {
+      handleOAuthCallback(code, state);
+      return;
+    }
+    
+    // Handle OAuth errors
+    if (error) {
+      console.error('OAuth error:', error);
+      // Clean up URL and redirect to login
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, document.title, url.toString());
+      router.push('/adminLogin');
+      return;
+    }
     
     if (authSuccess === 'success') {
       // Clean up the URL
@@ -99,13 +160,13 @@ export default function AdminPortal() {
       await disconnect()
       
       // Then sign out from Asgardeo session and redirect to adminLogin
-      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
+      window.location.href = '/api/auth/signout'
     } catch (error) {
       console.error("Failed to disconnect wallet:", error)
       // Still redirect and sign out even if wallet disconnect fails
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
-      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
+      window.location.href = '/api/auth/signout'
     }
   }
 

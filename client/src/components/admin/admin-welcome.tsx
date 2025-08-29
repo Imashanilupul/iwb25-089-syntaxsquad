@@ -47,7 +47,7 @@ export function AdminWelcome() {
         title: "Session Cleared",
         description: "Please connect your wallet to continue.",
       })
-      window.location.href = '/api/auth/signout?callbackUrl=' + encodeURIComponent(window.location.origin + '/adminLogin')
+      window.location.href = '/api/auth/signout'
     }
   }, [isConnected, verified, asgardeoUser, isFullyAuthenticated, router])
 
@@ -358,7 +358,7 @@ export function AdminWelcome() {
                           Click the button below to proceed with Asgardeo authentication and access the admin portal.
                         </p>
                         <Button 
-                          onClick={() => window.location.href = '/api/auth/signin?callbackUrl=' + encodeURIComponent(window.location.origin + '/admin')} 
+                          onClick={() => window.location.href = '/api/auth/signin'} 
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
