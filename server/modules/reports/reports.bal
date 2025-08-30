@@ -48,15 +48,17 @@ public class ReportsService {
         do {
             map<string> headers = self.getHeaders();
 
-            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*&order=created_time.desc", headers);
-            
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?removed=eq.false&select=*&order=created_at.desc", headers);
+
             if response.statusCode != 200 {
+                string|error errorBody = response.getTextPayload();
+                log:printError("Supabase error body: " + (errorBody is string ? errorBody : "(no body)"));
                 return error("Failed to get reports: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Reports retrieved successfully",
@@ -82,7 +84,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString() + "&removed=eq.false";
             
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
@@ -367,7 +369,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -411,7 +413,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?priority=eq." + priority + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?priority=eq." + priority + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -442,7 +444,7 @@ public class ReportsService {
     public function getReportsByStatus(boolean resolved) returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?resolved_status=eq." + resolved.toString() + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?resolved_status=eq." + resolved.toString() + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -478,7 +480,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -516,7 +518,7 @@ public class ReportsService {
             // Search in both report_title and description fields
             string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -546,7 +548,7 @@ public class ReportsService {
     public function getReportStatistics() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*", headers);
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?removed=eq.false&select=*", headers);
             
             if response.statusCode != 200 {
                 return error("Failed to get report statistics: " + response.statusCode.toString());
@@ -615,7 +617,7 @@ public class ReportsService {
     public function getRecentReports() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?created_time=gte." + "now() - interval '30 days'" + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?created_at=gte." + "now() - interval '30 days'" + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
