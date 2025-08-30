@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { Plus, Edit, Trash2, Building, MapPin, Loader2, AlertCircle } from "lucide-react"
+import { Plus, Edit, Trash2, Building, MapPin, Loader2, AlertCircle, Check, X } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { projectService, type Project, type ProjectFormData } from "@/services/project"
 import { categoryService, type Category } from "@/services/category"
@@ -59,6 +59,10 @@ export function ProjectManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [totalItems, setTotalItems] = useState(0)
+
+  // Spent budget editing state
+  const [editingSpentBudget, setEditingSpentBudget] = useState<{ [key: number]: string }>({})
+  const [updatingSpentBudget, setUpdatingSpentBudget] = useState<{ [key: number]: boolean }>({})
 
   // Pagination handlers
   const handlePageChange = (page: number) => {
@@ -248,6 +252,22 @@ export function ProjectManagement() {
         variant: "destructive"
       })
       return
+    }
+
+    // Validate allocated budget against category available budget
+    const selectedCategory = categories.find(c => c.category_id.toString() === formData.categoryId)
+    if (selectedCategory) {
+      const availableBudget = selectedCategory.allocated_budget - selectedCategory.spent_budget
+      const requestedBudget = parseFloat(formData.allocatedBudget)
+      
+      if (requestedBudget > availableBudget) {
+        toast({
+          title: "💰 Budget Exceeded",
+          description: `Requested budget (${formatCurrency(requestedBudget)}) exceeds category available budget (${formatCurrency(availableBudget)})`,
+          variant: "destructive"
+        })
+        return
+      }
     }
 
     if (editingId) {
@@ -742,10 +762,114 @@ Timestamp: ${timestamp}
     return statusItem ? statusItem.label : status
   }
 
-  const getCategoryName = (categoryId?: number) => {
-    if (!categoryId) return "No Category"
-    const category = categories.find((cat) => cat.category_id === categoryId)
-    return category ? category.category_name : "Unknown Category"
+  const getCategoryName = (project: Project) => {
+    // First try to get category name from embedded categories relationship
+    if (project.categories?.category_name) {
+      return project.categories.category_name
+    }
+    
+    // Fall back to looking up by category_id
+    if (!project.category_id) return "No Category"
+    
+    // Convert categoryId to number for comparison since categories.category_id is always number
+    const numericCategoryId = typeof project.category_id === 'string' ? parseInt(project.category_id) : project.category_id
+    
+    if (isNaN(numericCategoryId)) return "Invalid Category"
+    
+    const category = categories.find((cat) => cat.category_id === numericCategoryId)
+    return category ? category.category_name : `Unknown Category (ID: ${project.category_id})`
+  }
+
+  // Handle spent budget update
+  const handleSpentBudgetUpdate = async (projectId: number, newSpentBudget: string) => {
+    const numericValue = parseFloat(newSpentBudget)
+    
+    // Find the project to get the allocated budget
+    const project = projects.find(p => p.project_id === projectId)
+    if (!project) {
+      toast({
+        title: "Error",
+        description: "Project not found",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate the input
+    if (isNaN(numericValue) || numericValue < 0) {
+      toast({
+        title: "Invalid Input",
+        description: "Spent budget must be a non-negative number",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (numericValue > project.allocated_budget) {
+      toast({
+        title: "Validation Error",
+        description: "Spent budget cannot exceed allocated budget",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setUpdatingSpentBudget(prev => ({ ...prev, [projectId]: true }))
+      
+      const response = await projectService.updateProject(projectId, {
+        spentBudget: numericValue
+      })
+
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Spent budget updated successfully"
+        })
+        // Clear the editing state
+        setEditingSpentBudget(prev => {
+          const newState = { ...prev }
+          delete newState[projectId]
+          return newState
+        })
+        // Reload data to reflect changes
+        await loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to update spent budget",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error updating spent budget:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update spent budget. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setUpdatingSpentBudget(prev => ({ ...prev, [projectId]: false }))
+    }
+  }
+
+  // Handle spent budget edit
+  const handleSpentBudgetEdit = (projectId: number, currentValue: number) => {
+    setEditingSpentBudget(prev => ({ ...prev, [projectId]: currentValue.toString() }))
+  }
+
+  // Handle spent budget change
+  const handleSpentBudgetChange = (projectId: number, value: string) => {
+    setEditingSpentBudget(prev => ({ ...prev, [projectId]: value }))
+  }
+
+  // Cancel spent budget edit
+  const cancelSpentBudgetEdit = (projectId: number) => {
+    setEditingSpentBudget(prev => {
+      const newState = { ...prev }
+      delete newState[projectId]
+      return newState
+    })
   }
 
   if (loading) {
@@ -816,13 +940,31 @@ Timestamp: ${timestamp}
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent className="z-[10002] max-h-[200px]" position="popper">
-                      {categories.map((category) => (
-                        <SelectItem key={category.category_id} value={category.category_id.toString()}>
-                          {category.category_name}
-                        </SelectItem>
-                      ))}
+                      {categories.map((category) => {
+                        const availableBudget = category.allocated_budget - category.spent_budget
+                        return (
+                          <SelectItem key={category.category_id} value={category.category_id.toString()}>
+                            <div className="flex flex-col">
+                              <span>{category.category_name}</span>
+                              <span className="text-xs text-gray-500">
+                                Available: {formatCurrency(availableBudget)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
+                  {formData.categoryId && (
+                    <p className="text-xs text-gray-500">
+                      Available budget: {
+                        (() => {
+                          const selectedCategory = categories.find(c => c.category_id.toString() === formData.categoryId)
+                          return selectedCategory ? formatCurrency(selectedCategory.allocated_budget - selectedCategory.spent_budget) : "Unknown"
+                        })()
+                      }
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1094,10 +1236,50 @@ Timestamp: ${timestamp}
                 <TableRow key={project.project_id}>
                   <TableCell className="font-medium">{project.project_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{getCategoryName(project.category_id)}</Badge>
+                    <Badge variant="outline">{getCategoryName(project)}</Badge>
                   </TableCell>
                   <TableCell>{formatCurrency(project.allocated_budget)}</TableCell>
-                  <TableCell>{formatCurrency(project.spent_budget)}</TableCell>
+                  <TableCell>
+                    {editingSpentBudget[project.project_id] !== undefined ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={editingSpentBudget[project.project_id]}
+                          onChange={(e) => handleSpentBudgetChange(project.project_id, e.target.value)}
+                          className="w-24"
+                          min="0"
+                          max={project.allocated_budget}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSpentBudgetUpdate(project.project_id, editingSpentBudget[project.project_id])}
+                          disabled={updatingSpentBudget[project.project_id]}
+                        >
+                          {updatingSpentBudget[project.project_id] ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => cancelSpentBudgetEdit(project.project_id)}
+                          disabled={updatingSpentBudget[project.project_id]}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div 
+                        className="cursor-pointer hover:bg-gray-50 p-1 rounded"
+                        onClick={() => handleSpentBudgetEdit(project.project_id, project.spent_budget)}
+                      >
+                        {formatCurrency(project.spent_budget)}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge className={getStateColor(project.status)} variant="secondary">
                       {getStatusLabel(project.status)}
@@ -1106,9 +1288,6 @@ Timestamp: ${timestamp}
                   <TableCell>{project.province}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(project)}>
-                        <Edit className="h-3 w-3" />
-                      </Button>
                       <Button variant="outline" size="sm" onClick={() => handleDelete(project.project_id)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>

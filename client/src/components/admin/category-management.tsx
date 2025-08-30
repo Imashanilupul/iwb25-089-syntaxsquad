@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { Plus, Edit, Trash2, DollarSign, Loader2 } from "lucide-react"
+import { Plus, Edit, Trash2, DollarSign, Loader2, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import categoryService, { type Category, type CategoryFormData } from "@/services/category"
 
@@ -26,12 +26,12 @@ export function CategoryManagement() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState<CategoryFormData>({
     categoryName: "",
     allocatedBudget: 0,
-    spentBudget: 0,
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -88,7 +88,6 @@ export function CategoryManagement() {
     setFormData({
       categoryName: "",
       allocatedBudget: 0,
-      spentBudget: 0,
     })
     setEditingId(null)
   }
@@ -114,23 +113,7 @@ export function CategoryManagement() {
       return
     }
 
-    if ((formData.spentBudget || 0) < 0) {
-      toast({
-        title: "Validation Error",
-        description: "Spent budget cannot be negative",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if ((formData.spentBudget || 0) > formData.allocatedBudget) {
-      toast({
-        title: "Validation Error",
-        description: "Spent budget cannot exceed allocated budget",
-        variant: "destructive",
-      })
-      return
-    }
+    // Note: Spent budget validation removed as it will be auto-calculated from projects
 
     try {
       setSubmitting(true)
@@ -187,7 +170,6 @@ export function CategoryManagement() {
     setFormData({
       categoryName: category.category_name,
       allocatedBudget: category.allocated_budget,
-      spentBudget: category.spent_budget,
     })
     setEditingId(category.category_id)
     setIsDialogOpen(true)
@@ -223,6 +205,80 @@ export function CategoryManagement() {
     }
   }
 
+  const handleSyncSpentBudgets = async () => {
+    try {
+      setSyncing(true)
+      
+      // First test API connectivity
+      toast({
+        title: "🔄 Testing API connection...",
+        description: "Checking if backend server is reachable"
+      })
+
+      try {
+        const healthCheck = await fetch('http://localhost:8080/api/categories', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        
+        if (!healthCheck.ok) {
+          throw new Error(`Backend server responded with status: ${healthCheck.status}`)
+        }
+        
+        toast({
+          title: "✅ API connection successful",
+          description: "Backend server is reachable, proceeding with sync..."
+        })
+      } catch (connectError) {
+        toast({
+          title: "❌ Cannot connect to backend server",
+          description: "Please ensure the Ballerina server is running on http://localhost:8080",
+          variant: "destructive"
+        })
+        console.error("Connection test failed:", connectError)
+        return
+      }
+
+      toast({
+        title: "🔄 Syncing category spent budgets...",
+        description: "Calculating spent budgets from all projects"
+      })
+
+      const response = await categoryService.syncSpentBudgets()
+
+      if (response.success) {
+        toast({
+          title: "✅ Sync completed successfully!",
+          description: `Updated ${response.successCount || 0} categories. ${response.errorCount || 0} errors.`
+        })
+        await loadCategories() // Reload the list to show updated values
+      } else {
+        toast({
+          title: "❌ Sync failed",
+          description: response.message || "Failed to sync category spent budgets",
+          variant: "destructive"
+        })
+      }
+    } catch (error: any) {
+      console.error("Error syncing category spent budgets:", error)
+      
+      let errorMessage = "Failed to sync category spent budgets. Please try again."
+      if (error.message?.includes("Network Error")) {
+        errorMessage = "Cannot connect to backend server. Please ensure the Ballerina server is running on http://localhost:8080"
+      } else if (error.response?.status) {
+        errorMessage = `Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`
+      }
+      
+      toast({
+        title: "❌ Sync failed",
+        description: errorMessage,
+        variant: "destructive"
+      })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const getUtilizationColor = (spent: number, allocated: number) => {
     const percentage = (spent / allocated) * 100
     if (percentage > 90) return "text-red-600"
@@ -255,25 +311,39 @@ export function CategoryManagement() {
           <h2 className="text-2xl font-bold text-slate-900">Budget Categories</h2>
           <p className="text-slate-600">Manage budget categories and allocations</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                resetForm()
-              }}
-              disabled={loading}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Category
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Category" : "Add New Category"}</DialogTitle>
-              <DialogDescription>
-                {editingId ? "Update the category details" : "Create a new budget category"}
-              </DialogDescription>
-            </DialogHeader>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleSyncSpentBudgets}
+            disabled={loading || syncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync Spent Budgets'}
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                onClick={() => {
+                  resetForm()
+                }}
+                disabled={loading}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Category
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+        </div>
+      </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Edit Category" : "Add New Category"}</DialogTitle>
+            <DialogDescription>
+              {editingId ? "Update the category details" : "Create a new budget category"}
+            </DialogDescription>
+          </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="categoryName">Category Name</Label>
@@ -298,17 +368,7 @@ export function CategoryManagement() {
                   disabled={submitting}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="spentBudget">Spent Budget (Rs.)</Label>
-                <Input
-                  id="spentBudget"
-                  type="number"
-                  placeholder="e.g., 567000000000"
-                  value={formData.spentBudget || 0}
-                  onChange={(e) => setFormData({ ...formData, spentBudget: Number(e.target.value) })}
-                  disabled={submitting}
-                />
-              </div>
+
               <div className="flex gap-2">
                 <Button type="submit" className="flex-1" disabled={submitting}>
                   {submitting ? (
@@ -332,7 +392,6 @@ export function CategoryManagement() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -385,7 +444,10 @@ export function CategoryManagement() {
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle>Budget Categories</CardTitle>
-          <CardDescription>All budget categories with allocation and spending details</CardDescription>
+          <CardDescription>
+            All budget categories with allocation and spending details. 
+            Spent budget shows the total of all project spending in each category.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -404,8 +466,8 @@ export function CategoryManagement() {
                   <TableHead>Category Name</TableHead>
                   <TableHead>Allocated Budget</TableHead>
                   <TableHead>Spent Budget</TableHead>
+                  <TableHead>Available</TableHead>
                   <TableHead>Utilization</TableHead>
-                  <TableHead>Remaining</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -418,7 +480,13 @@ export function CategoryManagement() {
                     <TableRow key={category.category_id}>
                       <TableCell className="font-medium">{category.category_name}</TableCell>
                       <TableCell>{formatCurrency(category.allocated_budget)}</TableCell>
-                      <TableCell>{formatCurrency(category.spent_budget)}</TableCell>
+                      <TableCell>
+                        <span className="text-blue-600">{formatCurrency(category.spent_budget)}</span>
+                        <span className="text-xs text-gray-500 block">Sum of all projects</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-green-600 font-medium">{formatCurrency(remaining)}</span>
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -427,9 +495,33 @@ export function CategoryManagement() {
                           {utilization.toFixed(1)}%
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatCurrency(remaining)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={async () => {
+                              try {
+                                const response = await categoryService.syncSpentBudgets()
+                                if (response.success) {
+                                  toast({
+                                    title: "✅ Category synced!",
+                                    description: `Category ${category.category_name} updated`
+                                  })
+                                  await loadCategories()
+                                }
+                              } catch (error) {
+                                toast({
+                                  title: "❌ Sync failed",
+                                  description: "Failed to sync this category",
+                                  variant: "destructive"
+                                })
+                              }
+                            }}
+                            disabled={syncing}
+                          >
+                            <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEdit(category)}>
                             <Edit className="h-3 w-3" />
                           </Button>

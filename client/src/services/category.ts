@@ -50,6 +50,11 @@ class CategoryService {
   async deleteCategory(id: number): Promise<ApiResponse<{ categoryId: number }>> {
     return await apiService.delete<ApiResponse<{ categoryId: number }>>(`${this.baseUrl}/${id}`)
   }
+
+  // Sync category spent budgets
+  async syncSpentBudgets(): Promise<any> {
+    return await apiService.post<any>(`${this.baseUrl}/sync`, {})
+  }
 }
 
 export const categoryService = new CategoryService()

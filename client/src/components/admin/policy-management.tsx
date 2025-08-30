@@ -667,23 +667,6 @@ Timestamp: ${timestamp}
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Wallet Status */}
-          {isConnected ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Wallet className="h-4 w-4 text-blue-600" />
-              <span className="text-slate-700">
-                {address?.slice(0, 6)}...{address?.slice(-4)}
-              </span>
-              <Badge variant={verified ? "default" : "secondary"} className="text-xs">
-                {verified ? "Verified" : "Unverified"}
-              </Badge>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <ConnectButton />
-            </div>
-          )}
-          
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button

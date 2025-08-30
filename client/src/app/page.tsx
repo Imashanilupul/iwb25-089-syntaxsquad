@@ -286,6 +286,11 @@ export default function CivicPlatform() {
                         <TrendingUp className="h-3 w-3" />
                         {stat.change} from last month
                       </p>
+                      {stat.title === "Provincial Discussions" && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Total Policies + Total Comments
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
