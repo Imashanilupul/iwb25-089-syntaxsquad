@@ -1,6 +1,7 @@
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;
+import ballerina/regex;
 
 # Reports service for handling report operations
 public class ReportsService {
@@ -41,6 +42,79 @@ public class ReportsService {
         return headers;
     }
 
+    # Normalize a raw DB report row to API expected fields
+    private function normalizeReport(json raw) returns json|error {
+        if raw is map<json> {
+            map<json> out = {};
+            // id -> report_id
+            json|error idj = raw["id"];
+            if idj is json {
+                int|error idnum = idj.ensureType(int);
+                if idnum is int {
+                    out["report_id"] = idnum;
+                }
+            }
+            // title / report_title
+            json|error titlej = raw["title"];
+            if titlej is json {
+                string|error ts = titlej.ensureType(string);
+                if ts is string {
+                    out["report_title"] = ts;
+                }
+            }
+            if out["report_title"] == null {
+                json|error rtj = raw["report_title"];
+                if rtj is json {
+                    string|error rts = rtj.ensureType(string);
+                    if rts is string {
+                        out["report_title"] = rts;
+                    }
+                }
+            }
+            // description
+            if raw.hasKey("description") {
+                out["description"] = raw["description"];
+            }
+            // priority
+            if raw.hasKey("priority") {
+                out["priority"] = raw["priority"];
+            }
+            // assigned_to
+            if raw.hasKey("assigned_to") {
+                out["assigned_to"] = raw["assigned_to"];
+            }
+            // created_at -> created_time
+            if raw.hasKey("created_at") {
+                out["created_time"] = raw["created_at"];
+            }
+            // last_updated_time
+            if raw.hasKey("last_updated_time") {
+                out["last_updated_time"] = raw["last_updated_time"];
+            }
+            // resolved_time
+            if raw.hasKey("resolved_time") {
+                out["resolved_time"] = raw["resolved_time"];
+            }
+            // upvotes/downvotes -> likes/dislikes
+            if raw.hasKey("upvotes") {
+                out["likes"] = raw["upvotes"];
+            }
+            if raw.hasKey("downvotes") {
+                out["dislikes"] = raw["downvotes"];
+            }
+            // removed/resolved_status
+            if raw.hasKey("removed") {
+                out["removed"] = raw["removed"];
+            }
+            if raw.hasKey("resolved_status") {
+                out["resolved_status"] = raw["resolved_status"];
+            }
+
+            return out;
+        }
+        return error("Invalid report row format");
+    }
+
     # Get all reports
     #
     # + return - Reports list or error
@@ -59,11 +133,18 @@ public class ReportsService {
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
 
+            // Normalize DB columns to API expected fields
+            json[] normalized = [];
+            foreach json r in reports {
+                json nr = check self.normalizeReport(r);
+                normalized.push(nr);
+            }
+
             return {
                 "success": true,
                 "message": "Reports retrieved successfully",
-                "data": reports,
-                "count": reports.length(),
+                "data": normalized,
+                "count": normalized.length(),
                 "timestamp": time:utcNow()[0]
             };
             
@@ -94,12 +175,13 @@ public class ReportsService {
             
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
+
             if reports.length() > 0 {
+                json normalized = check self.normalizeReport(reports[0]);
                 return {
                     "success": true,
                     "message": "Report retrieved successfully",
-                    "data": reports[0],
+                    "data": normalized,
                     "timestamp": time:utcNow()[0]
                 };
             } else {
@@ -120,17 +202,21 @@ public class ReportsService {
     # + assignedTo - Person assigned to handle the report
     # + userId - User ID who created the report
     # + walletAddress - Wallet address of the user who created the report
+    # + blockchainTxHash - Optional blockchain transaction hash to store
+    # + blockchainBlockNumber - Optional blockchain block number
+    # + blockchainReportId - Optional ID assigned by the blockchain for the report
+    # + titleCid - Optional IPFS CID for the title
+    # + descriptionCid - Optional IPFS CID for the description
+    # + evidenceHashCid - Optional IPFS CID for the evidence hash
     # + return - Created report data or error
-    public function createReport(string reportTitle, string evidenceHash, string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = (), string? walletAddress = ()) returns json|error {
+    public function createReport(string reportTitle, string? evidenceHash = (), string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = (), string? walletAddress = (), string? blockchainTxHash = (), int? blockchainBlockNumber = (), string? blockchainReportId = (), string? titleCid = (), string? descriptionCid = (), string? evidenceHashCid = ()) returns json|error {
         do {
             // Validate input
             if reportTitle.trim().length() == 0 {
                 return error("Report title cannot be empty");
             }
             
-            if evidenceHash.trim().length() == 0 {
-                return error("Evidence hash cannot be empty");
-            }
+            // Evidence hash is optional now; frontend may omit it
             
             // Validate priority
             string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -147,8 +233,7 @@ public class ReportsService {
             
             json payload = {
                 "report_title": reportTitle,
-                "priority": priority,
-                "evidence_hash": evidenceHash
+                "priority": priority
             };
             
             // Add optional fields
@@ -200,7 +285,11 @@ public class ReportsService {
                     }
                 }
             } else {
-                return error("Failed to create report: " + response.statusCode.toString());
+                // Try to extract response body for debugging
+                string|error respBody = response.getTextPayload();
+                string bodyStr = respBody is string ? respBody : "(no body)";
+                log:printError("Supabase create report failed: status=" + response.statusCode.toString() + " body=" + bodyStr);
+                return error("Failed to create report: " + response.statusCode.toString() + " " + bodyStr);
             }
 
         } on fail error e {
@@ -866,29 +955,56 @@ public class ReportsService {
                     string newPriority = self.calculatePriorityFromVotes(newLikes, newDislikes);
                     
                     // Update report with new likes, dislikes and priority
-                    json payload = {
-                        "likes": newLikes,
-                        "dislikes": newDislikes,
-                        "priority": newPriority,
-                        "last_updated_time": "now()"
-                    };
-                    
-                    map<string> headers = self.getHeaders(true);
-                    string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
-                    http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-                    
-                    if response.statusCode != 200 {
-                        return error("Failed to like report: " + response.statusCode.toString());
-                    }
+                            // Map likes/dislikes to DB columns upvotes/downvotes
+                            json payload = {
+                                "upvotes": newLikes,
+                                "downvotes": newDislikes,
+                                "priority": newPriority,
+                                "last_updated_time": time:utcToString(time:utcNow())
+                            };
+
+                            map<string> headers = self.getHeaders(true);
+                            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
+                            http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
+
+                            if response.statusCode != 200 {
+                                // Try to extract response body for logging
+                                string|error respBody = response.getTextPayload();
+                                string bodyStr = respBody is string ? respBody : "(no body)";
+                                log:printError("Supabase like report failed: status=" + response.statusCode.toString() + " body=" + bodyStr);
+
+                                // If the database schema uses legacy columns 'likes'/'dislikes', retry with those keys
+                                if (regex:matches(bodyStr, "dislikes") || regex:matches(bodyStr, "likes")) {
+                                    log:printInfo("Retrying like update using legacy columns likes/dislikes");
+                                    json altPayload = {
+                                        "likes": newLikes,
+                                        "dislikes": newDislikes,
+                                        "priority": newPriority,
+                                        "last_updated_time": time:utcToString(time:utcNow())
+                                    };
+                                    http:Response altResp = check self.supabaseClient->patch(endpoint, altPayload, headers);
+                                    if altResp.statusCode != 200 {
+                                        string|error altBody = altResp.getTextPayload();
+                                        string altBodyStr = altBody is string ? altBody : "(no body)";
+                                        log:printError("Supabase like report retry failed: status=" + altResp.statusCode.toString() + " body=" + altBodyStr);
+                                        return error("Failed to like report after retry: " + altResp.statusCode.toString() + " " + altBodyStr);
+                                    }
+                                    response = altResp;
+                                } else {
+                                    return error("Failed to like report: " + response.statusCode.toString() + " " + bodyStr);
+                                }
+                            }
                     
                     json result = check response.getJsonPayload();
                     json[] reports = check result.ensureType();
-                    
+
                     if reports.length() > 0 {
+                        // Normalize DB row to API shape before returning to client
+                        json normalized = check self.normalizeReport(reports[0]);
                         return {
                             "success": true,
                             "message": "Report liked successfully",
-                            "data": reports[0],
+                            "data": normalized,
                             "timestamp": time:utcNow()[0]
                         };
                     } else {
@@ -962,29 +1078,56 @@ public class ReportsService {
                     string newPriority = self.calculatePriorityFromVotes(newLikes, newDislikes);
                     
                     // Update report with new likes, dislikes and priority
+                    // Map likes/dislikes to DB columns upvotes/downvotes
                     json payload = {
-                        "likes": newLikes,
-                        "dislikes": newDislikes,
+                        "upvotes": newLikes,
+                        "downvotes": newDislikes,
                         "priority": newPriority,
-                        "last_updated_time": "now()"
+                        "last_updated_time": time:utcToString(time:utcNow())
                     };
-                    
+
                     map<string> headers = self.getHeaders(true);
-                    string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+                    string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
                     http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-                    
+
                     if response.statusCode != 200 {
-                        return error("Failed to dislike report: " + response.statusCode.toString());
+                        // Try to extract response body for logging
+                        string|error respBody = response.getTextPayload();
+                        string bodyStr = respBody is string ? respBody : "(no body)";
+                        log:printError("Supabase dislike report failed: status=" + response.statusCode.toString() + " body=" + bodyStr);
+
+                        // If the database schema uses legacy columns 'likes'/'dislikes', retry with those keys
+                        if (regex:matches(bodyStr, "dislikes") || regex:matches(bodyStr, "likes")) {
+                            log:printInfo("Retrying dislike update using legacy columns likes/dislikes");
+                            json altPayload = {
+                                "likes": newLikes,
+                                "dislikes": newDislikes,
+                                "priority": newPriority,
+                                "last_updated_time": time:utcToString(time:utcNow())
+                            };
+                            http:Response altResp = check self.supabaseClient->patch(endpoint, altPayload, headers);
+                            if altResp.statusCode != 200 {
+                                string|error altBody = altResp.getTextPayload();
+                                string altBodyStr = altBody is string ? altBody : "(no body)";
+                                log:printError("Supabase dislike report retry failed: status=" + altResp.statusCode.toString() + " body=" + altBodyStr);
+                                return error("Failed to dislike report after retry: " + altResp.statusCode.toString() + " " + altBodyStr);
+                            }
+                            response = altResp;
+                        } else {
+                            return error("Failed to dislike report: " + response.statusCode.toString() + " " + bodyStr);
+                        }
                     }
                     
                     json result = check response.getJsonPayload();
                     json[] reports = check result.ensureType();
-                    
+
                     if reports.length() > 0 {
+                        // Normalize DB row to API shape before returning to client
+                        json normalized = check self.normalizeReport(reports[0]);
                         return {
                             "success": true,
                             "message": "Report disliked successfully",
-                            "data": reports[0],
+                            "data": normalized,
                             "timestamp": time:utcNow()[0]
                         };
                     } else {

@@ -18,7 +18,7 @@ public service class ChatService {
         io:println("ChatService initialized with Gemini URL: https://generativelanguage.googleapis.com/v1beta, ChromaDB URL: ", chromadbUrl);
     }
 
-    resource function post chat(http:Caller caller, json payload) returns error? {
+    isolated resource function post chat(http:Caller caller, json payload) returns error? {
         io:println("Received chat request with payload: ", payload.toString());
 
         // Validate payload
