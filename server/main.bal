@@ -1439,17 +1439,26 @@ service /api on apiListener {
 
         json payload = check request.getJsonPayload();
 
-        // Extract required fields
-        string reportTitle = check payload.report_title;
-        string evidenceHash = check payload.evidence_hash;
+    // Extract required fields
+    string reportTitle = check payload.report_title;
+    // evidence_hash is optional now (frontend may omit it)
+    string? evidenceHash = payload.evidence_hash is string ? check payload.evidence_hash : ();
 
-        // Extract optional fields
-        string? description = payload.description is string ? check payload.description : ();
-        string priority = payload.priority is string ? check payload.priority : "MEDIUM";
-        string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
-        int? userId = payload.user_id is int ? check payload.user_id : ();
+    // Extract optional fields
+    string? description = payload.description is string ? check payload.description : ();
+    string priority = payload.priority is string ? check payload.priority : "MEDIUM";
+    string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
+    int? userId = payload.user_id is int ? check payload.user_id : ();
 
-        return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId);
+    // Optional blockchain metadata (allow client to send these after tx)
+    string? blockchainTxHash = payload.tx_hash is string ? check payload.tx_hash : ();
+    int? blockchainBlockNumber = payload.block_number is int ? check payload.block_number : ();
+    string? blockchainReportId = payload.blockchain_report_id is string ? check payload.blockchain_report_id : ();
+    string? titleCid = payload.title_cid is string ? check payload.title_cid : ();
+    string? descriptionCid = payload.description_cid is string ? check payload.description_cid : ();
+    string? evidenceHashCid = payload.evidence_hash_cid is string ? check payload.evidence_hash_cid : ();
+
+    return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid, evidenceHashCid);
     }
 
     # Update report by ID
