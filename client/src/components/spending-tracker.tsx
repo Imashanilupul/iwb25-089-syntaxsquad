@@ -414,11 +414,11 @@ export function SpendingTracker() {
                           <Building className="h-3 w-3" />
                           {project.ministry}
                         </span>
-                        <span className="flex items-center gap-1">
+                        {/* <span className="flex items-center gap-1">
                           <Badge variant="secondary">
                             {project.categories?.category_name || project.category_id || "Uncategorized"}
                           </Badge>
-                        </span>
+                        </span> */}
                       </div>
                     </div>
                     <Badge className={getStatusColor(project.status)}>
