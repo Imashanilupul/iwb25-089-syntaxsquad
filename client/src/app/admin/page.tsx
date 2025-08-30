@@ -29,20 +29,24 @@ import {
   Wallet,
   Database,
 } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 
 export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("overview")
   const [isHydrated, setIsHydrated] = useState(false)
-  const [justAuthenticated, setJustAuthenticated] = useState(false)
+  const [isProcessingOAuth, setIsProcessingOAuth] = useState(false)
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
   const { verified, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
   const router = useRouter()
 
-  // Handle OAuth callback directly in the admin page
+  // Handle OAuth callback without page reload
   const handleOAuthCallback = async (code: string, state: string) => {
+    if (isProcessingOAuth) return // Prevent multiple simultaneous calls
+    
     try {
-      console.log('OAuth Callback: Starting token exchange...');
+      setIsProcessingOAuth(true)
+      console.log('OAuth Callback: Starting token exchange...')
       
       // Call our server-side API to handle token exchange securely
       const response = await fetch('/api/auth/token-exchange', {
@@ -55,147 +59,120 @@ export default function AdminPortal() {
           state,
           redirect_uri: `${window.location.origin}/admin`
         })
-      });
+      })
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('OAuth Callback: Token exchange failed:', response.status, errorText);
-        throw new Error('Token exchange failed');
+        const errorText = await response.text()
+        console.error('OAuth Callback: Token exchange failed:', response.status, errorText)
+        throw new Error('Token exchange failed')
       }
 
-      const result = await response.json();
-      console.log('OAuth Callback: Token exchange successful:', result);
+      const result = await response.json()
+      console.log('OAuth Callback: Token exchange successful:', result)
 
       if (result.success) {
-        // Set flag to indicate OAuth was just completed
+        // Clean up URL parameters
+        const url = new URL(window.location.href)
+        url.searchParams.delete('code')
+        url.searchParams.delete('state')
+        window.history.replaceState({}, document.title, url.toString())
+        
+        // Set a flag to indicate OAuth completion
         localStorage.setItem('oauth_completed', Date.now().toString())
         
-        // Clean up URL
-        const url = new URL(window.location.href);
-        url.searchParams.delete('code');
-        url.searchParams.delete('state');
-        window.history.replaceState({}, document.title, url.toString());
-
-        // Add a small delay to ensure the cookie is set, then refresh auth context
-        setTimeout(() => {
-          console.log('OAuth callback successful, reloading page to refresh auth context');
-          window.location.reload();
-        }, 500);
+        // Instead of reloading, trigger auth context refresh
+        // The auth context will detect the new session cookie and update accordingly
+        console.log('OAuth callback successful, auth context should update automatically')
+        
+        // Show success message
+        toast({
+          title: "Authentication Successful! 🎉",
+          description: "Welcome to the admin portal. Setting up your session...",
+        })
       } else {
-        throw new Error(result.error || 'Authentication failed');
+        throw new Error(result.error || 'Authentication failed')
       }
 
     } catch (error) {
-      console.error('OAuth callback error:', error);
-      router.push('/adminLogin');
+      console.error('OAuth callback error:', error)
+      toast({
+        title: "Authentication Failed",
+        description: "Please try logging in again.",
+        variant: "destructive"
+      })
+      router.push('/adminLogin')
+    } finally {
+      setIsProcessingOAuth(false)
     }
   }
 
   // Handle hydration
   useEffect(() => {
     setIsHydrated(true)
-    
-    // Check if we just completed OAuth authentication
-    const oauthCompleted = localStorage.getItem('oauth_completed')
-    if (oauthCompleted) {
-      const completedTime = parseInt(oauthCompleted)
-      const now = Date.now()
-      // If OAuth was completed within the last 30 seconds, consider us just authenticated
-      if (now - completedTime < 30000) {
-        console.log('Admin page: Detected recent OAuth completion')
-        setJustAuthenticated(true)
-        // Clear the flag after 10 seconds
-        setTimeout(() => {
-          localStorage.removeItem('oauth_completed')
-          setJustAuthenticated(false)
-        }, 10000)
-      } else {
-        // Clear old flag
-        localStorage.removeItem('oauth_completed')
-      }
-    }
   }, [])
 
-  // Handle successful auth callback and OAuth response
+  // Handle OAuth callback and URL cleanup
   useEffect(() => {
     if (!isHydrated) return
     
-    const urlParams = new URLSearchParams(window.location.search);
-    const authSuccess = urlParams.get('auth');
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
+    const urlParams = new URLSearchParams(window.location.search)
+    const code = urlParams.get('code')
+    const state = urlParams.get('state')
+    const error = urlParams.get('error')
     
-    // Handle OAuth callback directly
+    // Handle OAuth callback
     if (code && state) {
-      console.log('Admin page: Detected OAuth callback with code and state');
-      handleOAuthCallback(code, state);
-      return;
+      console.log('Admin page: Detected OAuth callback with code and state')
+      handleOAuthCallback(code, state)
+      return
     }
     
     // Handle OAuth errors
     if (error) {
-      console.error('Admin page: OAuth error detected:', error);
+      console.error('Admin page: OAuth error detected:', error)
       // Clean up URL and redirect to login
-      const url = new URL(window.location.href);
-      url.searchParams.delete('error');
-      window.history.replaceState({}, document.title, url.toString());
-      router.push('/adminLogin');
-      return;
+      const url = new URL(window.location.href)
+      url.searchParams.delete('error')
+      window.history.replaceState({}, document.title, url.toString())
+      router.push('/adminLogin')
+      return
     }
-    
-    if (authSuccess === 'success') {
-      // Clean up the URL
-      const url = new URL(window.location.href);
-      url.searchParams.delete('auth');
-      window.history.replaceState({}, document.title, url.toString());
-    }
-  }, [isHydrated]);
+  }, [isHydrated])
 
-  // Redirect to adminLogin if not fully authenticated (but only after loading is complete and hydrated)
+  // Redirect to adminLogin if not fully authenticated (but be patient after OAuth)
   useEffect(() => {
-    // If we just completed OAuth, be more patient
-    const delay = justAuthenticated ? 5000 : 2000 // 5 seconds if just authenticated, 2 seconds otherwise
+    if (!isHydrated || isLoading) return
     
-    const checkAuthAfterDelay = setTimeout(() => {
-      if (isHydrated && !isLoading && !isFullyAuthenticated) {
-        // Double-check if we have a session cookie before redirecting
-        const hasSessionCookie = document.cookie.includes('asgardeo_session')
-        
-        if (!hasSessionCookie && !justAuthenticated) {
-          console.log('Admin page: No session cookie and not just authenticated, redirecting to adminLogin')
+    // Check if we just completed OAuth
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000) // 10 seconds
+    
+    if (!isFullyAuthenticated && !isRecentlyAuthenticated) {
+      // Give auth context time to update after OAuth
+      const checkAuthAfterDelay = setTimeout(() => {
+        if (!isFullyAuthenticated) {
+          console.log('Admin page: Not authenticated, redirecting to adminLogin')
           router.push('/adminLogin')
-        } else if (!hasSessionCookie && justAuthenticated) {
-          console.log('Admin page: No session cookie but just authenticated, waiting longer...')
-          // Wait another 3 seconds before giving up
-          setTimeout(() => {
-            if (!document.cookie.includes('asgardeo_session')) {
-              console.log('Admin page: Still no session cookie after waiting, redirecting')
-              router.push('/adminLogin')
-            }
-          }, 3000)
-        } else {
-          console.log('Admin page: Has session cookie, waiting for auth context to update')
         }
-      }
-    }, delay)
+      }, 3000) // Wait 3 seconds for auth context to update
+      
+      return () => clearTimeout(checkAuthAfterDelay)
+    }
+  }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
-    return () => clearTimeout(checkAuthAfterDelay);
-  }, [isFullyAuthenticated, isLoading, router, isHydrated, justAuthenticated])
-
-  // Show consistent loading screen during authentication check or before hydration
-  if (!isHydrated || isLoading || (justAuthenticated && !isFullyAuthenticated)) {
+  // Show loading screen during authentication check or OAuth processing
+  if (!isHydrated || isLoading || isProcessingOAuth) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600">
             {!isHydrated ? 'Loading application...' : 
-             justAuthenticated ? 'Completing authentication...' : 
+             isProcessingOAuth ? 'Completing authentication...' : 
              'Verifying authentication...'}
           </p>
           <p className="text-sm text-slate-500 mt-2">
-            {justAuthenticated ? 
+            {isProcessingOAuth ? 
               'Please wait while we finalize your login' : 
               'Please wait while we validate your credentials'}
           </p>
@@ -204,23 +181,12 @@ export default function AdminPortal() {
     )
   }
 
-  // Show loading or redirect if not authenticated (only after hydration)
+  // Show loading if not authenticated but recently completed OAuth
   if (!isFullyAuthenticated) {
-    const hasSessionCookie = document.cookie.includes('asgardeo_session')
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
     
-    console.log('Admin page: User not fully authenticated', {
-      isHydrated,
-      isLoading,
-      isFullyAuthenticated,
-      verified,
-      asgardeoUser: !!asgardeoUser,
-      address: !!address,
-      justAuthenticated,
-      hasSessionCookie
-    });
-    
-    // If we just authenticated and have a session cookie, show loading instead of redirecting
-    if (justAuthenticated && hasSessionCookie) {
+    if (isRecentlyAuthenticated) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
           <div className="text-center">
@@ -234,17 +200,9 @@ export default function AdminPortal() {
       )
     }
     
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Checking authentication status...</p>
-          <p className="text-sm text-slate-500 mt-2">
-            If this persists, you will be redirected to login
-          </p>
-        </div>
-      </div>
-    )
+    // If not recently authenticated, redirect to login
+    router.push('/adminLogin')
+    return null
   }
 
   const handleWalletDisconnect = async () => {

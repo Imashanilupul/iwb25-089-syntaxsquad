@@ -186,65 +186,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  useEffect(() => {
-    async function handleAuthentication() {
-      console.log('AuthContext: Starting authentication process...');
-      setAuth(prev => ({ ...prev, isLoading: true, error: null }));
+  // Main authentication function
+  const handleAuthentication = async () => {
+    console.log('AuthContext: Starting authentication process...');
+    setAuth(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      // Get Asgardeo user info
+      const asgardeoUser = await getAsgardeoUserInfo();
       
-      try {
-        // Get Asgardeo user info
-        const asgardeoUser = await getAsgardeoUserInfo();
+      if (isConnected && address) {
+        console.log('AuthContext: Wallet connected, validating user...');
+        // Wallet is connected, now validate user registration
+        const validation = await validateUserRegistration(address, asgardeoUser);
         
-        if (isConnected && address) {
-          console.log('AuthContext: Wallet connected, validating user...');
-          // Wallet is connected, now validate user registration
-          const validation = await validateUserRegistration(address, asgardeoUser);
-          
-          const newAuthState = {
-            address,
-            walletVerified: validation.walletVerified,
-            verified: validation.walletVerified, // Legacy compatibility
-            asgardeoUser,
-            isRegisteredUser: validation.isRegisteredUser,
-            isFullyAuthenticated: validation.walletVerified && validation.isRegisteredUser,
-            jwt: validation.jwt,
-            isLoading: false,
-            error: null,
-          };
-          
-          console.log('AuthContext: Setting new auth state:', newAuthState);
-          setAuth(newAuthState);
-          saveAuthState(newAuthState);
-        } else {
-          console.log('AuthContext: No wallet connected, clearing auth state');
-          // No wallet connected - clear saved auth state
-          clearSavedAuthState();
-          
-          const newAuthState = {
-            address: null,
-            walletVerified: false,
-            verified: false, // Legacy compatibility
-            asgardeoUser,
-            isRegisteredUser: false,
-            isFullyAuthenticated: false,
-            jwt: null,
-            isLoading: false,
-            error: null,
-          };
-          
-          setAuth(newAuthState);
-        }
-      } catch (error) {
-        console.error('AuthContext: Authentication error:', error);
-        clearSavedAuthState(); // Clear saved state on error
-        setAuth(prev => ({
-          ...prev,
+        const newAuthState = {
+          address,
+          walletVerified: validation.walletVerified,
+          verified: validation.walletVerified, // Legacy compatibility
+          asgardeoUser,
+          isRegisteredUser: validation.isRegisteredUser,
+          isFullyAuthenticated: validation.walletVerified && validation.isRegisteredUser,
+          jwt: validation.jwt,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Authentication failed'
-        }));
+          error: null,
+        };
+        
+        console.log('AuthContext: Setting new auth state:', newAuthState);
+        setAuth(newAuthState);
+        saveAuthState(newAuthState);
+      } else {
+        console.log('AuthContext: No wallet connected, clearing auth state');
+        // No wallet connected - clear saved auth state
+        clearSavedAuthState();
+        
+        const newAuthState = {
+          address: null,
+          walletVerified: false,
+          verified: false, // Legacy compatibility
+          asgardeoUser,
+          isRegisteredUser: false,
+          isFullyAuthenticated: false,
+          jwt: null,
+          isLoading: false,
+          error: null,
+        };
+        
+        setAuth(newAuthState);
+      }
+    } catch (error) {
+      console.error('AuthContext: Authentication error:', error);
+      clearSavedAuthState(); // Clear saved state on error
+      setAuth(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Authentication failed'
+      }));
+    }
+  };
+
+  // Effect to monitor OAuth completion and refresh auth state
+  useEffect(() => {
+    if (!isHydrated) return;
+    
+    // Check if OAuth was recently completed
+    const oauthCompleted = localStorage.getItem('oauth_completed');
+    if (oauthCompleted) {
+      const completedTime = parseInt(oauthCompleted);
+      const now = Date.now();
+      
+      // If OAuth was completed within the last 30 seconds, refresh auth state
+      if (now - completedTime < 30000) {
+        console.log('AuthContext: Detected recent OAuth completion, refreshing auth state...');
+        
+        // Clear the flag
+        localStorage.removeItem('oauth_completed');
+        
+        // Trigger auth state refresh after a short delay to ensure cookie is set
+        const refreshTimer = setTimeout(() => {
+          handleAuthentication();
+        }, 1000);
+        
+        return () => clearTimeout(refreshTimer);
+      } else {
+        // Clear old flag
+        localStorage.removeItem('oauth_completed');
       }
     }
-    
+  }, [isHydrated]);
+
+  useEffect(() => {
     // Only run if hydrated to avoid SSR issues
     if (isHydrated) {
       handleAuthentication();
