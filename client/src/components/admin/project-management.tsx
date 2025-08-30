@@ -637,6 +637,23 @@ Timestamp: ${timestamp}
           title: "📊 Saving project to database..."
         })
 
+        // Fetch actual data from IPFS using CID
+        let viewDetailsData = formData.viewDetails
+        if (viewDetailsCid) {
+          try {
+            const ipfsRes = await fetch(`https://ipfs.io/ipfs/${viewDetailsCid}`)
+            if (ipfsRes.ok) {
+              viewDetailsData = await ipfsRes.text()
+            } else {
+              console.warn("Failed to fetch IPFS data, storing CID as fallback")
+              viewDetailsData = viewDetailsCid
+            }
+          } catch (err) {
+            console.warn("Error fetching IPFS data:", err)
+            viewDetailsData = viewDetailsCid
+          }
+        }
+
         try {
           const projectData: ProjectFormData = {
             projectName: formData.projectName,
@@ -646,7 +663,7 @@ Timestamp: ${timestamp}
             state: formData.state,
             province: formData.province,
             ministry: formData.ministry,
-            viewDetails: formData.viewDetails,
+            viewDetails: viewDetailsData,
             status: formData.status || "PLANNED"
           }
 

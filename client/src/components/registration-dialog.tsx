@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -315,55 +315,96 @@ export function RegistrationDialog() {
       }
     }
 
-    // Check for duplicates after a short delay
+    // Check for duplicates after a short delay (debounced)
     if (field === 'email' || field === 'nicNumber' || field === 'mobileNumber') {
-      setTimeout(() => checkForDuplicates(field, value), 500)
+      checkForDuplicates(field, value)
     }
   }
+  // Debounced duplicate check helper
+  const duplicateCheckTimers = useRef<Record<string, number>>({})
 
-  // Check for duplicates in the database
+  // Basic format validators to avoid calling backend with clearly invalid inputs
+  const isPossibleNIC = (v: string) => {
+    const s = v.trim()
+    if (!s) return false
+    return /^[0-9]{9}[VXvx]$/.test(s) || /^[0-9]{12}$/.test(s)
+  }
+
+  const isPossibleMobile = (v: string) => {
+    const s = v.trim()
+    if (!s) return false
+    return /^(\+94|0)?[0-9]{9}$/.test(s)
+  }
+
+  // Check for duplicates in the database (debounced)
   const checkForDuplicates = async (field: string, value: string) => {
     if (!value.trim()) return
 
-    try {
-      const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
-      let endpoint = ''
-      
-      switch (field) {
-        case 'email':
-          endpoint = `/api/users/email/${encodeURIComponent(value)}`
-          break
-        case 'nicNumber':
-          endpoint = `/api/users/nic/${encodeURIComponent(value)}`
-          break
-        case 'mobileNumber':
-          endpoint = `/api/users/mobile/${encodeURIComponent(value)}`
-          break
-        default:
-          return
-      }
+    // Input guards
+    if (field === 'nicNumber' && !isPossibleNIC(value)) return
+    if (field === 'mobileNumber' && !isPossibleMobile(value)) return
 
-      const response = await fetch(`${BACKEND_API_BASE}${endpoint}`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        
-        // If user found, set validation error
-        if (data.success && data.data) {
-          const errorMessages = {
-            email: "Email already registered",
-            nicNumber: "NIC already registered",
-            mobileNumber: "Mobile number already registered"
-          }
-          setValidationErrors(prev => ({
-            ...prev,
-            [field]: errorMessages[field as keyof typeof errorMessages]
-          }))
-        }
-      }
-    } catch (error) {
-      console.error('Error checking for duplicates:', error)
+    // Clear any existing timer
+    if (duplicateCheckTimers.current[field]) {
+      clearTimeout(duplicateCheckTimers.current[field])
     }
+
+    // Debounce the request to avoid rapid backend calls while user types
+    duplicateCheckTimers.current[field] = window.setTimeout(async () => {
+      try {
+        const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
+        let endpoint = ''
+        
+        switch (field) {
+          case 'email':
+            endpoint = `/api/users/email/${encodeURIComponent(value)}`
+            break
+          case 'nicNumber':
+            endpoint = `/api/users/nic/${encodeURIComponent(value)}`
+            break
+          case 'mobileNumber':
+            endpoint = `/api/users/mobile/${encodeURIComponent(value)}`
+            break
+          default:
+            return
+        }
+
+        const response = await fetch(`${BACKEND_API_BASE}${endpoint}`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          
+          // If user found, set validation error
+          if (data.success && data.data) {
+            const errorMessages = {
+              email: "Email already registered",
+              nicNumber: "NIC already registered",
+              mobileNumber: "Mobile number already registered"
+            }
+            setValidationErrors(prev => ({
+              ...prev,
+              [field]: errorMessages[field as keyof typeof errorMessages]
+            }))
+          } else {
+            // Backend returned structured failure (no user) - clear any existing error
+            setValidationErrors(prev => ({ ...prev, [field]: undefined }))
+          }
+        } else {
+          // Non-OK response: attempt to parse structured JSON and surface message
+          try {
+            const body = await response.json()
+            if (body && !body.success && body.message) {
+              // Clear error (no user) or leave as-is
+              setValidationErrors(prev => ({ ...prev, [field]: undefined }))
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for duplicates:', error)
+      }
+    }, 500)
   }
 
   // Check EVM address for duplicates
@@ -578,6 +619,7 @@ export function RegistrationDialog() {
                     Transaction: {result.transactionHash}
                   </span>
                   <button
+                    aria-label="Copy transaction hash"
                     onClick={() => {
                       if (result.transactionHash) {
                         navigator.clipboard.writeText(result.transactionHash)
@@ -593,15 +635,17 @@ export function RegistrationDialog() {
             </div>
           ),
           duration: 8000,
-          action: result.transactionHash ? {
-            label: "View Transaction",
-            onClick: () => {
-              if (result.transactionHash) {
-                // You can customize this URL based on your blockchain network
-                window.open(`https://etherscan.io/tx/${result.transactionHash}`, '_blank')
+          action: result.transactionHash
+            ? {
+                label: "View Transaction",
+                onClick: () => {
+                  if (result.transactionHash) {
+                    // You can customize this URL based on your blockchain network
+                    window.open(`https://etherscan.io/tx/${result.transactionHash}`, '_blank')
+                  }
+                },
               }
-            }
-          } : undefined
+            : undefined,
         })
       } else {
         toast.error("Registration Failed", {
@@ -818,6 +862,7 @@ export function RegistrationDialog() {
               <div className="space-y-2">
                 <Label htmlFor="province">Province</Label>
                 <select
+                  aria-label="Province"
                   id="province"
                   value={formData.province}
                   onChange={(e) => handleInputChange("province", e.target.value)}
