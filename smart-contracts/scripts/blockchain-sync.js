@@ -677,21 +677,70 @@ async function fetchIPFSContent(cid) {
   
   try {
     const content = await getFromPinata(cid);
-    
-    // If content is JSON, extract the actual content
-    if (typeof content === 'string' && content.startsWith('{')) {
+
+    // If the helper already returned an object, prefer its `content` field
+    if (content && typeof content === 'object') {
+      if (content.content !== undefined && content.content !== null) return content.content;
+      // fallback to stringifying the object
       try {
-        const parsedContent = JSON.parse(content);
-        return parsedContent.content || content;
-      } catch {
-        return content;
+        return JSON.stringify(content);
+      } catch (e) {
+        return String(content);
       }
     }
-    
+
+    // If content is a JSON string, parse and extract `content` if present
+    if (typeof content === 'string') {
+      const trimmed = content.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.content !== undefined && parsed.content !== null) return parsed.content;
+            return JSON.stringify(parsed);
+          }
+        } catch (e) {
+          // not JSON, fall through
+        }
+      }
+    }
+
     return content || `[IPFS: ${cid}]`;
   } catch (error) {
     console.error(`❌ Error fetching IPFS content for CID ${cid}:`, error.message);
     return `[IPFS Error: ${cid}]`;
+  }
+}
+
+// Helper that extracts the inner `content` field from objects/JSON strings used in view_details
+function extractViewContent(view) {
+  if (view === undefined || view === null) return '';
+  try {
+    // If object with content
+    if (typeof view === 'object') {
+      if (view.content !== undefined && view.content !== null) return String(view.content);
+      return JSON.stringify(view);
+    }
+
+    // If string, try to parse JSON and extract
+    if (typeof view === 'string') {
+      const trimmed = view.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object' && parsed.content !== undefined && parsed.content !== null) return String(parsed.content);
+          return JSON.stringify(parsed);
+        } catch (e) {
+          // not JSON - return raw string
+          return view;
+        }
+      }
+      return view;
+    }
+
+    return String(view);
+  } catch (e) {
+    return String(view);
   }
 }
 
@@ -981,6 +1030,7 @@ async function getAllProjects() {
   }
 
 async function createProject(data) {
+  const viewContent = extractViewContent(data.view_details);
   const projectData = {
     project_id: data.project_id,
     project_name: data.project_name || '',
@@ -990,7 +1040,7 @@ async function createProject(data) {
     state: data.state || '',
     province: data.province || '',
     ministry: data.ministry || '',
-    view_details: data.view_details || '',
+    view_details: viewContent,
     status: data.status || '',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
@@ -1040,51 +1090,141 @@ function comparePolicyFields(dbPolicy, bcPolicy) {
 function compareProjectFields(dbProject, bcProject) {
   const updateData = {};
   let hasChanges = false;
-  // Example field comparisons, adjust as needed for your schema
-  if (dbProject.project_id !== bcProject.projectId) {
-    updateData.project_id = bcProject.projectId;
+
+  // Normalize DB vs BC keys for numeric fields
+  const dbAllocated = dbProject.allocated_budget !== undefined ? Number(dbProject.allocated_budget) : (dbProject.allocatedBudget !== undefined ? Number(dbProject.allocatedBudget) : 0);
+  const dbSpent = dbProject.spent_budget !== undefined ? Number(dbProject.spent_budget) : (dbProject.spentBudget !== undefined ? Number(dbProject.spentBudget) : 0);
+  const bcAllocated = bcProject.allocated_budget !== undefined ? Number(bcProject.allocated_budget) : (bcProject.allocatedBudget !== undefined ? Number(bcProject.allocatedBudget) : 0);
+  const bcSpent = bcProject.spent_budget !== undefined ? Number(bcProject.spent_budget) : (bcProject.spentBudget !== undefined ? Number(bcProject.spentBudget) : 0);
+
+  // Compare simple string fields (map BC names to DB names)
+  if ((dbProject.project_name || '') !== (bcProject.project_name || bcProject.projectName || '')) {
+    updateData.project_name = bcProject.project_name || bcProject.projectName || '';
     hasChanges = true;
   }
-  if (dbProject.project_name !== bcProject.projectName) {
-    updateData.project_name = bcProject.projectName;
+
+  // category_id should be numeric or null
+  if ((dbProject.category_id || null) !== (bcProject.category_id !== undefined ? bcProject.category_id : bcProject.categoryId)) {
+    updateData.category_id = bcProject.category_id !== undefined ? bcProject.category_id : bcProject.categoryId || null;
     hasChanges = true;
   }
-  if (dbProject.category_id !== bcProject.categoryId) {
-    updateData.category_id = bcProject.categoryId;
-    hasChanges = true;
-  }
-  // Handle allocated_budget/allocatedBudget mapping
-  const dbAllocated = dbProject.allocated_budget !== undefined ? dbProject.allocated_budget : dbProject.allocatedBudget;
-  const bcAllocated = bcProject.allocatedBudget !== undefined ? bcProject.allocatedBudget : bcProject.allocated_budget;
+
   if (dbAllocated !== bcAllocated) {
     updateData.allocated_budget = bcAllocated;
     hasChanges = true;
   }
-  if (dbProject.spentBudget !== bcProject.spentBudget) {
-    updateData.spentBudget = bcProject.spentBudget;
+
+  if (dbSpent !== bcSpent) {
+    updateData.spent_budget = bcSpent;
     hasChanges = true;
   }
-  if (dbProject.state !== bcProject.state) {
-    updateData.state = bcProject.state;
+
+  if ((dbProject.state || '') !== (bcProject.state || '')) {
+    updateData.state = bcProject.state || '';
     hasChanges = true;
   }
-  if (dbProject.province !== bcProject.province) {
-    updateData.province = bcProject.province;
+
+  if ((dbProject.province || '') !== (bcProject.province || '')) {
+    updateData.province = bcProject.province || '';
     hasChanges = true;
   }
-  if (dbProject.ministry !== bcProject.ministry) {
-    updateData.ministry = bcProject.ministry;
+
+  if ((dbProject.ministry || '') !== (bcProject.ministry || '')) {
+    updateData.ministry = bcProject.ministry || '';
     hasChanges = true;
   }
-  if (dbProject.status !== bcProject.status) {
-    updateData.status = bcProject.status;
+
+  // Compare view_details content (bcProject.view_details should be resolved content)
+  try {
+    const dbView = extractViewContent(dbProject.view_details || '');
+    const bcView = extractViewContent(bcProject.view_details || bcProject.viewDetails || '');
+    if (dbView !== bcView) {
+      updateData.view_details = bcView;
+      hasChanges = true;
+    }
+  } catch (e) {
+    // fallback to raw comparison on error
+    if ((dbProject.view_details || '') !== (bcProject.view_details || bcProject.viewDetails || '')) {
+      updateData.view_details = bcProject.view_details || bcProject.viewDetails || '';
+      hasChanges = true;
+    }
+  }
+
+  if ((dbProject.status || '') !== (bcProject.status || '')) {
+    updateData.status = bcProject.status || '';
     hasChanges = true;
   }
-  if (dbProject.removed !== bcProject.removed) {
-    updateData.removed = bcProject.removed;
+
+  if ((dbProject.removed || false) !== (bcProject.removed || false)) {
+    updateData.removed = Boolean(bcProject.removed || false);
     hasChanges = true;
   }
+
+  // createdAt / updatedAt mapping (if available)
+  if (bcProject.createdAt && (dbProject.createdAt || dbProject.created_at) !== bcProject.createdAt) {
+    updateData.createdAt = bcProject.createdAt;
+    hasChanges = true;
+  }
+  if (bcProject.updatedAt && (dbProject.updatedAt || dbProject.updated_at) !== bcProject.updatedAt) {
+    updateData.updatedAt = bcProject.updatedAt;
+    hasChanges = true;
+  }
+
   return { hasChanges, updateData };
+}
+
+// Normalize a blockchain project raw object into a consistent shape and resolve IPFS CIDs
+async function normalizeBcProject(bcProject) {
+  if (!bcProject) return null;
+  const raw = bcProject.raw || [];
+
+  // helpers to extract values safely
+  function val(idx, alt) {
+    return raw[idx] !== undefined && raw[idx] !== null ? raw[idx] : (alt !== undefined ? alt : undefined);
+  }
+
+  // allocated / spent may be big numbers; coerce to Number then scale
+  const allocatedRaw = val(3, (bcProject.allocated_budget || bcProject.allocatedBudget || 0));
+  const spentRaw = val(4, (bcProject.spent_budget || bcProject.spentBudget || 0));
+  const allocNum = Number(allocatedRaw && allocatedRaw.toString ? allocatedRaw.toString() : allocatedRaw) || 0;
+  const spentNum = Number(spentRaw && spentRaw.toString ? spentRaw.toString() : spentRaw) || 0;
+
+  // category
+  let categoryRaw = val(2, (bcProject.category_id !== undefined ? bcProject.category_id : bcProject.categoryId));
+  let categoryInt = null;
+  if (categoryRaw !== undefined && categoryRaw !== null && categoryRaw !== '') {
+    const parsed = Number(categoryRaw.toString ? categoryRaw.toString() : categoryRaw);
+    if (!isNaN(parsed)) categoryInt = parseInt(parsed);
+  }
+
+  // view details CID or inline
+  const viewCid = val(8, (bcProject.view_details || bcProject.viewDetailsCid || bcProject.viewDetails || '')) || '';
+  const view_details = viewCid ? await fetchIPFSContent(String(viewCid)) : (bcProject.view_details || bcProject.viewDetails || '');
+
+  // Dates
+  function toDate(val) {
+    if (val === undefined || val === null || val === '') return null;
+    const num = Number(val && val.toString ? val.toString() : val);
+    if (isNaN(num) || num < 1000000000) return null;
+    return new Date(num * 1000).toISOString();
+  }
+
+  return {
+    id: bcProject.id,
+    projectId: bcProject.id,
+    project_name: val(1, (bcProject.project_name || bcProject.projectName || '')) || (bcProject.project_name || bcProject.projectName || ''),
+    category_id: categoryInt,
+    allocated_budget: Math.floor(allocNum / 1e12),
+    spent_budget: Math.floor(spentNum / 1e12),
+    state: val(5, bcProject.state) || bcProject.state || '',
+    province: val(6, bcProject.province) || bcProject.province || '',
+    ministry: val(7, bcProject.ministry) || bcProject.ministry || '',
+    view_details,
+    status: val(9, bcProject.status) || bcProject.status || '',
+    createdAt: toDate(val(10, bcProject.createdAt)),
+    updatedAt: toDate(val(11, bcProject.updatedAt)),
+    removed: val(12, bcProject.removed) !== undefined ? Boolean(val(12, bcProject.removed)) : (bcProject.removed || false)
+  };
 }
 // ========================================
 
@@ -1318,86 +1458,99 @@ async function syncProjectsWithData(fromBlock, toBlock, blockchainProjects) {
     console.log(`🏗️ Found ${blockchainProjects.length} projects in blockchain and ${dbProjects.length} in database`);
     const dbMap = new Map();
     const bcMap = new Map();
-    // Use project_id for DB, id for blockchain
-    dbProjects.forEach(p => { if (p.project_id) dbMap.set(p.project_id, p); });
-    blockchainProjects.forEach(p => { if (p.id) bcMap.set(p.id, p); });
-    // Phase 1: Check DB records
+
+    // Build DB map by both project_id and fallback id for resilience
+    dbProjects.forEach(p => {
+      const keyByProjectId = p.project_id !== undefined && p.project_id !== null ? String(p.project_id) : null;
+      const keyById = p.id !== undefined && p.id !== null ? String(p.id) : null;
+      if (keyByProjectId) dbMap.set(keyByProjectId, p);
+      if (keyById) dbMap.set(keyById, p);
+    });
+
+    // Normalize all blockchain projects (resolve IPFS CIDs) before comparison
+    for (const p of blockchainProjects) {
+      if (!p || (p.id === undefined || p.id === null)) continue;
+      try {
+        const normalized = await normalizeBcProject(p);
+        const key = String(normalized.id !== undefined && normalized.id !== null ? normalized.id : normalized.projectId);
+        bcMap.set(key, normalized);
+      } catch (e) {
+        console.warn(`Could not normalize blockchain project ${p.id}:`, e.message || e);
+      }
+    }
+
+    // Phase 1: For each DB record, always compare with blockchain data when available
     for (const dbProject of dbProjects) {
-      if (!dbProject.project_id) continue;
-      const bcId = dbProject.project_id;
-      const bcProject = bcMap.get(bcId);
+      const dbKey = dbProject.project_id !== undefined && dbProject.project_id !== null ? String(dbProject.project_id) : (dbProject.id !== undefined && dbProject.id !== null ? String(dbProject.id) : null);
+      // If we can't determine a key for this DB row, skip it
+      if (!dbKey) continue;
+
+      const bcProject = bcMap.get(dbKey);
+
       if (!bcProject) {
+        // DB has a record not present on-chain -> remove it from DB
         try {
-          await deleteRecord('projects', dbProject.project_id, 'project_id');
+          const idColumn = dbProject.project_id !== undefined && dbProject.project_id !== null ? 'project_id' : 'id';
+          await deleteRecord('projects', dbKey, idColumn);
           removedCount++;
-          console.log(`🗑️ Removed project ${bcId} (project_id: ${dbProject.project_id})`);
-        } catch (error) {
-          errors.push({ type: 'delete', id: bcId, error: error.message });
+          console.log(`🗑️ Removed project ${dbKey} (idColumn: ${idColumn}) not present on-chain`);
+        } catch (err) {
+          console.error(`❌ Failed to remove DB project ${dbKey}:`, err.message || err);
+          errors.push({ type: 'delete', id: dbKey, error: err.message || String(err) });
         }
         continue;
       }
-      const needsUpdate = compareProjectFields(dbProject, bcProject);
-      if (needsUpdate.hasChanges) {
-        try {
-          await updateRecord('projects', dbProject.project_id, needsUpdate.updateData, 'project_id');
+
+      // Compare every column and update when blockchain differs
+      try {
+        const { hasChanges, updateData } = compareProjectFields(dbProject, bcProject);
+        if (hasChanges) {
+          const idColumn = dbProject.project_id !== undefined && dbProject.project_id !== null ? 'project_id' : 'id';
+          await updateRecord('projects', dbKey, updateData, idColumn);
           updatedCount++;
-          console.log(`🔄 Updated project ${bcId} (project_id: ${dbProject.project_id})`);
-        } catch (error) {
-          errors.push({ type: 'update', id: bcId, error: error.message });
+          console.log(`� Updated DB project ${dbKey} with blockchain changes`);
         }
+      } catch (err) {
+        console.error(`❌ Failed to compare/update project ${dbKey}:`, err.message || err);
+        errors.push({ type: 'update', id: dbKey, error: err.message || String(err) });
       }
     }
-    // Phase 2: Create new records
-    for (const bcProject of blockchainProjects) {
-      const bcId = bcProject.id;
-      if (!bcId || dbMap.has(bcId)) {
-        if (!bcId) console.log('⚠️ Skipping project with missing id:', bcProject);
-        if (dbMap.has(bcId)) console.log(`⚠️ Project ${bcId} already exists in DB, skipping.`);
+
+    // Phase 2: Create new blockchain records that don't exist in DB
+    for (const [bcId, normalized] of bcMap.entries()) {
+      if (!bcId) {
+        console.log('⚠️ Skipping project with missing id in normalized set');
+        continue;
+      }
+      if (dbMap.has(bcId)) {
+        // Already handled in phase 1 (we compared and updated existing DB rows)
         continue;
       }
       try {
-        // Map blockchain id to DB project_id and sanitize integer fields
-        const raw = bcProject.raw || [];
-        // If raw array exists, extract fields from it
-        const allocatedRaw = raw[3] ? Number(raw[3]) : (typeof bcProject.allocated_budget === 'string' ? Number(bcProject.allocated_budget) : (typeof bcProject.allocatedBudget === 'string' ? Number(bcProject.allocatedBudget) : (bcProject.allocated_budget || bcProject.allocatedBudget || 0)));
-        const spentRaw = raw[4] ? Number(raw[4]) : (typeof bcProject.spent_budget === 'string' ? Number(bcProject.spent_budget) : (typeof bcProject.spentBudget === 'string' ? Number(bcProject.spentBudget) : (bcProject.spent_budget || bcProject.spentBudget || 0)));
-        // Sanitize category_id: must be integer or null
-        let categoryIdRaw = raw[2] !== undefined ? raw[2] : (bcProject.category_id !== undefined ? bcProject.category_id : bcProject.categoryId);
-        let categoryIdInt = null;
-        if (categoryIdRaw !== undefined && categoryIdRaw !== null && categoryIdRaw !== '') {
-          if (typeof categoryIdRaw === 'string' && categoryIdRaw.trim() === '') categoryIdInt = null;
-          else if (!isNaN(Number(categoryIdRaw))) categoryIdInt = parseInt(categoryIdRaw);
-        }
-        // Convert block timestamp to ISO date string
-        function toDate(val) {
-          if (val === undefined || val === null || val === '') return null;
-          const num = Number(val);
-          if (isNaN(num) || num < 1000000000) return null; // not a valid timestamp
-          return new Date(num * 1000).toISOString();
-        }
+        // Build DB-shaped object from normalized bc project (view_details already resolved)
         const dbProjectData = {
-          project_id: bcProject.id,
-          project_name: raw[1] || bcProject.project_name || bcProject.projectName || '',
-          category_id: categoryIdInt,
-          allocated_budget: Math.floor(allocatedRaw / 1e12),
-          spent_budget: Math.floor(spentRaw / 1e12),
-          state: raw[5] || bcProject.state || '',
-          province: raw[6] || bcProject.province || '',
-          ministry: raw[7] || bcProject.ministry || '',
-          view_details: raw[8] || bcProject.view_details || bcProject.viewDetailsCid || '',
-          status: raw[9] || bcProject.status || '',
-          createdAt: toDate(raw[10] ? raw[10] : bcProject.createdAt),
-          updatedAt: toDate(raw[11] ? raw[11] : bcProject.updatedAt),
-          removed: raw[12] !== undefined ? Boolean(raw[12]) : (bcProject.removed || false)
+          project_id: Number(normalized.id || normalized.projectId),
+          project_name: normalized.project_name || '',
+          category_id: normalized.category_id !== undefined ? normalized.category_id : null,
+          allocated_budget: normalized.allocated_budget !== undefined ? normalized.allocated_budget : null,
+          spent_budget: normalized.spent_budget !== undefined ? normalized.spent_budget : null,
+          state: normalized.state || '',
+          province: normalized.province || '',
+          ministry: normalized.ministry || '',
+          view_details: normalized.view_details || '',
+          status: normalized.status || '',
+          createdAt: normalized.createdAt || null,
+          updatedAt: normalized.updatedAt || null,
+          removed: Boolean(normalized.removed || false)
         };
-        // Ensure no empty string for integer fields
+
+        // Ensure no empty string for integer or date fields
         ['allocated_budget','spent_budget','createdAt','updatedAt'].forEach(f => {
           if (dbProjectData[f] === undefined || dbProjectData[f] === '') dbProjectData[f] = null;
         });
-        if (dbProjectData.category_id === undefined || dbProjectData.category_id === '') dbProjectData.category_id = null;
-        console.log('📝 Attempting to create project in DB:', JSON.stringify(dbProjectData, (key, value) => typeof value === 'bigint' ? value.toString() : value));
-        const result = await createProject(dbProjectData);
-        console.log('📝 DB create result:', result);
+
+        console.log('📝 Creating normalized project in DB:', JSON.stringify({ project_id: dbProjectData.project_id, project_name: dbProjectData.project_name }));
+        await createProject(dbProjectData);
         newCount++;
         console.log(`✅ Created new project ${bcId}`);
       } catch (error) {

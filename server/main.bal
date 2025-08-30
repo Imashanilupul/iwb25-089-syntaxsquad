@@ -1225,37 +1225,61 @@ service /api on apiListener {
     # Get user by email
     #
     # + email - Email to search for
-    # + return - User data or error
-    resource function get users/email/[string email]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/email/[string email]() returns json {
         log:printInfo("Get user by email endpoint called for email: " + email);
-        return usersService.getUserByEmail(email);
+        json|error res = usersService.getUserByEmail(email);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by email failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by NIC
     #
     # + nic - NIC to search for
-    # + return - User data or error
-    resource function get users/nic/[string nic]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/nic/[string nic]() returns json {
         log:printInfo("Get user by NIC endpoint called for NIC: " + nic);
-        return usersService.getUserByNic(nic);
+        json|error res = usersService.getUserByNic(nic);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by NIC failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by mobile number
     #
     # + mobile - Mobile number to search for
-    # + return - User data or error
-    resource function get users/mobile/[string mobile]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/mobile/[string mobile]() returns json {
         log:printInfo("Get user by mobile endpoint called for mobile: " + mobile);
-        return usersService.getUserByMobile(mobile);
+        json|error res = usersService.getUserByMobile(mobile);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by mobile failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by EVM address
     #
     # + evm - EVM address to search for
-    # + return - User data or error
-    resource function get users/evm/[string evm]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/evm/[string evm]() returns json {
         log:printInfo("Get user by EVM endpoint called for EVM: " + evm);
-        return usersService.getUserByEvm(evm);
+        json|error res = usersService.getUserByEvm(evm);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by EVM failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Search users by keyword
