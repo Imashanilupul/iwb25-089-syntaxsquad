@@ -42,7 +42,7 @@ public class CategoriesService {
         return headers;
     }
 
-    # Get all categories
+    # Get all categories (spent budget is now maintained in database)
     #
     # + return - Categories list or error
     public function getAllCategories() returns json|error {
@@ -72,7 +72,7 @@ public class CategoriesService {
         }
     }
 
-    # Get category by ID
+    # Get category by ID (spent budget is now maintained in database)
     #
     # + categoryId - Category ID to retrieve
     # + return - Category data or error
@@ -114,9 +114,8 @@ public class CategoriesService {
     #
     # + categoryName - Category name
     # + allocatedBudget - Allocated budget
-    # + spentBudget - Spent budget (optional, defaults to 0)
     # + return - Created category data or error
-    public function createCategory(string categoryName, decimal allocatedBudget, decimal spentBudget = 0d) returns json|error {
+    public function createCategory(string categoryName, decimal allocatedBudget) returns json|error {
         do {
             // Validate input
             if categoryName.trim().length() == 0 {
@@ -127,18 +126,10 @@ public class CategoriesService {
                 return error("Allocated budget cannot be negative");
             }
 
-            if spentBudget < 0d {
-                return error("Spent budget cannot be negative");
-            }
-
-            if spentBudget > allocatedBudget {
-                return error("Spent budget cannot exceed allocated budget");
-            }
-
             json payload = {
                 "category_name": categoryName,
                 "allocated_budget": allocatedBudget,
-                "spent_budget": spentBudget
+                "spent_budget": 0d // Will be calculated from projects
             };
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
@@ -359,6 +350,169 @@ public class CategoriesService {
             "valid": errors.length() == 0,
             "errors": errors
         };
+    }
+
+    # Update category spent budget based on all projects in that category
+    #
+    # + categoryId - Category ID to update
+    # + return - Success or error
+    public function updateCategorySpentBudget(int categoryId) returns json|error {
+        // Validate input
+        if categoryId <= 0 {
+            return error("Category ID must be a positive integer");
+        }
+
+        do {
+            map<string> headers = self.getHeaders();
+            
+            // Get total spent from all projects in this category
+            // Note: category_id in projects table is text, so we need to compare as string
+            string projectsEndpoint = "/rest/v1/projects?category_id=eq." + categoryId.toString() + "&removed=is.false&select=spent_budget";
+            http:Response projectsResponse = check self.supabaseClient->get(projectsEndpoint, headers);
+            
+            decimal totalSpent = 0d;
+            int projectCount = 0;
+            
+            if projectsResponse.statusCode == 200 {
+                json projectsBody = check projectsResponse.getJsonPayload();
+                json[] projects = check projectsBody.ensureType();
+                
+                log:printInfo("Found " + projects.length().toString() + " projects for category " + categoryId.toString());
+                
+                foreach json project in projects {
+                    if project is map<json> {
+                        json|error spentBudgetJson = project["spent_budget"];
+                        if spentBudgetJson is json && spentBudgetJson != () {
+                            decimal projectSpent = 0d;
+                            
+                            // Handle different data types from database (projects.spent_budget is bigint)
+                            if spentBudgetJson is int {
+                                projectSpent = <decimal>spentBudgetJson;
+                            } else if spentBudgetJson is decimal {
+                                projectSpent = spentBudgetJson;
+                            } else if spentBudgetJson is string {
+                                decimal|error parsed = decimal:fromString(spentBudgetJson);
+                                if parsed is decimal {
+                                    projectSpent = parsed;
+                                }
+                            }
+                            
+                            totalSpent += projectSpent;
+                            projectCount += 1;
+                            log:printInfo("Project spent: " + projectSpent.toString() + ", running total: " + totalSpent.toString());
+                        }
+                    }
+                }
+            } else {
+                log:printError("Failed to get projects for category " + categoryId.toString() + ": " + projectsResponse.statusCode.toString());
+            }
+            
+            log:printInfo("Final total spent for category " + categoryId.toString() + ": " + totalSpent.toString() + " from " + projectCount.toString() + " projects");
+            
+            // Update the category's spent_budget in the database
+            json payload = {
+                "spent_budget": totalSpent,
+                "updated_at": "now()"
+            };
+            
+            map<string> updateHeaders = self.getHeaders(true); // Include Prefer header
+            string endpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString();
+            http:Response response = check self.supabaseClient->patch(endpoint, payload, updateHeaders);
+            
+            if response.statusCode == 200 {
+                log:printInfo("Successfully updated category " + categoryId.toString() + " spent budget to " + totalSpent.toString());
+                return {
+                    "success": true,
+                    "message": "Category spent budget updated successfully",
+                    "categoryId": categoryId,
+                    "newSpentBudget": totalSpent,
+                    "projectCount": projectCount,
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                json|error errorBody = response.getJsonPayload();
+                string errorMsg = errorBody is json ? errorBody.toString() : "Unknown error";
+                log:printError("Failed to update category spent budget: " + response.statusCode.toString() + " - " + errorMsg);
+                return error("Failed to update category spent budget: " + response.statusCode.toString());
+            }
+            
+        } on fail error e {
+            return error("Failed to update category spent budget: " + e.message());
+        }
+    }
+
+    # Get available budget for a category (allocated - spent from projects)
+    #
+    # + categoryId - Category ID to check
+    # + return - Available budget amount or error
+    public function getCategoryAvailableBudget(int categoryId) returns decimal|error {
+        // Validate input
+        if categoryId <= 0 {
+            return error("Category ID must be a positive integer");
+        }
+
+        do {
+            map<string> headers = self.getHeaders();
+            
+            // Get category allocated budget
+            string categoryEndpoint = "/rest/v1/categories?category_id=eq." + categoryId.toString() + "&select=allocated_budget";
+            http:Response categoryResponse = check self.supabaseClient->get(categoryEndpoint, headers);
+            
+            if categoryResponse.statusCode != 200 {
+                return error("Failed to get category: " + categoryResponse.statusCode.toString());
+            }
+            
+            json categoryResult = check categoryResponse.getJsonPayload();
+            json[] categories = check categoryResult.ensureType();
+            
+            if categories.length() == 0 {
+                return error("Category not found");
+            }
+            
+            json category = categories[0];
+            decimal allocatedBudget = 0d;
+            if category is map<json> {
+                json|error allocatedJson = category["allocated_budget"];
+                if allocatedJson is json {
+                    allocatedBudget = check allocatedJson.ensureType(decimal);
+                }
+            }
+            
+            // Get total spent from all projects in this category (sum of all project spent budgets)
+            // Note: category_id in projects table is text, so we need to compare as string
+            string projectsEndpoint = "/rest/v1/projects?category_id=eq." + categoryId.toString() + "&removed=is.false&select=spent_budget";
+            http:Response projectsResponse = check self.supabaseClient->get(projectsEndpoint, headers);
+            
+            decimal totalSpent = 0d;
+            if projectsResponse.statusCode == 200 {
+                json projectsBody = check projectsResponse.getJsonPayload();
+                json[] projects = check projectsBody.ensureType();
+                
+                foreach json project in projects {
+                    if project is map<json> {
+                        json|error spentBudgetJson = project["spent_budget"];
+                        if spentBudgetJson is json && spentBudgetJson != () {
+                            // Handle different data types from database (projects.spent_budget is bigint)
+                            if spentBudgetJson is int {
+                                totalSpent += <decimal>spentBudgetJson;
+                            } else if spentBudgetJson is decimal {
+                                totalSpent += spentBudgetJson;
+                            } else if spentBudgetJson is string {
+                                decimal|error parsed = decimal:fromString(spentBudgetJson);
+                                if parsed is decimal {
+                                    totalSpent += parsed;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return allocatedBudget - totalSpent;
+            
+        } on fail error e {
+            return error("Failed to get category available budget: " + e.message());
+        }
     }
 
     # Get categories with budget analysis

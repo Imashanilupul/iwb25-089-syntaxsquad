@@ -548,7 +548,7 @@ service /api on apiListener {
             };
         }
 
-        return categoriesService.createCategory(categoryName, allocatedBudget, spentBudget);
+        return categoriesService.createCategory(categoryName, allocatedBudget);
     }
 
     # Update category by ID
@@ -570,6 +570,104 @@ service /api on apiListener {
     resource function delete categories/[int categoryId]() returns json|error {
         log:printInfo("Delete category endpoint called for ID: " + categoryId.toString());
         return categoriesService.deleteCategory(categoryId);
+    }
+
+    # Sync category spent budgets (recalculate from projects)
+    #
+    # + return - Success message or error
+    resource function post categories/sync() returns json|error {
+        log:printInfo("Sync category spent budgets endpoint called");
+        
+        // Get all categories
+        json|error categoriesResult = categoriesService.getAllCategories();
+        if categoriesResult is error {
+            return {
+                "success": false,
+                "message": "Failed to get categories: " + categoriesResult.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        json categoriesResponse = categoriesResult;
+        if categoriesResponse is map<json> {
+            json|error categoriesData = categoriesResponse["data"];
+            if categoriesData is json[] {
+                int successCount = 0;
+                int errorCount = 0;
+                
+                foreach json category in categoriesData {
+                    if category is map<json> {
+                        json|error categoryIdJson = category["category_id"];
+                        if categoryIdJson is json {
+                            int|error categoryId = categoryIdJson.ensureType(int);
+                            if categoryId is int {
+                                json|error updateResult = categoriesService.updateCategorySpentBudget(categoryId);
+                                if updateResult is json {
+                                    successCount += 1;
+                                } else {
+                                    errorCount += 1;
+                                    log:printError("Failed to sync category " + categoryId.toString() + ": " + updateResult.message());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return {
+                    "success": true,
+                    "message": "Category spent budget sync completed",
+                    "successCount": successCount,
+                    "errorCount": errorCount,
+                    "timestamp": time:utcNow()[0]
+                };
+            }
+        }
+        
+        return {
+            "success": false,
+            "message": "Failed to parse categories data",
+            "timestamp": time:utcNow()[0]
+        };
+    }
+
+    # Debug endpoint to check category-project relationships
+    #
+    # + return - Debug information about categories and projects
+    resource function get categories/debug() returns json|error {
+        log:printInfo("Debug categories endpoint called");
+        
+        // Get all categories
+        json|error categoriesResult = categoriesService.getAllCategories();
+        if categoriesResult is error {
+            return {
+                "success": false,
+                "message": "Failed to get categories: " + categoriesResult.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        // Get all projects
+        json|error projectsResult = projectsService.getAllProjects();
+        if projectsResult is error {
+            return {
+                "success": false,
+                "message": "Failed to get projects: " + projectsResult.message(),
+                "timestamp": time:utcNow()[0]
+            };
+        }
+        
+        json debugInfo = {
+            "categories": categoriesResult,
+            "projects": projectsResult,
+            "timestamp": time:utcNow()[0]
+        };
+        
+        return {
+            "success": true,
+            "message": "Debug information retrieved",
+            "data": debugInfo,
+            "timestamp": time:utcNow()[0]
+        };
     }
 
     # Get all policies with pagination

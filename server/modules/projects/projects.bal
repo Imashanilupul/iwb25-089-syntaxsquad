@@ -48,6 +48,7 @@ public class ProjectsService {
         do {
             map<string> headers = self.getHeaders();
             // Only fetch projects where removed is false (not soft-deleted)
+            // Note: We'll handle category lookup separately since category_id is stored as text
             string endpoint = "/rest/v1/projects?removed=is.false&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
 
@@ -172,6 +173,8 @@ public class ProjectsService {
                 return error("Invalid status. Allowed values: PLANNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
             }
             
+            // Note: Category budget validation will be handled by the sync process
+            
 
             // Cast allocated_budget and spent_budget to int8 (bigint)
             int allocatedBudgetInt = <int>allocatedBudget;
@@ -190,6 +193,7 @@ public class ProjectsService {
             // Only add category_id if present and not empty (as text per database schema)
             if categoryId is int {
                 payload = check payload.mergeJson({"category_id": categoryId.toString()});
+                log:printInfo("Added category_id to project payload: " + categoryId.toString());
             }
 
             if viewDetails is string {
@@ -201,7 +205,9 @@ public class ProjectsService {
             map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/projects", payload, headers);
 
-            if response.statusCode == 201 {
+                            if response.statusCode == 201 {
+                // Note: Category spent budget will be updated via sync endpoint
+                
                 // Check if response has content
                 json|error result = response.getJsonPayload();
                 if result is error {
@@ -387,6 +393,8 @@ public class ProjectsService {
                 }
             }
             
+            // Note: Category budget validation will be handled by the sync process
+            
             // If only spent budget is being updated, validate against existing allocated budget
             else if payloadMap.hasKey("spent_budget") && !payloadMap.hasKey("allocated_budget") {
                 decimal newSpent = check payloadMap["spent_budget"].ensureType(decimal);
@@ -454,6 +462,8 @@ public class ProjectsService {
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
             
+            // Note: Category spent budget will be updated via sync endpoint
+
             if projects.length() > 0 {
                 return {
                     "success": true,
@@ -486,6 +496,30 @@ public class ProjectsService {
         }
         
         do {
+            // Get project's category_id before deletion to update category spent budget
+            map<string> getHeaders = self.getHeaders();
+            string getEndpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&select=category_id";
+            http:Response getResponse = check self.supabaseClient->get(getEndpoint, getHeaders);
+            
+            int? projectCategoryId = ();
+            if getResponse.statusCode == 200 {
+                json getResult = check getResponse.getJsonPayload();
+                json[] projects = check getResult.ensureType();
+                
+                if projects.length() > 0 {
+                    json project = projects[0];
+                    if project is map<json> {
+                        json|error categoryIdJson = project["category_id"];
+                        if categoryIdJson is json && categoryIdJson is string {
+                            int|error categoryIdInt = int:fromString(categoryIdJson);
+                            if categoryIdInt is int {
+                                projectCategoryId = categoryIdInt;
+                            }
+                        }
+                    }
+                }
+            }
+            
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString();
             http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
@@ -493,6 +527,8 @@ public class ProjectsService {
             if response.statusCode != 200 && response.statusCode != 204 {
                 return error("Failed to delete project: " + response.statusCode.toString());
             }
+            
+            // Note: Category spent budget will be updated via sync endpoint
             
             return {
                 "success": true,
