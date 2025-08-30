@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { AlertTriangle, Shield, Clock, CheckCircle, Search, Loader2, X, RotateCcw } from "lucide-react"
+import { AlertTriangle, Shield, Clock, CheckCircle, Search, Loader2, X, RotateCcw, User, UserCheck } from "lucide-react"
 import { toast } from "sonner"
 import { reportService, type Report, type ReportStatistics } from "@/services/report"
 
@@ -29,6 +29,10 @@ export function ReportManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [totalItems, setTotalItems] = useState(0)
+
+  // Assignment state
+  const [assignmentInputs, setAssignmentInputs] = useState<{ [reportId: number]: string }>({})
+  const [assigningReports, setAssigningReports] = useState<{ [reportId: number]: boolean }>({})
 
   // Pagination handlers
   const handlePageChange = (page: number) => {
@@ -67,9 +71,14 @@ export function ReportManagement() {
     if (debouncedSearchTerm) {
       performSearch()
     } else {
-      loadReports()
+      loadAndFilterReports()
     }
   }, [debouncedSearchTerm, filterPriority, filterStatus])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterPriority, filterStatus, debouncedSearchTerm])
 
   // Load all reports from backend
   const loadReports = async () => {
@@ -81,7 +90,70 @@ export function ReportManagement() {
       setTotalItems(sortedReports.length)
       setSearchResults("")
       
+      // Initialize assignment inputs with current assignments
+      const initialAssignments: { [reportId: number]: string } = {}
+      sortedReports.forEach(report => {
+        initialAssignments[report.report_id] = report.assigned_to || ''
+      })
+      setAssignmentInputs(initialAssignments)
+      
       // Load statistics
+      const statsData = await reportService.getReportStatistics()
+      setStatistics(statsData)
+    } catch (error) {
+      console.error('Failed to load reports:', error)
+      toast.error('Failed to load reports. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+      // Load and filter reports when no search term is provided
+  const loadAndFilterReports = async () => {
+    try {
+      setLoading(true)
+      const reportsData = await reportService.getAllReports()
+      
+      // Apply filters
+      let filteredReports = reportsData
+      
+      // Apply priority filter
+      if (filterPriority !== "all") {
+        filteredReports = filteredReports.filter(report => report.priority === filterPriority)
+      }
+      
+      // Apply status filter
+      if (filterStatus !== "all") {
+        const isResolved = filterStatus === "resolved"
+        filteredReports = filteredReports.filter(report => report.resolved_status === isResolved)
+      }
+      
+      const sortedReports = sortReports(filteredReports)
+      setReports(sortedReports)
+      setTotalItems(sortedReports.length)
+      
+      // Set filter results message
+      if (filterPriority !== "all" || filterStatus !== "all") {
+        let filterMessage = `Filtered ${filteredReports.length} report(s)`
+        const appliedFilters: string[] = []
+        if (filterPriority !== "all") appliedFilters.push(`Priority: ${formatPriority(filterPriority)}`)
+        if (filterStatus !== "all") appliedFilters.push(`Status: ${filterStatus === "resolved" ? "Resolved" : "Pending"}`)
+        if (appliedFilters.length > 0) {
+          filterMessage += ` (${appliedFilters.join(", ")})`
+        }
+        setSearchResults(filterMessage)
+      } else {
+        setSearchResults("")
+      }
+      
+      // Initialize assignment inputs with current assignments
+      const initialAssignments: { [reportId: number]: string } = {}
+      sortedReports.forEach(report => {
+        initialAssignments[report.report_id] = report.assigned_to || ''
+      })
+      setAssignmentInputs(initialAssignments)
+      
+      // Load statistics (use original data for accurate stats)
       const statsData = await reportService.getReportStatistics()
       setStatistics(statsData)
     } catch (error) {
@@ -175,12 +247,58 @@ export function ReportManagement() {
     }
   }
 
+  // Handle assignment input change
+  const handleAssignmentInputChange = (reportId: number, value: string) => {
+    setAssignmentInputs(prev => ({
+      ...prev,
+      [reportId]: value
+    }))
+  }
+
+  // Handle assign/unassign report
+  const handleAssignReport = async (reportId: number) => {
+    const assignedTo = assignmentInputs[reportId]?.trim()
+    
+    try {
+      setAssigningReports(prev => ({ ...prev, [reportId]: true }))
+      
+      let updatedReport: Report
+      if (assignedTo && assignedTo.length > 0) {
+        // Assign to someone
+        updatedReport = await reportService.assignReport(reportId, assignedTo)
+        toast.success(`Report assigned to ${assignedTo} successfully!`)
+      } else {
+        // Unassign (empty input)
+        updatedReport = await reportService.unassignReport(reportId)
+        toast.success('Report unassigned successfully!')
+      }
+      
+      // Update reports list
+      setReports(reports.map(report => 
+        report.report_id === reportId ? updatedReport : report
+      ))
+      
+      // Update assignment input to reflect the actual assignment
+      setAssignmentInputs(prev => ({
+        ...prev,
+        [reportId]: updatedReport.assigned_to || ''
+      }))
+      
+    } catch (error) {
+      console.error('Failed to assign/unassign report:', error)
+      toast.error('Failed to update assignment. Please try again.')
+    } finally {
+      setAssigningReports(prev => ({ ...prev, [reportId]: false }))
+    }
+  }
+
   // Clear all filters
   const clearFilters = () => {
     setSearchTerm("")
     setDebouncedSearchTerm("")
     setFilterPriority("all")
     setFilterStatus("all")
+    setCurrentPage(1) // Reset to first page when clearing filters
     loadReports()
   }
 
@@ -381,6 +499,7 @@ export function ReportManagement() {
                   <TableHead>Report Title</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Assignment</TableHead>
                   <TableHead>Evidence Hash</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -395,9 +514,6 @@ export function ReportManagement() {
                         {report.description && (
                           <p className="text-sm text-slate-500 truncate">{report.description}</p>
                         )}
-                        {report.assigned_to && (
-                          <p className="text-xs text-slate-400">Assigned to: {report.assigned_to}</p>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -409,6 +525,40 @@ export function ReportManagement() {
                       <Badge className={getStatusColor(report.resolved_status)} variant="secondary">
                         {report.resolved_status ? "Resolved" : "Pending"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <Input
+                            placeholder="Assign to..."
+                            value={assignmentInputs[report.report_id] || ''}
+                            onChange={(e) => handleAssignmentInputChange(report.report_id, e.target.value)}
+                            className="text-sm"
+                            disabled={assigningReports[report.report_id]}
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAssignReport(report.report_id)}
+                          disabled={assigningReports[report.report_id] || 
+                            assignmentInputs[report.report_id] === (report.assigned_to || '')}
+                          className="whitespace-nowrap"
+                        >
+                          {assigningReports[report.report_id] ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : assignmentInputs[report.report_id]?.trim() ? (
+                            <UserCheck className="h-3 w-3" />
+                          ) : (
+                            <User className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
+                      {report.assigned_to && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Currently: {report.assigned_to}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded">
@@ -445,7 +595,7 @@ export function ReportManagement() {
                 ))}
                 {reports.length === 0 && !loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-slate-500 py-8">
+                    <TableCell colSpan={7} className="text-center text-slate-500 py-8">
                       No reports found. {searchTerm || filterPriority !== "all" || filterStatus !== "all" 
                         ? "Try adjusting your search criteria." 
                         : "Reports will appear here when submitted by citizens."}

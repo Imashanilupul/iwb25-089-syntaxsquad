@@ -1,5 +1,6 @@
 import ballerina/http;
 import ballerina/log;
+
 import ballerina/time;
 
 # Helper function for pagination calculation
@@ -19,7 +20,7 @@ public function calculatePagination(int page, int pageLimit, int total) returns 
 |} {
     int totalPages = (total + pageLimit - 1) / pageLimit;
     int offset = (page - 1) * pageLimit;
-    
+
     return {
         page: page,
         'limit: pageLimit,
@@ -35,10 +36,40 @@ public function calculatePagination(int page, int pageLimit, int total) returns 
 # For example, if using a module named db, import it:
 # import db;
 
-
-
 # Policies service for handling policy operations
 public class PoliciesService {
+    # Get policy by ID
+    #
+    # + policyId - Policy ID to retrieve
+    # + return - Policy data or error
+    public function getPolicyById(int policyId) returns json|error {
+        // Validate input
+        if policyId <= 0 {
+            return error("Policy ID must be a positive integer");
+        }
+        do {
+            map<string> headers = self.getHeaders();
+            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
+            if response.statusCode != 200 {
+                return error("Failed to get policy: " + response.statusCode.toString());
+            }
+            json result = check response.getJsonPayload();
+            json[] policies = check result.ensureType();
+            if policies.length() > 0 {
+                return {
+                    "success": true,
+                    "message": "Policy retrieved successfully",
+                    "data": policies[0],
+                    "timestamp": time:utcNow()[0]
+                };
+            } else {
+                return error("Policy not found");
+            }
+        } on fail error e {
+            return error("Failed to get policy: " + e.message());
+        }
+    }
     private http:Client supabaseClient;
     private int port;
     private string supabaseUrl;
@@ -53,7 +84,7 @@ public class PoliciesService {
     public function init(http:Client supabaseClient, int port, string supabaseUrl, string supabaseServiceRoleKey) {
         self.supabaseClient = supabaseClient;
         self.port = port;
-        self.supabaseUrl = supabaseUrl; 
+        self.supabaseUrl = supabaseUrl;
         self.supabaseServiceRoleKey = supabaseServiceRoleKey;
         log:printInfo("✅ Policies service initialized");
     }
@@ -68,11 +99,11 @@ public class PoliciesService {
             "Authorization": "Bearer " + self.supabaseServiceRoleKey,
             "Content-Type": "application/json"
         };
-        
+
         if includePrefer {
             headers["Prefer"] = "return=representation";
         }
-        
+
         return headers;
     }
 
@@ -82,84 +113,62 @@ public class PoliciesService {
     # + pageLimit - Number of items per page (default: 20)
     # + return - Policies list with pagination metadata or error
     public function getAllPolicies(int page = 1, int pageLimit = 20) returns json|error {
-        do {
-            map<string> headers = self.getHeaders();
+    do {
+        map<string> headers = self.getHeaders();
 
-            // Get total count first
-            http:Response countResponse = check self.supabaseClient->get("/rest/v1/policies?select=count", headers);
-            if countResponse.statusCode != 200 {
-                return error("Failed to get policies count: " + countResponse.statusCode.toString());
+        // Get total count first (Supabase returns count in Content-Range header, not in payload)
+        string countEndpoint = "/rest/v1/policies?select=id";
+        http:Response countResponse = check self.supabaseClient->get(countEndpoint, headers);
+        if countResponse.statusCode != 200 {
+            return error("Failed to get policies count: " + countResponse.statusCode.toString());
+        }
+        int total = 0;
+        var contentRangeResult = countResponse.getHeader("Content-Range");
+        if contentRangeResult is string {
+            // Format: items 0-19/123
+            var slashIndex = contentRangeResult.indexOf("/");
+            if slashIndex is int && slashIndex >= 0 {
+                string totalStr = contentRangeResult.substring(slashIndex + 1);
+                int|error totalParsed = int:fromString(totalStr);
+                if totalParsed is int {
+                    total = totalParsed;
+                }
             }
+        }
+
+        // Fallback: if Content-Range missing, use length of returned array
+        if total == 0 {
             json countResult = check countResponse.getJsonPayload();
             json[] countArray = check countResult.ensureType();
-            int total = check countArray[0].count;
-
-            // Calculate pagination
-            var pagination = calculatePagination(page, pageLimit, total);
-            
-            // Get paginated data
-            string endpoint = string `/rest/v1/policies?select=*&order=created_time.desc&limit=${pageLimit}&offset=${pagination.offset}`;
-            http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
-            if response.statusCode != 200 {
-                return error("Failed to get policies: " + response.statusCode.toString());
-            }
-            
-            json result = check response.getJsonPayload();
-            json[] policies = check result.ensureType();
-            
-            return {
-                "success": true,
-                "message": "Policies retrieved successfully",
-                "data": policies,
-                "pagination": pagination,
-                "timestamp": time:utcNow()[0]
-            };
-            
-        } on fail error e {
-            return error("Failed to get policies: " + e.message());
+            total = countArray.length();
         }
+
+        // Calculate pagination
+        var pagination = calculatePagination(page, pageLimit, total);
+
+        // Use correct column names for ordering (created_at, not created_time)
+        string endpoint = string `/rest/v1/policies?select=*&order=created_at.desc&limit=${pageLimit}&offset=${pagination.offset}`;
+        http:Response response = check self.supabaseClient->get(endpoint, headers);
+
+        if response.statusCode != 200 {
+            return error("Failed to get policies: " + response.statusCode.toString());
+        }
+
+        json result = check response.getJsonPayload();
+        json[] policies = check result.ensureType();
+
+        return {
+            "success": true,
+            "message": "Policies retrieved successfully",
+            "data": policies,
+            "pagination": pagination,
+            "timestamp": time:utcNow()[0]
+        };
+
+    } on fail error e {
+        return error("Failed to get policies: " + e.message());
     }
-
-    # Get policy by ID
-    #
-    # + policyId - Policy ID to retrieve
-    # + return - Policy data or error
-    public function getPolicyById(int policyId) returns json|error {
-        // Validate input
-        if policyId <= 0 {
-            return error("Policy ID must be a positive integer");
-        }
-        
-        do {
-            map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
-            
-            http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
-            if response.statusCode != 200 {
-                return error("Failed to get policy: " + response.statusCode.toString());
-            }
-            
-            json result = check response.getJsonPayload();
-            json[] policies = check result.ensureType();
-            
-            if policies.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Policy retrieved successfully",
-                    "data": policies[0],
-                    "timestamp": time:utcNow()[0]
-                };
-            } else {
-                return error("Policy not found");
-            }
-            
-        } on fail error e {
-            return error("Failed to get policy: " + e.message());
-        }
-    }
-
+}           
     # Create a new policy
     #
     # + name - Policy name
@@ -175,19 +184,19 @@ public class PoliciesService {
             if name.trim().length() == 0 {
                 return error("Policy name cannot be empty");
             }
-            
+
             if description.trim().length() == 0 {
                 return error("Policy description cannot be empty");
             }
-            
+
             if viewFullPolicy.trim().length() == 0 {
                 return error("Policy full document cannot be empty");
             }
-            
+
             if ministry.trim().length() == 0 {
                 return error("Ministry cannot be empty");
             }
-            
+
             // Validate status
             string[] validStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"];
             boolean isValidStatus = false;
@@ -200,7 +209,7 @@ public class PoliciesService {
             if !isValidStatus {
                 return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
             }
-            
+
             json payload = {
                 "name": name,
                 "description": description,
@@ -208,7 +217,7 @@ public class PoliciesService {
                 "ministry": ministry,
                 "status": status
             };
-            
+
             // Add effective_date if provided
             if effectiveDate is string {
                 payload = check payload.mergeJson({"effective_date": effectiveDate});
@@ -216,7 +225,7 @@ public class PoliciesService {
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/policies", payload, headers);
-            
+
             if response.statusCode == 201 {
                 // Check if response has content
                 json|error result = response.getJsonPayload();
@@ -265,10 +274,10 @@ public class PoliciesService {
         if policyId <= 0 {
             return error("Policy ID must be a positive integer");
         }
-        
+
         do {
             map<json> payloadMap = {};
-            
+
             // Build update payload from provided data
             json|error name = updateData.name;
             if name is json {
@@ -279,7 +288,7 @@ public class PoliciesService {
                     return error("Policy name cannot be empty");
                 }
             }
-            
+
             json|error description = updateData.description;
             if description is json {
                 string|error descStr = description.ensureType(string);
@@ -289,7 +298,7 @@ public class PoliciesService {
                     return error("Policy description cannot be empty");
                 }
             }
-            
+
             json|error viewFullPolicy = updateData.view_full_policy;
             if viewFullPolicy is json {
                 string|error fullPolicyStr = viewFullPolicy.ensureType(string);
@@ -299,7 +308,7 @@ public class PoliciesService {
                     return error("Policy full document cannot be empty");
                 }
             }
-            
+
             json|error ministry = updateData.ministry;
             if ministry is json {
                 string|error ministryStr = ministry.ensureType(string);
@@ -309,7 +318,7 @@ public class PoliciesService {
                     return error("Ministry cannot be empty");
                 }
             }
-            
+
             json|error status = updateData.status;
             if status is json {
                 string|error statusStr = status.ensureType(string);
@@ -329,7 +338,7 @@ public class PoliciesService {
                     }
                 }
             }
-            
+
             json|error effectiveDate = updateData.effective_date;
             if effectiveDate is json {
                 string|error dateStr = effectiveDate.ensureType(string);
@@ -337,25 +346,25 @@ public class PoliciesService {
                     payloadMap["effective_date"] = dateStr;
                 }
             }
-            
+
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");
             }
-            
+
             payloadMap["updated_at"] = "now()";
             json payload = payloadMap;
-            
+
             map<string> headers = self.getHeaders(true); // Include Prefer header
             string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to update policy: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             if policies.length() > 0 {
                 return {
                     "success": true,
@@ -366,7 +375,7 @@ public class PoliciesService {
             } else {
                 return error("Policy not found");
             }
-            
+
         } on fail error e {
             return error("Failed to update policy: " + e.message());
         }
@@ -381,22 +390,22 @@ public class PoliciesService {
         if policyId <= 0 {
             return error("Policy ID must be a positive integer");
         }
-        
+
         do {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
             http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
-            
+
             if response.statusCode != 200 && response.statusCode != 204 {
                 return error("Failed to delete policy: " + response.statusCode.toString());
             }
-            
+
             return {
                 "success": true,
                 "message": "Policy deleted successfully",
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to delete policy: " + e.message());
         }
@@ -419,19 +428,19 @@ public class PoliciesService {
         if !isValidStatus {
             return error("Invalid status. Allowed values: DRAFT, UNDER_REVIEW, PUBLIC_CONSULTATION, APPROVED, ACTIVE, INACTIVE, ARCHIVED");
         }
-        
+
         do {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?status=eq." + status + "&select=*&order=created_time.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get policies by status: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Policies retrieved successfully by status",
@@ -440,7 +449,7 @@ public class PoliciesService {
                 "status": status,
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get policies by status: " + e.message());
         }
@@ -455,19 +464,19 @@ public class PoliciesService {
         if ministry.trim().length() == 0 {
             return error("Ministry name cannot be empty");
         }
-        
+
         do {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?ministry=eq." + ministry + "&select=*&order=created_time.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get policies by ministry: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Policies retrieved successfully by ministry",
@@ -476,7 +485,7 @@ public class PoliciesService {
                 "ministry": ministry,
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get policies by ministry: " + e.message());
         }
@@ -488,27 +497,27 @@ public class PoliciesService {
     # + return - Validation result
     public function validatePolicyData(json policyData) returns json {
         string[] errors = [];
-        
+
         json|error name = policyData.name;
         if name is error || name.toString().trim().length() == 0 {
             errors.push("Policy name is required and cannot be empty");
         }
-        
+
         json|error description = policyData.description;
         if description is error || description.toString().trim().length() == 0 {
             errors.push("Policy description is required and cannot be empty");
         }
-        
+
         json|error viewFullPolicy = policyData.view_full_policy;
         if viewFullPolicy is error || viewFullPolicy.toString().trim().length() == 0 {
             errors.push("Policy full document is required and cannot be empty");
         }
-        
+
         json|error ministry = policyData.ministry;
         if ministry is error || ministry.toString().trim().length() == 0 {
             errors.push("Ministry is required and cannot be empty");
         }
-        
+
         json|error status = policyData.status;
         if status is json {
             string|error statusStr = status.ensureType(string);
@@ -526,7 +535,7 @@ public class PoliciesService {
                 }
             }
         }
-        
+
         return {
             "valid": errors.length() == 0,
             "errors": errors
@@ -540,19 +549,19 @@ public class PoliciesService {
         do {
             map<string> headers = self.getHeaders();
             http:Response response = check self.supabaseClient->get("/rest/v1/policies?select=*", headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get policy statistics: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             // Initialize counters
             map<int> statusCounts = {};
             map<int> ministryCounts = {};
             int totalPolicies = policies.length();
-            
+
             foreach json policy in policies {
                 if policy is map<json> {
                     // Count by status
@@ -564,7 +573,7 @@ public class PoliciesService {
                             statusCounts[status] = currentCount + 1;
                         }
                     }
-                    
+
                     // Count by ministry
                     json|error ministryJson = policy["ministry"];
                     if ministryJson is json {
@@ -576,7 +585,7 @@ public class PoliciesService {
                     }
                 }
             }
-            
+
             return {
                 "success": true,
                 "message": "Policy statistics retrieved successfully",
@@ -587,7 +596,7 @@ public class PoliciesService {
                 },
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get policy statistics: " + e.message());
         }
@@ -602,21 +611,21 @@ public class PoliciesService {
         if keyword.trim().length() == 0 {
             return error("Search keyword cannot be empty");
         }
-        
+
         do {
             // Search in both name and description fields
             string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?or=(name.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to search policies: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Policy search completed successfully",
@@ -625,7 +634,7 @@ public class PoliciesService {
                 "keyword": keyword,
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to search policies: " + e.message());
         }
@@ -639,14 +648,14 @@ public class PoliciesService {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?status=eq.ACTIVE&select=*&order=created_time.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get active policies: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Active policies retrieved successfully",
@@ -654,7 +663,7 @@ public class PoliciesService {
                 "count": policies.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get active policies: " + e.message());
         }
@@ -668,14 +677,14 @@ public class PoliciesService {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?status=eq.DRAFT&select=*&order=created_time.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get draft policies: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Draft policies retrieved successfully",
@@ -683,7 +692,7 @@ public class PoliciesService {
                 "count": policies.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get draft policies: " + e.message());
         }
@@ -697,14 +706,14 @@ public class PoliciesService {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/policies?effective_date=gt.now()&select=*&order=effective_date.asc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get future effective policies: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] policies = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Future effective policies retrieved successfully",
@@ -712,7 +721,7 @@ public class PoliciesService {
                 "count": policies.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get future effective policies: " + e.message());
         }
@@ -729,7 +738,7 @@ public class PoliciesService {
     public function confirmPolicyDraft(int policyId, string? txHash, int? blockNumber, string? blockchainPolicyId, string? descriptionCid) returns json|error {
         do {
             map<json> updateData = {};
-            
+
             if txHash is string {
                 updateData["blockchain_tx_hash"] = txHash;
             }
@@ -742,29 +751,29 @@ public class PoliciesService {
             if descriptionCid is string {
                 updateData["description_cid"] = descriptionCid;
             }
-            
+
             // Update status to confirmed if it was draft
             updateData["status"] = "UNDER_REVIEW";
             updateData["updated_time"] = time:utcNow()[0];
-            
+
             map<string> headers = self.getHeaders(true);
             string endpoint = "/rest/v1/policies?id=eq." + policyId.toString();
-            
+
             http:Response response = check self.supabaseClient->patch(endpoint, updateData, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to confirm policy draft: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
-            
+
             return {
                 "success": true,
                 "message": "Policy draft confirmed with blockchain data successfully",
                 "data": result,
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to confirm policy draft: " + e.message());
         }

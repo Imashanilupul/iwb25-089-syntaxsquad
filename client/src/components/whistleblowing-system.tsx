@@ -1892,7 +1892,7 @@ Timestamp: ${timestamp}
                     : 0
                 const isThresholdMet =
                   (petition.signature_count || 0) >= petition.required_signature_count
-                const status = isThresholdMet ? "Threshold Met" : petition.status || "Active"
+                const status = isThresholdMet ? "Threshold Met" : (petition.completed ? "Completed" : "Active")
 
                 return (
                   <Card key={petition.id} className="border-0 shadow-md">
@@ -1951,7 +1951,7 @@ Timestamp: ${timestamp}
                           <Button variant="outline" size="sm">
                             View Details
                           </Button>
-                          {petition.status === "ACTIVE" && !isThresholdMet && (
+                          {!petition.completed && !isThresholdMet && (
                             <Button
                               size="sm"
                               onClick={() => signPetition(petition.id)}

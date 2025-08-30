@@ -6,28 +6,33 @@ const path = require('path');
 
 const router = express.Router();
 
-const contractAddress = "0xD8E110E021a9281b8ad7A6Cf93c2b14b3e3B2712"; // Replace with real Reports contract address
 let reports;
 let signers;
-
-async function init() {
-  const Reports = await ethers.getContractFactory("Reports");
-  reports = await Reports.attach(contractAddress);
-  signers = await ethers.getSigners();
-}
-init();
-
+let contractAddress;
 function loadDeployedAddresses() {
   try {
     const p = path.join(__dirname, '..', 'deployed-addresses.json');
     if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
+      const addresses = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return addresses.Reports || null;
     }
   } catch (e) {
     console.warn('Could not load deployed-addresses.json', e.message);
   }
   return null;
 }
+async function init() {
+  contractAddress = loadDeployedAddresses();
+  if (!contractAddress) {
+    throw new Error('Reports contract address not found in deployed-addresses.json');
+  }
+  const Reports = await ethers.getContractFactory("Reports");
+  reports = await Reports.attach(contractAddress);
+  signers = await ethers.getSigners();
+}
+init();
+
+
 
 function loadContractAbi() {
   try {

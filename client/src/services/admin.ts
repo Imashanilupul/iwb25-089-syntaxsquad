@@ -5,6 +5,7 @@ import { proposalService } from './proposal'
 import { petitionService } from './petition'
 import { reportService } from './report'
 import { policyService } from './policy'
+import { policyCommentService } from './policy-comment'
 import { userService } from './user'
 
 export interface AdminDashboardData {
@@ -29,7 +30,7 @@ export interface AdminDashboardData {
   newRegistrationsThisMonth: number
   
   // Policy Data
-  activePolicies: number
+  activePolicies: number // Now represents total policies count
   totalComments: number
   
   // Report Data
@@ -87,6 +88,8 @@ export const adminService = {
         petitionsResponse,
         reportsResponse,
         policiesResponse,
+        policyStatsResponse,
+        commentStatsResponse,
         userStats,
         recentUsers
       ] = await Promise.all([
@@ -96,6 +99,8 @@ export const adminService = {
         petitionService.getAllPetitions().catch(() => ({ success: false, data: [] })),
         reportService.getAllReports().catch(() => []),
         policyService.getAllPolicies().catch(() => ({ success: false, data: [] })),
+        policyService.getPolicyStatistics().catch(() => ({ success: false, statistics: { total_policies: 0, status_distribution: {}, ministry_distribution: {} } })),
+        policyCommentService.getCommentStatistics().catch(() => ({ success: false, data: { total_comments: 0, total_likes: 0, replies_count: 0, average_likes_per_comment: 0, user_activity_breakdown: {}, policy_engagement_breakdown: {} } })),
         userService.getUserStatistics().catch(() => ({ total_users: 0, users_with_evm: 0, users_without_evm: 0, evm_adoption_percentage: 0 })),
         userService.getRecentUsers().catch(() => [])
       ])
@@ -108,6 +113,10 @@ export const adminService = {
                        petitionsResponse.success ? petitionsResponse.data : []
       const reports = Array.isArray(reportsResponse) ? reportsResponse : []
       const policies = policiesResponse.success ? policiesResponse.data : []
+      
+      // Process policy and comment statistics
+      const policyStats = policyStatsResponse.success ? policyStatsResponse.statistics : null
+      const commentStats = commentStatsResponse.success ? commentStatsResponse.data : null
 
       // Calculate budget totals
       const totalBudget = categories.reduce((sum: number, cat: any) => sum + (cat.allocated_budget || 0), 0)
@@ -129,8 +138,10 @@ export const adminService = {
       const pendingReports = reports.filter((r: any) => !r.resolved_status).length
       const resolvedReports = reports.filter((r: any) => r.resolved_status).length
 
-      // Calculate policy statistics
-      const activePolicies = policies.filter((p: any) => p.status === 'ACTIVE').length
+      // Calculate policy statistics - use real data from policy statistics API
+      const totalPolicies = policyStats?.total_policies || policies.length
+      const activePolicies = policyStats?.status_distribution?.ACTIVE || policies.filter((p: any) => p.status === 'ACTIVE').length
+      const totalComments = commentStats?.total_comments || 0
 
       // Prepare category data for charts
       const categoryData = categories.slice(0, 5).map((cat: any) => ({
@@ -169,8 +180,8 @@ export const adminService = {
         newRegistrationsThisMonth: Array.isArray(recentUsers) ? recentUsers.length : 0,
         
         // Policy Data
-        activePolicies,
-        totalComments: Math.floor(activePolicies * 290), // Estimate based on policies
+        activePolicies: totalPolicies, // Show total policies instead of just active ones
+        totalComments, // Use real comment count from database
         
         // Report Data
         pendingReports,

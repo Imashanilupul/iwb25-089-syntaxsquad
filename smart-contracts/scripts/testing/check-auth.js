@@ -1,6 +1,6 @@
 const { ethers } = require("hardhat");
 
-const CONTRACT_ADDRESS = "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9";
+const CONTRACT_ADDRESS = "0x010Fa40999Fa27a1Ac4599b3eCecC3A716A2439b";
 
 async function main() {
   console.log("📋 Listing Authorized Users and Admins");

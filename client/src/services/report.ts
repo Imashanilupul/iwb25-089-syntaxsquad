@@ -307,6 +307,38 @@ export const reportService = {
     }
   },
 
+  // Assign report to a user
+  async assignReport(reportId: number, assignedTo: string): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/assign`, {
+        assigned_to: assignedTo
+      });
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to assign report');
+    } catch (error: any) {
+      console.error('Error assigning report:', error);
+      const errorMessage = ApiService.getErrorMessage(error);
+      throw new Error(errorMessage);
+    }
+  },
+
+  // Unassign report (remove assignment)
+  async unassignReport(reportId: number): Promise<Report> {
+    try {
+      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/unassign`, {});
+      if (response.success && !Array.isArray(response.data)) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to unassign report');
+    } catch (error: any) {
+      console.error('Error unassigning report:', error);
+      const errorMessage = ApiService.getErrorMessage(error);
+      throw new Error(errorMessage);
+    }
+  },
+
   // Utility: Determine priority from likes/dislikes
   getPriorityFromVotes(likes: number = 0, dislikes: number = 0): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
     const net = likes - dislikes;

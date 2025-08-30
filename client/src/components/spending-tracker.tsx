@@ -414,6 +414,11 @@ export function SpendingTracker() {
                           <Building className="h-3 w-3" />
                           {project.ministry}
                         </span>
+                        <span className="flex items-center gap-1">
+                          <Badge variant="secondary">
+                            {project.categories?.category_name || project.category_id || "Uncategorized"}
+                          </Badge>
+                        </span>
                       </div>
                     </div>
                     <Badge className={getStatusColor(project.status)}>
@@ -450,9 +455,8 @@ export function SpendingTracker() {
 
                   <div className="flex items-center justify-between pt-2 border-t">
                     <div className="text-xs text-slate-500">
-                     
                       <span className="ml-2">
-                        • Updated {project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "Unknown"}
+                        • Updated {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : "Unknown"}
                       </span>
                     </div>
                     <Button 
