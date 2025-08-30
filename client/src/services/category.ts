@@ -52,8 +52,8 @@ class CategoryService {
   }
 
   // Sync category spent budgets
-  async syncSpentBudgets(): Promise<ApiResponse<{ successCount: number; errorCount: number }>> {
-    return await apiService.post<ApiResponse<{ successCount: number; errorCount: number }>>(`${this.baseUrl}/sync`, {})
+  async syncSpentBudgets(): Promise<any> {
+    return await apiService.post<any>(`${this.baseUrl}/sync`, {})
   }
 }
 

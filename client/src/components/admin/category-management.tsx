@@ -32,7 +32,6 @@ export function CategoryManagement() {
   const [formData, setFormData] = useState<CategoryFormData>({
     categoryName: "",
     allocatedBudget: 0,
-    spentBudget: 0, // This will be calculated automatically from projects
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -89,7 +88,6 @@ export function CategoryManagement() {
     setFormData({
       categoryName: "",
       allocatedBudget: 0,
-      spentBudget: 0, // Will be auto-calculated
     })
     setEditingId(null)
   }
@@ -172,7 +170,6 @@ export function CategoryManagement() {
     setFormData({
       categoryName: category.category_name,
       allocatedBudget: category.allocated_budget,
-      spentBudget: category.spent_budget, // Read-only, will be auto-calculated
     })
     setEditingId(category.category_id)
     setIsDialogOpen(true)
@@ -252,7 +249,7 @@ export function CategoryManagement() {
       if (response.success) {
         toast({
           title: "✅ Sync completed successfully!",
-          description: `Updated ${response.data.successCount} categories. ${response.data.errorCount} errors.`
+          description: `Updated ${response.successCount || 0} categories. ${response.errorCount || 0} errors.`
         })
         await loadCategories() // Reload the list to show updated values
       } else {
@@ -371,19 +368,7 @@ export function CategoryManagement() {
                   disabled={submitting}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="spentBudget">Spent Budget (Rs.)</Label>
-                <Input
-                  id="spentBudget"
-                  type="number"
-                  value={formData.spentBudget || 0}
-                  disabled={true}
-                  className="bg-gray-50"
-                />
-                <p className="text-xs text-gray-500">
-                  Shows total spending from all projects in this category
-                </p>
-              </div>
+
               <div className="flex gap-2">
                 <Button type="submit" className="flex-1" disabled={submitting}>
                   {submitting ? (
