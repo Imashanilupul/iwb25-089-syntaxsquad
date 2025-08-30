@@ -690,7 +690,13 @@ service /api on apiListener {
     # + return - Projects list or error
     resource function get projects() returns json|error {
         log:printInfo("Get all projects endpoint called");
-        return projectsService.getAllProjects();
+        json|error result = projectsService.getAllProjects();
+        if result is json {
+            return result;
+        } else {
+            log:printError("Failed to get projects: " + result.toString());
+            return { message: "Failed to get projects", status: 500 };
+        }
     }
 
     # Get distinct ministries from projects

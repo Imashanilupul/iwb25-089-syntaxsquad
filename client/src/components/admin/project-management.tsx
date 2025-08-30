@@ -569,6 +569,7 @@ Timestamp: ${timestamp}
         // Convert allocated budget to Wei (assuming input is in ETH for blockchain - we'll adjust this)
         const allocatedBudgetWei = (ethers as any).parseEther((parseFloat(formData.allocatedBudget) / 1000000).toString()) // Convert Rs to a reasonable ETH amount
 
+        // Only pass supported arguments to contract
         const tx = await contract.createProject(
           formData.projectName,
           categoryName,
@@ -621,7 +622,7 @@ Timestamp: ${timestamp}
             projectName: formData.projectName,
             categoryId: formData.categoryId ? parseInt(formData.categoryId) : undefined,
             allocatedBudget: parseFloat(formData.allocatedBudget),
-            spentBudget: 0,
+            spentBudget: formData.spentBudget ? parseFloat(formData.spentBudget) : 0,
             state: formData.state,
             province: formData.province,
             ministry: formData.ministry,

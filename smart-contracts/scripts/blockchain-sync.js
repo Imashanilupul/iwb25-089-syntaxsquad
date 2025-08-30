@@ -304,15 +304,13 @@ async function fetchPetitionsOptimized(blocksBack) {
 
 async function processPetition(connectedContract, i) {
   const petition = await connectedContract.getPetition(i);
-  
   // Fetch IPFS content with timeout protection
   const [title, description] = await Promise.all([
     timeoutPromise(fetchIPFSContent(petition[0]), 10000, `petition-title-${i}`),
     timeoutPromise(fetchIPFSContent(petition[1]), 10000, `petition-desc-${i}`)
   ]);
-  
   return {
-    blockchain_petition_id: i,
+    id: i,
     title: title,
     description: description,
     required_signature_count: Number(petition[2].toString()),
@@ -794,17 +792,15 @@ async function getAllPetitions() {
 
 async function createPetition(data) {
   const petitionData = {
+    id: data.id,
     title: data.title?.content || data.title || '',
     description: data.description?.content || data.description || '',
     required_signature_count: data.required_signature_count || 0,
     signature_count: data.signature_count || 0,
-    blockchain_petition_id: data.blockchain_petition_id,
     creator: data.creator || null,
-    deadline: data.deadline || null,
     completed: data.is_completed || false,
     removed: data.removed || false
   };
-  
   return await createRecord('petitions', petitionData);
 }
 
@@ -1518,46 +1514,42 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
   let updatedCount = 0;
   let removedCount = 0;
   const errors = [];
-  
+
   try {
     const dbPetitions = await getAllPetitions();
     console.log(`📊 Found ${blockchainPetitions.length} petitions in blockchain and ${dbPetitions.length} in database`);
-    
+
     const dbMap = new Map();
     const bcMap = new Map();
-    
+
     dbPetitions.forEach(p => {
-      if (p.blockchain_petition_id) {
-        dbMap.set(p.blockchain_petition_id, p);
+      if (p.id) {
+        dbMap.set(p.id, p);
       }
     });
-    
     blockchainPetitions.forEach(p => {
-      if (p.blockchain_petition_id) {
-        bcMap.set(p.blockchain_petition_id, p);
+      if (p.id) {
+        bcMap.set(p.id, p);
       }
     });
-    
-    // Phase 1: Check DB records
+
+    // Remove DB records not in blockchain
     for (const dbPetition of dbPetitions) {
-      if (!dbPetition.blockchain_petition_id) continue;
-      
-      const bcId = dbPetition.blockchain_petition_id;
+      if (!dbPetition.id) continue;
+      const bcId = dbPetition.id;
       const bcPetition = bcMap.get(bcId);
-      
       if (!bcPetition) {
         try {
           await deleteRecord('petitions', dbPetition.id);
           removedCount++;
-          console.log(`🗑️ Removed petition ${bcId} (id: ${dbPetition.id})`);
+          console.log(`🗑️ Removed petition ${bcId} (id: ${dbPetition.id}) - not found in blockchain`);
         } catch (error) {
           errors.push({ type: 'delete', id: bcId, error: error.message });
         }
         continue;
       }
-      
+      // If present in blockchain, check for updates
       const needsUpdate = comparePetitionFields(dbPetition, bcPetition);
-      
       if (needsUpdate.hasChanges) {
         try {
           await updateRecord('petitions', dbPetition.id, needsUpdate.updateData);
@@ -1568,12 +1560,11 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
         }
       }
     }
-    
-    // Phase 2: Create new records
+
+    // Add blockchain petitions not in DB
     for (const bcPetition of blockchainPetitions) {
-      const bcId = bcPetition.blockchain_petition_id;
+      const bcId = bcPetition.id;
       if (!bcId || dbMap.has(bcId)) continue;
-      
       try {
         await createPetition(bcPetition);
         newCount++;
@@ -1582,12 +1573,10 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
         errors.push({ type: 'create', id: bcId, error: error.message });
       }
     }
-    
   } catch (error) {
     console.error('❌ Error in petitions sync:', error);
     errors.push({ type: 'general', error: error.message });
   }
-  
   return {
     status: 'completed',
     fromBlock,
@@ -1823,7 +1812,6 @@ module.exports = router;
 // Add this logging to the aggregated endpoint - around line 1360, after fetching each entity type
 
 // Aggregated endpoint: return all contract data in one response given how many blocks backwards
-
 
 
 
