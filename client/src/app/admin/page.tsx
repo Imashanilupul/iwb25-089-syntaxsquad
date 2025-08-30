@@ -160,6 +160,24 @@ export default function AdminPortal() {
     }
   }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
+  // Additional redirect effect for immediate unauthenticated state
+  useEffect(() => {
+    if (!isHydrated || isLoading || isFullyAuthenticated) return
+    
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
+    
+    if (!isRecentlyAuthenticated) {
+      // Immediate redirect for clearly unauthenticated users
+      const redirectTimer = setTimeout(() => {
+        console.log('Admin page: Not authenticated, redirecting to adminLogin')
+        router.push('/adminLogin')
+      }, 1000) // Short delay to avoid race conditions
+      
+      return () => clearTimeout(redirectTimer)
+    }
+  }, [isFullyAuthenticated, isLoading, router, isHydrated])
+
   // Show loading screen during authentication check or OAuth processing
   if (!isHydrated || isLoading || isProcessingOAuth) {
     return (
@@ -200,9 +218,15 @@ export default function AdminPortal() {
       )
     }
     
-    // If not recently authenticated, redirect to login
-    router.push('/adminLogin')
-    return null
+    // Show loading while redirecting
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Redirecting to login...</p>
+        </div>
+      </div>
+    )
   }
 
   const handleWalletDisconnect = async () => {
