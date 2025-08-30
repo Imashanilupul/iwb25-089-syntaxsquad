@@ -277,6 +277,22 @@ export function ProjectManagement() {
       return
     }
 
+    // Validate allocated budget against category available budget
+    const selectedCategory = categories.find(c => c.category_id.toString() === formData.categoryId)
+    if (selectedCategory) {
+      const availableBudget = selectedCategory.allocated_budget - selectedCategory.spent_budget
+      const requestedBudget = parseFloat(formData.allocatedBudget)
+      
+      if (requestedBudget > availableBudget) {
+        toast({
+          title: "💰 Budget Exceeded",
+          description: `Requested budget (${formatCurrency(requestedBudget)}) exceeds category available budget (${formatCurrency(availableBudget)})`,
+          variant: "destructive"
+        })
+        return
+      }
+    }
+
     if (editingId) {
       // Handle project edit with blockchain integration
       if (!isConnected) {
@@ -769,10 +785,22 @@ Timestamp: ${timestamp}
     return statusItem ? statusItem.label : status
   }
 
-  const getCategoryName = (categoryId?: number) => {
-    if (!categoryId) return "No Category"
-    const category = categories.find((cat) => cat.category_id === categoryId)
-    return category ? category.category_name : "Unknown Category"
+  const getCategoryName = (project: Project) => {
+    // First try to get category name from embedded categories relationship
+    if (project.categories?.category_name) {
+      return project.categories.category_name
+    }
+    
+    // Fall back to looking up by category_id
+    if (!project.category_id) return "No Category"
+    
+    // Convert categoryId to number for comparison since categories.category_id is always number
+    const numericCategoryId = typeof project.category_id === 'string' ? parseInt(project.category_id) : project.category_id
+    
+    if (isNaN(numericCategoryId)) return "Invalid Category"
+    
+    const category = categories.find((cat) => cat.category_id === numericCategoryId)
+    return category ? category.category_name : `Unknown Category (ID: ${project.category_id})`
   }
 
   // Handle spent budget update
@@ -935,13 +963,31 @@ Timestamp: ${timestamp}
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent className="z-[10002] max-h-[200px]" position="popper">
-                      {categories.map((category) => (
-                        <SelectItem key={category.category_id} value={category.category_id.toString()}>
-                          {category.category_name}
-                        </SelectItem>
-                      ))}
+                      {categories.map((category) => {
+                        const availableBudget = category.allocated_budget - category.spent_budget
+                        return (
+                          <SelectItem key={category.category_id} value={category.category_id.toString()}>
+                            <div className="flex flex-col">
+                              <span>{category.category_name}</span>
+                              <span className="text-xs text-gray-500">
+                                Available: {formatCurrency(availableBudget)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
+                  {formData.categoryId && (
+                    <p className="text-xs text-gray-500">
+                      Available budget: {
+                        (() => {
+                          const selectedCategory = categories.find(c => c.category_id.toString() === formData.categoryId)
+                          return selectedCategory ? formatCurrency(selectedCategory.allocated_budget - selectedCategory.spent_budget) : "Unknown"
+                        })()
+                      }
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1213,7 +1259,7 @@ Timestamp: ${timestamp}
                 <TableRow key={project.project_id}>
                   <TableCell className="font-medium">{project.project_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{getCategoryName(project.category_id)}</Badge>
+                    <Badge variant="outline">{getCategoryName(project)}</Badge>
                   </TableCell>
                   <TableCell>{formatCurrency(project.allocated_budget)}</TableCell>
                   <TableCell>

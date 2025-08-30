@@ -3,7 +3,7 @@ import apiService from "./api"
 export interface Project {
   project_id: number
   project_name: string
-  category_id?: number
+  category_id?: number | string // Can be number or string depending on database storage
   allocated_budget: number
   spent_budget: number
   state: string
