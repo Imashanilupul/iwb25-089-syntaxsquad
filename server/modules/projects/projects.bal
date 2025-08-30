@@ -187,7 +187,7 @@ public class ProjectsService {
                 "status": status
             };
 
-            // Only add category_id if present and not empty
+            // Only add category_id if present and not empty (as text per database schema)
             if categoryId is int {
                 payload = check payload.mergeJson({"category_id": categoryId.toString()});
             }
@@ -269,9 +269,16 @@ public class ProjectsService {
             
             json|error categoryId = updateData.categoryId;
             if categoryId is json {
-                int|error catId = categoryId.ensureType(int);
-                if catId is int {
-                    payloadMap["category_id"] = catId;
+                // Handle category_id as text (as per database schema)
+                if categoryId is int {
+                    payloadMap["category_id"] = categoryId.toString();
+                } else if categoryId is string {
+                    payloadMap["category_id"] = categoryId;
+                } else {
+                    string|error catIdStr = categoryId.ensureType(string);
+                    if catIdStr is string {
+                        payloadMap["category_id"] = catIdStr;
+                    }
                 }
             }
             
@@ -279,7 +286,8 @@ public class ProjectsService {
             if allocatedBudget is json {
                 decimal|error budget = allocatedBudget.ensureType(decimal);
                 if budget is decimal && budget >= 0d {
-                    payloadMap["allocated_budget"] = budget;
+                    // Cast to int for database (bigint column)
+                    payloadMap["allocated_budget"] = <int>budget;
                 } else {
                     return error("Allocated budget must be non-negative");
                 }
@@ -287,9 +295,27 @@ public class ProjectsService {
             
             json|error spentBudget = updateData.spentBudget;
             if spentBudget is json {
-                decimal|error spent = spentBudget.ensureType(decimal);
-                if spent is decimal && spent >= 0d {
-                    payloadMap["spent_budget"] = spent;
+                decimal spent = 0d;
+                
+                // Handle different input types (int/decimal/string)
+                if spentBudget is int {
+                    spent = <decimal>spentBudget;
+                } else if spentBudget is decimal {
+                    spent = spentBudget;
+                } else if spentBudget is string {
+                    decimal|error parsed = decimal:fromString(spentBudget);
+                    if parsed is decimal {
+                        spent = parsed;
+                    } else {
+                        return error("Invalid spent budget format");
+                    }
+                } else {
+                    return error("Unsupported spent budget type");
+                }
+                
+                if spent >= 0d {
+                    // Cast to int for database (bigint column)
+                    payloadMap["spent_budget"] = <int>spent;
                 } else {
                     return error("Spent budget must be non-negative");
                 }
@@ -361,11 +387,60 @@ public class ProjectsService {
                 }
             }
             
+            // If only spent budget is being updated, validate against existing allocated budget
+            else if payloadMap.hasKey("spent_budget") && !payloadMap.hasKey("allocated_budget") {
+                decimal newSpent = check payloadMap["spent_budget"].ensureType(decimal);
+                
+                // Fetch current project to get allocated budget
+                map<string> headers = self.getHeaders(false);
+                string getEndpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&select=allocated_budget";
+                http:Response getResponse = check self.supabaseClient->get(getEndpoint, headers);
+                
+                if getResponse.statusCode != 200 {
+                    return error("Failed to fetch current project data for validation");
+                }
+                
+                json getResult = check getResponse.getJsonPayload();
+                json[] currentProjects = check getResult.ensureType();
+                
+                if currentProjects.length() == 0 {
+                    return error("Project not found");
+                }
+                
+                json currentProject = currentProjects[0];
+                
+                // Handle different data types from database (int/decimal/string)
+                decimal currentAllocated = 0d;
+                json|error allocatedValue = currentProject.allocated_budget;
+                if allocatedValue is json {
+                    if allocatedValue is int {
+                        currentAllocated = <decimal>allocatedValue;
+                    } else if allocatedValue is decimal {
+                        currentAllocated = allocatedValue;
+                    } else if allocatedValue is string {
+                        decimal|error parsed = decimal:fromString(allocatedValue);
+                        if parsed is decimal {
+                            currentAllocated = parsed;
+                        } else {
+                            return error("Invalid allocated budget format in database");
+                        }
+                    } else {
+                        return error("Unsupported allocated budget type in database");
+                    }
+                } else {
+                    return error("Failed to retrieve allocated budget from database");
+                }
+                
+                if newSpent > currentAllocated {
+                    return error("Spent budget cannot exceed allocated budget");
+                }
+            }
+            
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");
             }
             
-            payloadMap["updated_at"] = "now()";
+            payloadMap["updatedAt"] = "now()";
             json payload = payloadMap;
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
