@@ -320,7 +320,7 @@ export function PetitionManagement() {
           <CardContent>
             <div className="text-2xl font-bold">
               {statistics?.status_breakdown?.ACTIVE || 
-               petitions.filter((p) => p.status.toUpperCase() === "ACTIVE").length}
+               petitions.filter((p) => (p.status?.toUpperCase() === "ACTIVE")).length}
             </div>
             <p className="text-xs text-slate-500">Currently collecting signatures</p>
           </CardContent>

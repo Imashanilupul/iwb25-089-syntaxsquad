@@ -47,16 +47,22 @@ public class ProjectsService {
     public function getAllProjects() returns json|error {
         do {
             map<string> headers = self.getHeaders();
+            // Only fetch projects where removed is false (not soft-deleted)
+            string endpoint = "/rest/v1/projects?removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
+            http:Response response = check self.supabaseClient->get(endpoint, headers);
 
-            http:Response response = check self.supabaseClient->get("/rest/v1/projects?select=*,categories(category_name)&order=created_at.desc", headers);
-            
             if response.statusCode != 200 {
+                // Log Supabase error response body for debugging
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Projects retrieved successfully",
@@ -64,8 +70,9 @@ public class ProjectsService {
                 "count": projects.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
+            log:printError("getAllProjects error: " + e.message());
             return error("Failed to get projects: " + e.message());
         }
     }
@@ -79,20 +86,20 @@ public class ProjectsService {
         if projectId <= 0 {
             return error("Project ID must be a positive integer");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&select=*,categories(category_name)";
-            
+            // Only fetch if not removed
+            string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&removed=is.false&select=*,categories(category_name)";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get project: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             if projects.length() > 0 {
                 return {
                     "success": true,
@@ -103,8 +110,8 @@ public class ProjectsService {
             } else {
                 return error("Project not found");
             }
-            
         } on fail error e {
+            log:printError("getProjectById error: " + e.message());
             return error("Failed to get project: " + e.message());
         }
     }
@@ -422,19 +429,19 @@ public class ProjectsService {
         if categoryId <= 0 {
             return error("Category ID must be a positive integer");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?category_id=eq." + categoryId.toString() + "&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?category_id=eq." + categoryId.toString() + "&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects by category: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects retrieved successfully by category",
@@ -443,8 +450,8 @@ public class ProjectsService {
                 "categoryId": categoryId,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("getProjectsByCategory error: " + e.message());
             return error("Failed to get projects by category: " + e.message());
         }
     }
@@ -457,7 +464,7 @@ public class ProjectsService {
         // Validate status
         string[] validStatuses = ["PLANNED", "IN_PROGRESS", "COMPLETED", "ON_HOLD", "CANCELLED"];
         boolean isValidStatus = false;
-        foreach string validStatus in validStatuses {
+        foreach var validStatus in validStatuses {
             if status == validStatus {
                 isValidStatus = true;
                 break;
@@ -466,19 +473,19 @@ public class ProjectsService {
         if !isValidStatus {
             return error("Invalid status. Allowed values: PLANNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?status=eq." + status + "&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?status=eq." + status + "&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects by status: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects retrieved successfully by status",
@@ -487,8 +494,8 @@ public class ProjectsService {
                 "status": status,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("getProjectsByStatus error: " + e.message());
             return error("Failed to get projects by status: " + e.message());
         }
     }
@@ -502,19 +509,19 @@ public class ProjectsService {
         if ministry.trim().length() == 0 {
             return error("Ministry name cannot be empty");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?ministry=eq." + ministry + "&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?ministry=eq." + ministry + "&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects by ministry: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects retrieved successfully by ministry",
@@ -523,8 +530,8 @@ public class ProjectsService {
                 "ministry": ministry,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("getProjectsByMinistry error: " + e.message());
             return error("Failed to get projects by ministry: " + e.message());
         }
     }
@@ -538,19 +545,19 @@ public class ProjectsService {
         if state.trim().length() == 0 {
             return error("State name cannot be empty");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?state=eq." + state + "&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?state=eq." + state + "&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects by state: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects retrieved successfully by state",
@@ -559,8 +566,8 @@ public class ProjectsService {
                 "state": state,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("getProjectsByState error: " + e.message());
             return error("Failed to get projects by state: " + e.message());
         }
     }
@@ -574,19 +581,19 @@ public class ProjectsService {
         if province.trim().length() == 0 {
             return error("Province name cannot be empty");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?province=eq." + province + "&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?province=eq." + province + "&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to get projects by province: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects retrieved successfully by province",
@@ -595,8 +602,8 @@ public class ProjectsService {
                 "province": province,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("getProjectsByProvince error: " + e.message());
             return error("Failed to get projects by province: " + e.message());
         }
     }
@@ -610,21 +617,21 @@ public class ProjectsService {
         if keyword.trim().length() == 0 {
             return error("Search keyword cannot be empty");
         }
-        
         do {
-            // Search in project name and view_details fields
+            // Search in project name and view_details fields, only not removed
             string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/projects?or=(project_name.ilike." + searchTerm + ",view_details.ilike." + searchTerm + ")&select=*,categories(category_name)&order=created_at.desc";
+            string endpoint = "/rest/v1/projects?or=(project_name.ilike." + searchTerm + ",view_details.ilike." + searchTerm + ")&removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase error body: " + errorBody.toString());
+                }
                 return error("Failed to search projects: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Projects search completed successfully",
@@ -633,8 +640,8 @@ public class ProjectsService {
                 "keyword": keyword,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
+            log:printError("searchProjects error: " + e.message());
             return error("Failed to search projects: " + e.message());
         }
     }

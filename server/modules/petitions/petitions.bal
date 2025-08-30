@@ -344,28 +344,23 @@ public class PetitionsService {
         if creatorId <= 0 {
             return error("Creator ID must be a positive integer");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/petitions?creator_id=eq." + creatorId.toString() + "&select=*&order=created_at.desc";
+            string endpoint = "/rest/v1/petitions?creator_id=eq." + creatorId.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to get petitions by creator: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] petitions = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Petitions by creator retrieved successfully",
+                "message": "Petitions retrieved successfully by creator",
                 "data": petitions,
                 "count": petitions.length(),
                 "creatorId": creatorId,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get petitions by creator: " + e.message());
         }
@@ -388,28 +383,23 @@ public class PetitionsService {
         if !isValidStatus {
             return error("Invalid status. Allowed values: ACTIVE, COMPLETED, EXPIRED, CANCELLED");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/petitions?status=eq." + status + "&select=*&order=created_at.desc";
+            string endpoint = "/rest/v1/petitions?status=eq." + status + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to get petitions by status: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] petitions = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Petitions by status retrieved successfully",
+                "message": "Petitions retrieved successfully by status",
                 "data": petitions,
                 "count": petitions.length(),
                 "status": status,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get petitions by status: " + e.message());
         }
@@ -424,21 +414,16 @@ public class PetitionsService {
         if keyword.trim().length() == 0 {
             return error("Search keyword cannot be empty");
         }
-        
         do {
-            // Search in both title and description fields
-            string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/petitions?or=(title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_at.desc";
+            string searchTerm = "%" + keyword + "%";
+            string endpoint = "/rest/v1/petitions?or=(title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to search petitions: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] petitions = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Petitions search completed successfully",
@@ -447,7 +432,6 @@ public class PetitionsService {
                 "keyword": keyword,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to search petitions: " + e.message());
         }

@@ -48,15 +48,17 @@ public class ReportsService {
         do {
             map<string> headers = self.getHeaders();
 
-            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*&order=created_time.desc", headers);
-            
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?removed=eq.false&select=*&order=created_at.desc", headers);
+
             if response.statusCode != 200 {
+                string|error errorBody = response.getTextPayload();
+                log:printError("Supabase error body: " + (errorBody is string ? errorBody : "(no body)"));
                 return error("Failed to get reports: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
+
             return {
                 "success": true,
                 "message": "Reports retrieved successfully",
@@ -82,7 +84,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString() + "&removed=eq.false";
             
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
@@ -364,30 +366,25 @@ public class ReportsService {
         if userId <= 0 {
             return error("User ID must be a positive integer");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
-                return error("Failed to get reports by user ID: " + response.statusCode.toString());
+                return error("Failed to get reports by user: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Reports by user retrieved successfully",
+                "message": "Reports retrieved successfully by user",
                 "data": reports,
                 "count": reports.length(),
                 "userId": userId,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
-            return error("Failed to get reports by user ID: " + e.message());
+            return error("Failed to get reports by user: " + e.message());
         }
     }
 
@@ -408,28 +405,23 @@ public class ReportsService {
         if !isValidPriority {
             return error("Invalid priority. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?priority=eq." + priority + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?priority=eq." + priority + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to get reports by priority: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Reports by priority retrieved successfully",
+                "message": "Reports retrieved successfully by priority",
                 "data": reports,
                 "count": reports.length(),
                 "priority": priority,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get reports by priority: " + e.message());
         }
@@ -442,25 +434,21 @@ public class ReportsService {
     public function getReportsByStatus(boolean resolved) returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?resolved_status=eq." + resolved.toString() + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?resolved=eq." + resolved.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to get reports by status: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Reports by status retrieved successfully",
+                "message": "Reports retrieved successfully by status",
                 "data": reports,
                 "count": reports.length(),
                 "resolved": resolved,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get reports by status: " + e.message());
         }
@@ -475,28 +463,23 @@ public class ReportsService {
         if evidenceHash.trim().length() == 0 {
             return error("Evidence hash cannot be empty");
         }
-        
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to get reports by evidence hash: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
             return {
                 "success": true,
-                "message": "Reports by evidence hash retrieved successfully",
+                "message": "Reports retrieved successfully by evidence hash",
                 "data": reports,
                 "count": reports.length(),
                 "evidenceHash": evidenceHash,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get reports by evidence hash: " + e.message());
         }
@@ -511,21 +494,16 @@ public class ReportsService {
         if keyword.trim().length() == 0 {
             return error("Search keyword cannot be empty");
         }
-        
         do {
-            // Search in both report_title and description fields
-            string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&select=*&order=created_time.desc";
+            string searchTerm = "%" + keyword + "%";
+            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
             if response.statusCode != 200 {
                 return error("Failed to search reports: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] reports = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Reports search completed successfully",
@@ -534,7 +512,6 @@ public class ReportsService {
                 "keyword": keyword,
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to search reports: " + e.message());
         }
@@ -546,7 +523,7 @@ public class ReportsService {
     public function getReportStatistics() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            http:Response response = check self.supabaseClient->get("/rest/v1/reports?select=*", headers);
+            http:Response response = check self.supabaseClient->get("/rest/v1/reports?removed=eq.false&select=*", headers);
             
             if response.statusCode != 200 {
                 return error("Failed to get report statistics: " + response.statusCode.toString());
@@ -615,7 +592,7 @@ public class ReportsService {
     public function getRecentReports() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?created_time=gte." + "now() - interval '30 days'" + "&select=*&order=created_time.desc";
+            string endpoint = "/rest/v1/reports?created_at=gte." + "now() - interval '30 days'" + "&removed=eq.false&select=*&order=created_at.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {

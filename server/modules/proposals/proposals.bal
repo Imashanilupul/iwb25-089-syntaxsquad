@@ -47,16 +47,12 @@ public class ProposalsService {
     public function getAllProposals() returns json|error {
         do {
             map<string> headers = self.getHeaders();
-
-            http:Response response = check self.supabaseClient->get("/rest/v1/proposals?select=*&order=created_at.desc", headers);
-            
+            http:Response response = check self.supabaseClient->get("/rest/v1/proposals?removed=eq.false&select=*&order=created_at.desc", headers);
             if response.statusCode != 200 {
                 return error("Failed to get proposals: " + response.statusCode.toString());
             }
-            
             json result = check response.getJsonPayload();
             json[] proposals = check result.ensureType();
-            
             return {
                 "success": true,
                 "message": "Proposals retrieved successfully",
@@ -64,7 +60,6 @@ public class ProposalsService {
                 "count": proposals.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
         } on fail error e {
             return error("Failed to get proposals: " + e.message());
         }
@@ -82,8 +77,7 @@ public class ProposalsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/proposals?id=eq." + proposalId.toString();
-            
+            string endpoint = "/rest/v1/proposals?id=eq." + proposalId.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -387,7 +381,7 @@ public class ProposalsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/proposals?category_id=eq." + categoryId.toString() + "&select=*&order=created_at.desc";
+            string endpoint = "/rest/v1/proposals?category_id=eq." + categoryId.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -399,7 +393,7 @@ public class ProposalsService {
             
             return {
                 "success": true,
-                "message": "Proposals by category retrieved successfully",
+                "message": "Proposals retrieved successfully by category",
                 "data": proposals,
                 "count": proposals.length(),
                 "categoryId": categoryId,
@@ -418,7 +412,7 @@ public class ProposalsService {
     public function getProposalsByStatus(boolean activeStatus) returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/proposals?active_status=eq." + activeStatus.toString() + "&select=*&order=created_at.desc";
+            string endpoint = "/rest/v1/proposals?active_status=eq." + activeStatus.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -430,7 +424,7 @@ public class ProposalsService {
             
             return {
                 "success": true,
-                "message": "Proposals by status retrieved successfully",
+                "message": "Proposals retrieved successfully by status",
                 "data": proposals,
                 "count": proposals.length(),
                 "activeStatus": activeStatus,
@@ -454,7 +448,7 @@ public class ProposalsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/proposals?created_by=eq." + createdBy.toString() + "&select=*&order=created_at.desc";
+            string endpoint = "/rest/v1/proposals?created_by=eq." + createdBy.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -466,7 +460,7 @@ public class ProposalsService {
             
             return {
                 "success": true,
-                "message": "Proposals by creator retrieved successfully",
+                "message": "Proposals retrieved successfully by creator",
                 "data": proposals,
                 "count": proposals.length(),
                 "createdBy": createdBy,
@@ -489,10 +483,9 @@ public class ProposalsService {
         }
         
         do {
-            // Search in title, short_description, and description_in_details fields
-            string searchTerm = "%" + keyword + "%";
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/proposals?or=(title.ilike." + searchTerm + ",short_description.ilike." + searchTerm + ",description_in_details.ilike." + searchTerm + ")&select=*&order=created_at.desc";
+            string searchTerm = "%" + keyword + "%";
+            string endpoint = "/rest/v1/proposals?or=(title.ilike." + searchTerm + ",short_description.ilike." + searchTerm + ",description_in_details.ilike." + searchTerm + ")&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
             if response.statusCode != 200 {
@@ -504,7 +497,7 @@ public class ProposalsService {
             
             return {
                 "success": true,
-                "message": "Proposal search completed successfully",
+                "message": "Proposals search completed successfully",
                 "data": proposals,
                 "count": proposals.length(),
                 "keyword": keyword,
@@ -1133,7 +1126,7 @@ public class ProposalsService {
                                     year = yearResult is int ? yearResult : ();
                                     dayOfYear = dayResult is int ? dayResult : ();
                                 } else if nic.length() == 12 {
-                                    // New format: YYYYMMDDSSSG where YYYY is year, MMM is day of year  
+                                    // New format: YYYYMMDDSSSG where YYYY is year
                                     int|error yearResult = int:fromString(nic.substring(0, 4));
                                     int|error dayResult = int:fromString(nic.substring(4, 7));
                                     year = yearResult is int ? yearResult : ();
