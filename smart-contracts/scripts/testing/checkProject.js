@@ -6,7 +6,7 @@ const path = require('path');
 // Contract addresses for different networks
 const CONTRACT_ADDRESSES = {
   // From deployed-addresses.json
-  sepolia: "0x6e5A642acF9Ad0FFD96C54149201b2F44579d759", // Will be updated after deployment
+  sepolia: "0xed01EAc85d6d7de9130C367CF1F3748Fa36B4799", // Will be updated after deployment
   // Add other networks as needed
 };
 
@@ -139,10 +139,15 @@ async function checkProjectsData() {
         console.log(`Updated At: ${new Date(Number(project[12]) * 1000).toLocaleString()}`);
         
         // Calculate budget metrics
-        const allocatedBudget = Number(project[3]);
-        const spentBudget = Number(project[4]);
-        const remainingBudget = allocatedBudget - spentBudget;
-        const budgetUtilization = allocatedBudget > 0 ? ((spentBudget / allocatedBudget) * 100).toFixed(2) : "0.00";
+          const allocatedBudget = BigInt(project[3]);
+          const spentBudget = BigInt(project[4]);
+          const remainingBudget = allocatedBudget - spentBudget;
+          // Only convert to Number if value is safe
+          let budgetUtilization = "0.00";
+          if (allocatedBudget > 0n && spentBudget <= BigInt(Number.MAX_SAFE_INTEGER) && allocatedBudget <= BigInt(Number.MAX_SAFE_INTEGER)) {
+            budgetUtilization = ((Number(spentBudget) / Number(allocatedBudget)) * 100).toFixed(2);
+          }
+          console.log(`Allocated Budget: ${ethers.formatEther(project[3])} ETH (${project[3].toString()} wei)`);
         
         console.log(`Remaining Budget: ${ethers.formatEther(remainingBudget)} ETH (${remainingBudget.toString()} wei)`);
         console.log(`Budget Utilization: ${budgetUtilization}%`);
@@ -163,7 +168,18 @@ async function checkProjectsData() {
           try {
             console.log("\n📄 Fetching view details from IPFS...");
             const viewDetailsContent = await getFromPinata(project[8]);
-            const parsedContent = JSON.parse(viewDetailsContent);
+            let parsedContent;
+            if (typeof viewDetailsContent === 'object') {
+              parsedContent = viewDetailsContent;
+            } else {
+              try {
+                parsedContent = JSON.parse(viewDetailsContent);
+              } catch (jsonErr) {
+                // If not valid JSON, print raw content
+                console.log(`📄 Raw IPFS Content: ${viewDetailsContent}`);
+                throw jsonErr;
+              }
+            }
             console.log(`📄 View Details Type: ${parsedContent.type || 'Unknown'}`);
             console.log(`📄 View Details Content: ${parsedContent.content || 'No content'}`);
             console.log(`📄 IPFS Timestamp: ${new Date(parsedContent.timestamp || 0).toLocaleString()}`);
@@ -186,8 +202,8 @@ async function checkProjectsData() {
     
     try {
       // Calculate statistics by iterating through projects
-      let totalAllocatedBudget = 0;
-      let totalSpentBudget = 0;
+  let totalAllocatedBudget = 0n;
+  let totalSpentBudget = 0n;
       let statusCounts = {};
       let categoryCounts = {};
       let stateCounts = {};
@@ -199,8 +215,8 @@ async function checkProjectsData() {
           const project = await connectedContract.getProject(i);
           
           // Budget calculations
-          totalAllocatedBudget += Number(project[3]);
-          totalSpentBudget += Number(project[4]);
+          totalAllocatedBudget += BigInt(project[3]);
+          totalSpentBudget += BigInt(project[4]);
           
           // Count by status
           const status = project[9];
@@ -231,8 +247,10 @@ async function checkProjectsData() {
       console.log(`💰 Total Allocated Budget: ${ethers.formatEther(totalAllocatedBudget)} ETH`);
       console.log(`💸 Total Spent Budget: ${ethers.formatEther(totalSpentBudget)} ETH`);
       console.log(`💵 Total Remaining Budget: ${ethers.formatEther(totalAllocatedBudget - totalSpentBudget)} ETH`);
-      
-      const overallUtilization = totalAllocatedBudget > 0 ? ((totalSpentBudget / totalAllocatedBudget) * 100).toFixed(2) : "0.00";
+      let overallUtilization = "0.00";
+      if (totalAllocatedBudget > 0n && totalSpentBudget <= BigInt(Number.MAX_SAFE_INTEGER) && totalAllocatedBudget <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        overallUtilization = ((Number(totalSpentBudget) / Number(totalAllocatedBudget)) * 100).toFixed(2);
+      }
       console.log(`📊 Overall Budget Utilization: ${overallUtilization}%`);
       
       console.log(`\n📂 Projects by Status:`);
@@ -316,11 +334,13 @@ async function checkSpecificProject(projectId) {
     console.log(`Updated At: ${new Date(Number(projectData[12]) * 1000).toLocaleString()}`);
     
     // Calculate budget metrics
-    const allocatedBudget = Number(projectData[3]);
-    const spentBudget = Number(projectData[4]);
+    const allocatedBudget = BigInt(projectData[3]);
+    const spentBudget = BigInt(projectData[4]);
     const remainingBudget = allocatedBudget - spentBudget;
-    const budgetUtilization = allocatedBudget > 0 ? ((spentBudget / allocatedBudget) * 100).toFixed(2) : "0.00";
-    
+    let budgetUtilization = "0.00";
+    if (allocatedBudget > 0n && spentBudget <= BigInt(Number.MAX_SAFE_INTEGER) && allocatedBudget <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      budgetUtilization = ((Number(spentBudget) / Number(allocatedBudget)) * 100).toFixed(2);
+    }
     console.log(`Remaining Budget: ${ethers.formatEther(remainingBudget)} ETH`);
     console.log(`Budget Utilization: ${budgetUtilization}%`);
     

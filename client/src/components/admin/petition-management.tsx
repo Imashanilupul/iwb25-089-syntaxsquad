@@ -174,25 +174,31 @@ export function PetitionManagement() {
     setSearchResults("")
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | undefined | null) => {
+    if (!status || typeof status !== "string") {
+      return "bg-gray-100 text-gray-800";
+    }
     switch (status.toUpperCase()) {
       case "ACTIVE":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-100 text-blue-800";
       case "COMPLETED":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800";
       case "EXPIRED":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-yellow-100 text-yellow-800";
       case "CANCELLED":
-        return "bg-red-100 text-red-800"
+        return "bg-red-100 text-red-800";
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800";
     }
   }
 
-  const formatStatus = (status: string) => {
-    return status.replace("_", " ").split(" ").map(word => 
+  const formatStatus = (status: string | undefined | null) => {
+    if (!status || typeof status !== "string") {
+      return "Unknown";
+    }
+    return status.replace(/_/g, " ").split(" ").map(word => 
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(" ")
+    ).join(" ");
   }
 
   const formatNumber = (num: number) => {

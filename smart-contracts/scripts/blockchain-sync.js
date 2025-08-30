@@ -304,15 +304,13 @@ async function fetchPetitionsOptimized(blocksBack) {
 
 async function processPetition(connectedContract, i) {
   const petition = await connectedContract.getPetition(i);
-  
   // Fetch IPFS content with timeout protection
   const [title, description] = await Promise.all([
     timeoutPromise(fetchIPFSContent(petition[0]), 10000, `petition-title-${i}`),
     timeoutPromise(fetchIPFSContent(petition[1]), 10000, `petition-desc-${i}`)
   ]);
-  
   return {
-    blockchain_petition_id: i,
+    id: i,
     title: title,
     description: description,
     required_signature_count: Number(petition[2].toString()),
@@ -794,17 +792,15 @@ async function getAllPetitions() {
 
 async function createPetition(data) {
   const petitionData = {
+    id: data.id,
     title: data.title?.content || data.title || '',
     description: data.description?.content || data.description || '',
     required_signature_count: data.required_signature_count || 0,
     signature_count: data.signature_count || 0,
-    blockchain_petition_id: data.blockchain_petition_id,
     creator: data.creator || null,
-    deadline: data.deadline || null,
     completed: data.is_completed || false,
     removed: data.removed || false
   };
-  
   return await createRecord('petitions', petitionData);
 }
 
@@ -842,6 +838,7 @@ async function getAllPolicies() {
 
 async function createPolicy(data) {
   const policyData = {
+    id: data.id || null,
     name: data.name || '',
     description: data.description || '',
     ministry: data.ministry || '',
@@ -985,15 +982,15 @@ async function getAllProjects() {
 
 async function createProject(data) {
   const projectData = {
-    project_id: data.projectId || data.project_id,
-    project_name: data.projectName || '',
-    category_id: data.categoryId || '',
-    allocated_budget: data.allocatedBudget || data.allocated_budget || 0,
-    spent_budget: data.spentBudget || 0,
+    project_id: data.project_id,
+    project_name: data.project_name || '',
+    category_id: data.category_id || '',
+    allocated_budget: data.allocated_budget || 0,
+    spent_budget: data.spent_budget || 0,
     state: data.state || '',
     province: data.province || '',
     ministry: data.ministry || '',
-    view_details: data.viewDetailsCid || '',
+    view_details: data.view_details || '',
     status: data.status || '',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
@@ -1222,51 +1219,84 @@ async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
   try {
     const dbPolicies = await getAllPolicies();
     console.log(`📜 Found ${blockchainPolicies.length} policies in blockchain and ${dbPolicies.length} in database`);
+    // Build lookup maps by id
     const dbMap = new Map();
-    const bcMap = new Map();
     dbPolicies.forEach(p => { if (p.id) dbMap.set(p.id, p); });
+    const bcMap = new Map();
     blockchainPolicies.forEach(p => { if (p.id) bcMap.set(p.id, p); });
-    // Phase 1: Check DB records
+
+    // 1. Remove DB records not in blockchain
     for (const dbPolicy of dbPolicies) {
       if (!dbPolicy.id) continue;
-      const bcId = dbPolicy.id;
-      const bcPolicy = bcMap.get(bcId);
-      if (!bcPolicy) {
+      if (!bcMap.has(dbPolicy.id)) {
         try {
           await deleteRecord('policies', dbPolicy.id);
           removedCount++;
-          console.log(`🗑️ Removed policy ${bcId} (id: ${dbPolicy.id})`);
+          console.log(`🗑️ Removed policy ${dbPolicy.id} (not found in blockchain)`);
         } catch (error) {
-          errors.push({ type: 'delete', id: bcId, error: error.message });
+          errors.push({ type: 'delete', id: dbPolicy.id, error: error.message });
         }
-        continue;
       }
+    }
+
+    // 2. Update DB records if changed
+    for (const dbPolicy of dbPolicies) {
+      if (!dbPolicy.id) continue;
+      const bcPolicy = bcMap.get(dbPolicy.id);
+      if (!bcPolicy) continue;
       const needsUpdate = comparePolicyFields(dbPolicy, bcPolicy);
       if (needsUpdate.hasChanges) {
         try {
           await updateRecord('policies', dbPolicy.id, needsUpdate.updateData);
           updatedCount++;
-          console.log(`🔄 Updated policy ${bcId} (id: ${dbPolicy.id})`);
+          console.log(`🔄 Updated policy ${dbPolicy.id}`);
         } catch (error) {
-          errors.push({ type: 'update', id: bcId, error: error.message });
+          errors.push({ type: 'update', id: dbPolicy.id, error: error.message });
         }
       }
     }
-    // Phase 2: Create new records
+
+    // 3. Add blockchain records not in DB
     for (const bcPolicy of blockchainPolicies) {
-      const bcId = bcPolicy.id;
-      if (!bcId || dbMap.has(bcId)) continue;
+      if (!bcPolicy.id || dbMap.has(bcPolicy.id)) continue;
       try {
-        await createPolicy(bcPolicy);
+        // Map raw array to proper DB columns
+        const raw = bcPolicy.raw || [];
+        function toDate(val) {
+          if (val === undefined || val === null || val === '') return null;
+          const num = Number(val);
+          if (isNaN(num) || num < 1000000000) return null;
+          return new Date(num * 1000).toISOString();
+        }
+        const dbPolicyData = {
+          id: bcPolicy.id,
+          name: raw[0] || bcPolicy.name || '',
+          description: raw[1] || bcPolicy.description || '',
+          view_full_policy: raw[2] || bcPolicy.view_full_policy || '',
+          ministry: raw[3] || bcPolicy.ministry || '',
+          status: raw[4] || bcPolicy.status || '',
+          creator: raw[5] || bcPolicy.creator || '',
+          created_at: toDate(raw[6] || bcPolicy.created_at),
+          updated_at: toDate(raw[7] || bcPolicy.updated_at),
+          effective_date: toDate(raw[8] || bcPolicy.effective_date),
+          supportCount: raw[9] !== undefined ? parseInt(raw[9]) : (bcPolicy.supportCount || 0),
+          removed: raw[10] !== undefined ? Boolean(raw[10]) : (bcPolicy.removed || false),
+          isActive: raw[11] !== undefined ? Boolean(raw[11]) : (bcPolicy.isActive || false)
+        };
+        console.log('📝 Creating policy in DB:', JSON.stringify(dbPolicyData));
+        await createPolicy(dbPolicyData);
         newCount++;
-        console.log(`✅ Created new policy ${bcId}`);
+        console.log(`✅ Created policy ${bcPolicy.id}`);
       } catch (error) {
-        errors.push({ type: 'create', id: bcId, error: error.message });
+        errors.push({ type: 'create', id: bcPolicy.id, error: error.message });
       }
     }
   } catch (error) {
     console.error('❌ Error in policies sync:', error);
     errors.push({ type: 'general', error: error.message });
+  }
+  if (errors.length > 0) {
+    console.error('❌ Policy sync errors:', JSON.stringify(errors, null, 2));
   }
   return {
     status: 'completed',
@@ -1288,8 +1318,9 @@ async function syncProjectsWithData(fromBlock, toBlock, blockchainProjects) {
     console.log(`🏗️ Found ${blockchainProjects.length} projects in blockchain and ${dbProjects.length} in database`);
     const dbMap = new Map();
     const bcMap = new Map();
-  dbProjects.forEach(p => { if (p.project_id) dbMap.set(p.project_id, p); });
-  blockchainProjects.forEach(p => { if (p.projectId) bcMap.set(p.projectId, p); });
+    // Use project_id for DB, id for blockchain
+    dbProjects.forEach(p => { if (p.project_id) dbMap.set(p.project_id, p); });
+    blockchainProjects.forEach(p => { if (p.id) bcMap.set(p.id, p); });
     // Phase 1: Check DB records
     for (const dbProject of dbProjects) {
       if (!dbProject.project_id) continue;
@@ -1318,10 +1349,55 @@ async function syncProjectsWithData(fromBlock, toBlock, blockchainProjects) {
     }
     // Phase 2: Create new records
     for (const bcProject of blockchainProjects) {
-      const bcId = bcProject.projectId;
-      if (!bcId || dbMap.has(bcId)) continue;
+      const bcId = bcProject.id;
+      if (!bcId || dbMap.has(bcId)) {
+        if (!bcId) console.log('⚠️ Skipping project with missing id:', bcProject);
+        if (dbMap.has(bcId)) console.log(`⚠️ Project ${bcId} already exists in DB, skipping.`);
+        continue;
+      }
       try {
-        await createProject(bcProject);
+        // Map blockchain id to DB project_id and sanitize integer fields
+        const raw = bcProject.raw || [];
+        // If raw array exists, extract fields from it
+        const allocatedRaw = raw[3] ? Number(raw[3]) : (typeof bcProject.allocated_budget === 'string' ? Number(bcProject.allocated_budget) : (typeof bcProject.allocatedBudget === 'string' ? Number(bcProject.allocatedBudget) : (bcProject.allocated_budget || bcProject.allocatedBudget || 0)));
+        const spentRaw = raw[4] ? Number(raw[4]) : (typeof bcProject.spent_budget === 'string' ? Number(bcProject.spent_budget) : (typeof bcProject.spentBudget === 'string' ? Number(bcProject.spentBudget) : (bcProject.spent_budget || bcProject.spentBudget || 0)));
+        // Sanitize category_id: must be integer or null
+        let categoryIdRaw = raw[2] !== undefined ? raw[2] : (bcProject.category_id !== undefined ? bcProject.category_id : bcProject.categoryId);
+        let categoryIdInt = null;
+        if (categoryIdRaw !== undefined && categoryIdRaw !== null && categoryIdRaw !== '') {
+          if (typeof categoryIdRaw === 'string' && categoryIdRaw.trim() === '') categoryIdInt = null;
+          else if (!isNaN(Number(categoryIdRaw))) categoryIdInt = parseInt(categoryIdRaw);
+        }
+        // Convert block timestamp to ISO date string
+        function toDate(val) {
+          if (val === undefined || val === null || val === '') return null;
+          const num = Number(val);
+          if (isNaN(num) || num < 1000000000) return null; // not a valid timestamp
+          return new Date(num * 1000).toISOString();
+        }
+        const dbProjectData = {
+          project_id: bcProject.id,
+          project_name: raw[1] || bcProject.project_name || bcProject.projectName || '',
+          category_id: categoryIdInt,
+          allocated_budget: Math.floor(allocatedRaw / 1e12),
+          spent_budget: Math.floor(spentRaw / 1e12),
+          state: raw[5] || bcProject.state || '',
+          province: raw[6] || bcProject.province || '',
+          ministry: raw[7] || bcProject.ministry || '',
+          view_details: raw[8] || bcProject.view_details || bcProject.viewDetailsCid || '',
+          status: raw[9] || bcProject.status || '',
+          createdAt: toDate(raw[10] ? raw[10] : bcProject.createdAt),
+          updatedAt: toDate(raw[11] ? raw[11] : bcProject.updatedAt),
+          removed: raw[12] !== undefined ? Boolean(raw[12]) : (bcProject.removed || false)
+        };
+        // Ensure no empty string for integer fields
+        ['allocated_budget','spent_budget','createdAt','updatedAt'].forEach(f => {
+          if (dbProjectData[f] === undefined || dbProjectData[f] === '') dbProjectData[f] = null;
+        });
+        if (dbProjectData.category_id === undefined || dbProjectData.category_id === '') dbProjectData.category_id = null;
+        console.log('📝 Attempting to create project in DB:', JSON.stringify(dbProjectData, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+        const result = await createProject(dbProjectData);
+        console.log('📝 DB create result:', result);
         newCount++;
         console.log(`✅ Created new project ${bcId}`);
       } catch (error) {
@@ -1339,7 +1415,6 @@ async function syncProjectsWithData(fromBlock, toBlock, blockchainProjects) {
     results: { new: newCount, updated: updatedCount, removed: removedCount, errors }
   };
 }
-// ========================================
 
 // Two-phase sync for proposals
 async function syncProposalsWithData(fromBlock, toBlock, blockchainProposals) {
@@ -1439,46 +1514,42 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
   let updatedCount = 0;
   let removedCount = 0;
   const errors = [];
-  
+
   try {
     const dbPetitions = await getAllPetitions();
     console.log(`📊 Found ${blockchainPetitions.length} petitions in blockchain and ${dbPetitions.length} in database`);
-    
+
     const dbMap = new Map();
     const bcMap = new Map();
-    
+
     dbPetitions.forEach(p => {
-      if (p.blockchain_petition_id) {
-        dbMap.set(p.blockchain_petition_id, p);
+      if (p.id) {
+        dbMap.set(p.id, p);
       }
     });
-    
     blockchainPetitions.forEach(p => {
-      if (p.blockchain_petition_id) {
-        bcMap.set(p.blockchain_petition_id, p);
+      if (p.id) {
+        bcMap.set(p.id, p);
       }
     });
-    
-    // Phase 1: Check DB records
+
+    // Remove DB records not in blockchain
     for (const dbPetition of dbPetitions) {
-      if (!dbPetition.blockchain_petition_id) continue;
-      
-      const bcId = dbPetition.blockchain_petition_id;
+      if (!dbPetition.id) continue;
+      const bcId = dbPetition.id;
       const bcPetition = bcMap.get(bcId);
-      
       if (!bcPetition) {
         try {
           await deleteRecord('petitions', dbPetition.id);
           removedCount++;
-          console.log(`🗑️ Removed petition ${bcId} (id: ${dbPetition.id})`);
+          console.log(`🗑️ Removed petition ${bcId} (id: ${dbPetition.id}) - not found in blockchain`);
         } catch (error) {
           errors.push({ type: 'delete', id: bcId, error: error.message });
         }
         continue;
       }
-      
+      // If present in blockchain, check for updates
       const needsUpdate = comparePetitionFields(dbPetition, bcPetition);
-      
       if (needsUpdate.hasChanges) {
         try {
           await updateRecord('petitions', dbPetition.id, needsUpdate.updateData);
@@ -1489,12 +1560,11 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
         }
       }
     }
-    
-    // Phase 2: Create new records
+
+    // Add blockchain petitions not in DB
     for (const bcPetition of blockchainPetitions) {
-      const bcId = bcPetition.blockchain_petition_id;
+      const bcId = bcPetition.id;
       if (!bcId || dbMap.has(bcId)) continue;
-      
       try {
         await createPetition(bcPetition);
         newCount++;
@@ -1503,12 +1573,10 @@ async function syncPetitionsWithData(fromBlock, toBlock, blockchainPetitions) {
         errors.push({ type: 'create', id: bcId, error: error.message });
       }
     }
-    
   } catch (error) {
     console.error('❌ Error in petitions sync:', error);
     errors.push({ type: 'general', error: error.message });
   }
-  
   return {
     status: 'completed',
     fromBlock,
@@ -1744,7 +1812,6 @@ module.exports = router;
 // Add this logging to the aggregated endpoint - around line 1360, after fetching each entity type
 
 // Aggregated endpoint: return all contract data in one response given how many blocks backwards
-
 
 
 

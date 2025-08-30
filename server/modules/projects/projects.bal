@@ -48,7 +48,7 @@ public class ProjectsService {
         do {
             map<string> headers = self.getHeaders();
             // Only fetch projects where removed is false (not soft-deleted)
-            string endpoint = "/rest/v1/projects?removed=is.false&select=*,categories(category_name)&order=createdAt.desc";
+            string endpoint = "/rest/v1/projects?removed=is.false&order=createdAt.desc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
 
             if response.statusCode != 200 {
@@ -89,7 +89,7 @@ public class ProjectsService {
         do {
             map<string> headers = self.getHeaders();
             // Only fetch if not removed
-            string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&removed=is.false&select=*,categories(category_name)";
+            string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&removed=is.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             if response.statusCode != 200 {
                 json|error errorBody = response.getJsonPayload();
@@ -172,28 +172,35 @@ public class ProjectsService {
                 return error("Invalid status. Allowed values: PLANNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
             }
             
+
+            // Cast allocated_budget and spent_budget to int8 (bigint)
+            int allocatedBudgetInt = <int>allocatedBudget;
+            int spentBudgetInt = <int>spentBudget;
+
             json payload = {
                 "project_name": projectName,
-                "allocated_budget": allocatedBudget,
-                "spent_budget": spentBudget,
+                "allocated_budget": allocatedBudgetInt,
+                "spent_budget": spentBudgetInt,
                 "state": state,
                 "province": province,
                 "ministry": ministry,
                 "status": status
             };
-            
-            // Add optional fields if provided
+
+            // Only add category_id if present and not empty
             if categoryId is int {
-                payload = check payload.mergeJson({"category_id": categoryId});
+                payload = check payload.mergeJson({"category_id": categoryId.toString()});
             }
-            
+
             if viewDetails is string {
                 payload = check payload.mergeJson({"view_details": viewDetails});
             }
 
+            log:printInfo("Project create payload: " + payload.toString());
+
             map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/projects", payload, headers);
-            
+
             if response.statusCode == 201 {
                 // Check if response has content
                 json|error result = response.getJsonPayload();
@@ -223,6 +230,10 @@ public class ProjectsService {
                     }
                 }
             } else {
+                json|error errorBody = response.getJsonPayload();
+                if errorBody is json {
+                    log:printError("Supabase create project error: " + errorBody.toString());
+                }
                 return error("Failed to create project: " + response.statusCode.toString());
             }
 
