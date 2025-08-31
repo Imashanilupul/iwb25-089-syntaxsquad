@@ -218,15 +218,15 @@ Transparent Governance Platform is a comprehensive civic transparency and govern
 - **Backend**: Ballerina, FastAPI (Python), Express.js (Node.js)
 - **Styling**: Tailwind CSS
 - **UI Components**: Radix UI primitives
-- **Database**: Supabase
-- **Authentication**: Asgardeo + Humanode biometrics
+- **Database**: PostgreSQL
+- **Authentication**: Asgardeo 
 - **Blockchain**: Ethereum (Hardhat)
 - **AI**: Google Gemini API
-- **Vector DB**: Chroma
+- **Vector DB**: Chroma Cloud
 - **Form Handling**: React Hook Form + Zod
 - **Charts**: Recharts
 - **Icons**: Lucide React
-- **Theme**: next-themes (dark/light mode)
+
 
 ## 8) Platform URLs 🌐
 
