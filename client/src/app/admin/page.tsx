@@ -349,9 +349,9 @@ export default function AdminPortal() {
                 variant="default" 
                 size="sm" 
                 onClick={handleWalletDisconnect}
-                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                className="flex items-center gap-2 bg-black text-white hover:bg-black/90 rounded-full"
               >
-                <Wallet className="h-4 w-4" />
+                <Wallet className="w-4 h-4 mr-2" />
                 Logout
               </Button>
             </div>

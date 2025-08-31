@@ -516,39 +516,66 @@ service /api on apiListener {
     resource function post categories(http:Request request) returns json|error {
         log:printInfo("Create category endpoint called");
 
-        json payload = check request.getJsonPayload();
-
-        // Validate required fields
-        string categoryName = check payload.categoryName.ensureType(string);
-        decimal allocatedBudget = check payload.allocatedBudget.ensureType(decimal);
-        decimal spentBudget = payload.spentBudget is () ? 0d : check payload.spentBudget.ensureType(decimal);
-
-        // Validate input
-        if categoryName.trim().length() == 0 {
+        // Parse and validate payload defensively to avoid runtime KeyNotFound errors
+        json|error maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            log:printError("Invalid JSON payload for create category: " + maybePayload.message());
             return {
                 "success": false,
-                "message": "Category name cannot be empty",
+                "message": "Invalid JSON payload",
+                "error": maybePayload.message(),
                 "timestamp": time:utcNow()[0]
             };
         }
 
-        if allocatedBudget < 0d {
-            return {
-                "success": false,
-                "message": "Allocated budget cannot be negative",
-                "timestamp": time:utcNow()[0]
-            };
-        }
+        if maybePayload is map<json> {
+            map<json> payload = maybePayload;
 
-        if spentBudget < 0d {
-            return {
-                "success": false,
-                "message": "Spent budget cannot be negative",
-                "timestamp": time:utcNow()[0]
-            };
-        }
+            // Required fields
+            if !payload.hasKey("categoryName") {
+                return { "success": false, "message": "Missing required field: categoryName", "timestamp": time:utcNow()[0] };
+            }
+            if !payload.hasKey("allocatedBudget") {
+                return { "success": false, "message": "Missing required field: allocatedBudget", "timestamp": time:utcNow()[0] };
+            }
 
-        return categoriesService.createCategory(categoryName, allocatedBudget);
+            string|error categoryNameVal = payload["categoryName"].ensureType(string);
+            if categoryNameVal is error {
+                return { "success": false, "message": "Invalid field 'categoryName': must be a string", "timestamp": time:utcNow()[0] };
+            }
+
+            decimal|error allocatedBudgetVal = payload["allocatedBudget"].ensureType(decimal);
+            if allocatedBudgetVal is error {
+                return { "success": false, "message": "Invalid field 'allocatedBudget': must be a number", "timestamp": time:utcNow()[0] };
+            }
+
+            decimal spentBudget = 0d;
+            if payload.hasKey("spentBudget") {
+                decimal|error spentVal = payload["spentBudget"].ensureType(decimal);
+                if spentVal is error {
+                    return { "success": false, "message": "Invalid field 'spentBudget': must be a number", "timestamp": time:utcNow()[0] };
+                }
+                spentBudget = spentVal;
+            }
+
+            // Validate input values
+            string categoryName = categoryNameVal;
+            decimal allocatedBudget = allocatedBudgetVal;
+
+            if categoryName.trim().length() == 0 {
+                return { "success": false, "message": "Category name cannot be empty", "timestamp": time:utcNow()[0] };
+            }
+            if allocatedBudget < 0d {
+                return { "success": false, "message": "Allocated budget cannot be negative", "timestamp": time:utcNow()[0] };
+            }
+            if spentBudget < 0d {
+                return { "success": false, "message": "Spent budget cannot be negative", "timestamp": time:utcNow()[0] };
+            }
+
+            return categoriesService.createCategory(categoryName, allocatedBudget);
+        } else {
+            return { "success": false, "message": "Invalid request payload: expected JSON object", "timestamp": time:utcNow()[0] };
+        }
     }
 
     # Update category by ID

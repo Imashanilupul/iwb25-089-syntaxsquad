@@ -1,13 +1,30 @@
-'use client'
+"use client"
 
 import { useAppKitAccount, useDisconnect } from '@reown/appkit/react'
 import { Button } from "@/components/ui/button"
 import { XCircle } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
 
 export const ConnectButton = () => {
+  const { address, isConnected } = useAppKitAccount()
+  const { isRegisteredUser } = useAuth()
+
+  const shortAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null
+
   return (
-    <div >
+    <div className="flex flex-col items-end">
+      <div>
         <appkit-button />
+      </div>
+
+      {isConnected && address && (
+        <div className="mt-1 text-right">
+          {/* <div className="text-sm text-slate-700">{shortAddr}</div> */}
+          {!isRegisteredUser && (
+            <div className="text-xs text-red-600">Unregistered wallet</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -33,7 +33,8 @@ import { policyService } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 
 export default function CivicPlatform() {
-  const { address } = useAuth()
+  const { address, isRegisteredUser } = useAuth()
+  const showRegistration = !address || !isRegisteredUser
   const [activeTab, setActiveTab] = useState("overview")
   const [userCount, setUserCount] = useState<number>(0)
   const [userChangePct, setUserChangePct] = useState<number>(0)
@@ -217,7 +218,7 @@ export default function CivicPlatform() {
       <div className="container mx-auto p-6">
         {/* Top-right fixed buttons */}
         <div className="fixed top-6 right-6 z-[10000] flex gap-3">
-          <RegistrationDialog />
+          {showRegistration && <RegistrationDialog />}
           <ConnectButton />
         </div>
 
@@ -477,6 +478,14 @@ export default function CivicPlatform() {
       </footer>
 
       {/* Chat Widget Container */}
+      {/* {address && !isRegisteredUser && (
+        <div className="fixed bottom-20 right-6 z-[9998]">
+          <div className="rounded bg-yellow-100 text-yellow-800 px-3 py-1 text-sm shadow">
+            
+          </div>
+        </div>
+      )} */}
+
       <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999]">
         <ChatWidget />
       </div>
