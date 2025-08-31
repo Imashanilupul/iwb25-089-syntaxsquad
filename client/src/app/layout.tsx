@@ -9,7 +9,15 @@ import { Toaster } from "sonner";
 export const metadata: Metadata = {
   title: "Sri Lanka Transparent Governance Platform",
   description: "Created with v0",
-  generator: "v0.dev",
+  generator: "dark grecher",
+  icons: {
+    icon: '/images/sri-lanka-emblem.png',
+    apple: '/images/sri-lanka-emblem.png',
+    other: {
+      rel: 'icon',
+      url: '/images/sri-lanka-emblem.png',
+    },
+  },
 };
 
 export default function RootLayout({
