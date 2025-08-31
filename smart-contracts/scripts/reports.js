@@ -23,13 +23,20 @@ function loadDeployedAddresses() {
   return null;
 }
 async function init() {
-  contractAddress = loadDeployedAddresses();
-  if (!contractAddress) {
-    throw new Error('Reports contract address not found in deployed-addresses.json');
+  try {
+    contractAddress = loadDeployedAddresses();
+    if (!contractAddress) {
+      throw new Error('Reports contract address not found in deployed-addresses.json');
+    }
+    const Reports = await ethers.getContractFactory("Reports");
+    reports = await Reports.attach(contractAddress);
+    signers = await ethers.getSigners();
+    console.log('Reports contract attached at', contractAddress);
+  } catch (e) {
+    console.warn('Could not initialize on-chain Reports contract:', e.message || e);
+    // rethrow so failures are visible during startup (consistent with petitions.js)
+    throw e;
   }
-  const Reports = await ethers.getContractFactory("Reports");
-  reports = await Reports.attach(contractAddress);
-  signers = await ethers.getSigners();
 }
 init();
 
@@ -51,9 +58,9 @@ function loadContractAbi() {
 
 // New endpoint: prepare data for frontend-signed transaction
 router.post('/prepare-report', async (req, res) => {
-  const { title, description, evidenceHash, draftId } = req.body || {};
-  if (!title || !description || !evidenceHash) {
-    return res.status(400).json({ success: false, error: 'Missing title, description, or evidence hash' });
+  const { title, description, draftId } = req.body || {};
+    if (!title || !description) {
+      return res.status(400).json({ success: false, error: 'Missing title or description' });
   }
 
   try {
@@ -64,27 +71,27 @@ router.post('/prepare-report', async (req, res) => {
     const descriptionCid = await uploadDescriptionToPinata(description);
     console.log('✅ Uploaded description CID:', descriptionCid);
 
-    // Upload evidence hash to IPFS as well for additional security
-    const evidenceHashCid = await uploadDescriptionToPinata(evidenceHash);
-    console.log('✅ Uploaded evidence hash CID:', evidenceHashCid);
+  // evidence handling removed - contract and DB no longer store evidence
 
-    const addresses = loadDeployedAddresses();
-    const deployedContractAddress = addresses && addresses.Reports ? addresses.Reports : contractAddress;
+
+  // prefer a fresh read from deployed-addresses.json, fall back to the cached value
+  const deployedContractAddress = loadDeployedAddresses() || contractAddress || null;
     const contractAbi = loadContractAbi();
 
     if (!deployedContractAddress) {
-      console.warn('No deployed Reports contract address found');
+      console.error('No deployed Reports contract address found. Check deployed-addresses.json or contract deployment.');
+      return res.status(500).json({ success: false, error: 'Reports contract address not found on server' });
     }
     if (!contractAbi) {
-      console.warn('No Reports contract ABI found in artifacts');
+      console.error('No Reports contract ABI found in artifacts. Ensure contracts were compiled.');
+      return res.status(500).json({ success: false, error: 'Reports contract ABI not available on server' });
     }
 
     return res.json({
       success: true,
       draftId: draftId || null,
       titleCid,
-      descriptionCid,
-      evidenceHashCid,
+  descriptionCid,
       contractAddress: deployedContractAddress,
       contractAbi,
     });
@@ -94,16 +101,130 @@ router.post('/prepare-report', async (req, res) => {
   }
 });
 
+// Create a report: perform on-chain tx, wait for mining, then create DB record
 router.post("/create-report", async (req, res) => {
-  const { titleCid, descriptionCid, evidenceHashCid, signerIndex } = req.body;
-  try {
-    const tx = await reports.connect(signers[signerIndex]).createReport(titleCid, descriptionCid, evidenceHashCid);
-    const receipt = await tx.wait();
+  const {
+    reportTitle,
+    description,
+    titleCid: providedTitleCid,
+    descriptionCid: providedDescriptionCid,
+    signerIndex = 0,
+    walletAddress,
+    priority = 'MEDIUM',
+    assignedTo,
+    userId,
+  } = req.body || {};
 
-    let reportId = await reports.reportCount();
-    res.json({ reportId: reportId.toString() });
+  let titleCid = providedTitleCid;
+  let descriptionCid = providedDescriptionCid;
+
+  try {
+  // If client provided a txHash, verify the on-chain receipt first and then create DB
+    if (req.body && req.body.txHash) {
+      const txHash = req.body.txHash;
+      const provider = signers && signers[0] && signers[0].provider;
+      let receipt = null;
+      if (provider) {
+        receipt = await provider.getTransactionReceipt(txHash);
+      } else {
+        // Try using default ethers provider if available
+        try {
+          const { ethers } = require('ethers');
+          const defaultProvider = ethers.getDefaultProvider();
+          receipt = await defaultProvider.getTransactionReceipt(txHash);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (!receipt) {
+        return res.status(202).json({ success: false, message: 'Transaction not yet mined', txHash });
+      }
+
+      if (receipt.status !== 1) {
+        return res.status(400).json({ success: false, message: 'Transaction failed on-chain', txHash, receipt });
+      }
+
+      // Build payload for Ballerina backend using client-provided fields
+      const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
+      const payload = {
+        report_title: reportTitle || req.body.reportTitle || null,
+        description: description || req.body.description || null,
+        priority: priority || req.body.priority || 'MEDIUM',
+        assigned_to: assignedTo || req.body.assignedTo || null,
+        user_id: userId || req.body.userId || null,
+        wallet_address: walletAddress || req.body.walletAddress || null,
+        tx_hash: txHash,
+        block_number: req.body.blockNumber || receipt.blockNumber,
+        blockchain_report_id: req.body.blockchainReportId || null,
+        title_cid: titleCid || req.body.titleCid || null,
+        description_cid: descriptionCid || req.body.descriptionCid || null,
+      };
+
+      try {
+        const resp = await axios.post(`${ballerinaUrl}/api/reports`, payload, { headers: { 'Content-Type': 'application/json' } });
+        return res.json({ success: true, message: 'On-chain verified and DB create succeeded', db: resp.data, txReceipt: receipt });
+      } catch (dbErr) {
+        console.error('Failed to create DB record after client on-chain tx:', dbErr.message || dbErr);
+        return res.status(502).json({ success: false, message: 'On-chain succeeded but DB create failed', error: dbErr.message || String(dbErr), txReceipt: receipt });
+      }
+    }
+
+    // Fallback: if no txHash provided, server will perform the on-chain tx and then create DB
+    const signer = signers[signerIndex] || signers[0];
+    if (!signer) return res.status(500).json({ success: false, error: 'No signer available' });
+
+    // If CIDs weren't provided by client, upload text to IPFS like petitions flow
+    if (!titleCid && reportTitle) {
+      console.log('📤 Uploading report title to IPFS (server-side)...');
+      titleCid = await uploadDescriptionToPinata(reportTitle);
+      console.log('✅ Uploaded title CID:', titleCid);
+    }
+    if (!descriptionCid && description) {
+      console.log('📤 Uploading report description to IPFS (server-side)...');
+      descriptionCid = await uploadDescriptionToPinata(description);
+      console.log('✅ Uploaded description CID:', descriptionCid);
+    }
+
+    // Ensure required CIDs exist
+    if (!titleCid || !descriptionCid) {
+      return res.status(400).json({ success: false, error: 'Missing titleCid or descriptionCid; provide text or CIDs' });
+    }
+
+  // Call the contract (two-argument createReport: titleCid, descriptionCid)
+  const tx = await reports.connect(signer).createReport(titleCid, descriptionCid);
+  const receipt = await tx.wait();
+
+    if (!receipt || receipt.status !== 1) {
+      return res.status(400).json({ success: false, message: 'On-chain transaction failed', txHash: tx.hash, receipt });
+    }
+
+    // Build payload for Ballerina backend (match server expected keys)
+    const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
+    const payload = {
+      report_title: reportTitle || null,
+      description: description || null,
+      priority: priority || 'MEDIUM',
+      assigned_to: assignedTo || null,
+      user_id: userId || null,
+      wallet_address: walletAddress || (signer.address ? signer.address : null),
+      tx_hash: tx.hash,
+      block_number: receipt.blockNumber,
+      blockchain_report_id: null,
+      title_cid: titleCid,
+      description_cid: descriptionCid,
+    };
+
+    try {
+      const resp = await axios.post(`${ballerinaUrl}/api/reports`, payload, { headers: { 'Content-Type': 'application/json' } });
+      return res.json({ success: true, message: 'On-chain and DB create succeeded', db: resp.data, txReceipt: receipt });
+    } catch (dbErr) {
+      console.error('Failed to create DB record after on-chain tx:', dbErr.message || dbErr);
+      return res.status(502).json({ success: false, message: 'On-chain succeeded but DB create failed', error: dbErr.message || String(dbErr), txReceipt: receipt });
+    }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('create-report error', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
   }
 });
 
@@ -182,88 +303,25 @@ router.post("/reopen-report", async (req, res) => {
   }
 });
 
-// Endpoint: after a client-side (wallet) transaction confirmed, notify this service
-// so it can validate the tx and create the DB row via the Ballerina backend.
-router.post('/notify-create-report', async (req, res) => {
-  const {
-    reportTitle,
-    description,
-    priority,
-    walletAddress,
-    txHash,
-    blockNumber,
-    blockchainReportId,
-    titleCid,
-    descriptionCid,
-    evidenceHashCid
-  } = req.body || {};
-
-  if (!txHash) {
-    return res.status(400).json({ success: false, error: 'txHash is required' });
-  }
-
-  try {
-    // Attempt to verify the transaction receipt using the first signer/provider
-    const provider = signers && signers[0] && signers[0].provider;
-    let receipt = null;
-    if (provider) {
-      receipt = await provider.getTransactionReceipt(txHash);
-    }
-
-    if (!receipt) {
-      // If no receipt found, respond with 202 Accepted so client can retry later
-      return res.status(202).json({ success: false, message: 'Transaction not yet mined', txHash });
-    }
-
-    if (receipt.status !== 1) {
-      return res.status(400).json({ success: false, message: 'Transaction failed on-chain', txHash, receipt });
-    }
-
-    // Build payload for Ballerina backend
-    const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
-    const payload = {
-      report_title: reportTitle,
-      description: description,
-      priority: priority || 'MEDIUM',
-      wallet_address: walletAddress,
-      tx_hash: txHash,
-      block_number: blockNumber || receipt.blockNumber,
-      blockchain_report_id: blockchainReportId || null,
-      title_cid: titleCid || null,
-      description_cid: descriptionCid || null,
-      evidence_hash_cid: evidenceHashCid || null
-    };
-
-    try {
-      const resp = await axios.post(`${ballerinaUrl}/api/reports`, payload, { headers: { 'Content-Type': 'application/json' } });
-      return res.json({ success: true, message: 'DB created', db: resp.data, txReceipt: receipt });
-    } catch (dbErr) {
-      console.error('Failed to create DB record:', dbErr.message || dbErr);
-      return res.status(500).json({ success: false, message: 'On-chain succeeded but DB create failed', error: dbErr.message || String(dbErr), txReceipt: receipt });
-    }
-  } catch (err) {
-    console.error('notify-create-report error', err);
-    return res.status(500).json({ success: false, error: err.message || String(err) });
-  }
-});
+// NOTE: legacy notify endpoint removed to keep a single clear flow: on-chain tx then DB create
 
 router.get("/report/:id", async (req, res) => {
   try {
     const report = await reports.getReport(req.params.id);
     
     // Convert BigInt values to strings for JSON serialization
-    const serializedReport = {
-      titleCid: report[0],
-      descriptionCid: report[1],
-      evidenceHashCid: report[2],
-      upvotes: report[3].toString(),
-      downvotes: report[4].toString(),
-      creator: report[5],
-      resolved: report[6],
-      assignedTo: report[7],
-      createdAt: report[8].toString(),
-      resolvedAt: report[9].toString()
-    };
+      // Contract getReport returns: titleCid, descriptionCid, upvotes, downvotes, creator, resolved, createdAt, resolvedAt, removed
+      const serializedReport = {
+        titleCid: report[0],
+        descriptionCid: report[1],
+        upvotes: report[2].toString(),
+        downvotes: report[3].toString(),
+        creator: report[4],
+        resolved: report[5],
+        createdAt: report[6].toString(),
+        resolvedAt: report[7].toString(),
+        removed: report[8]
+      };
     
     res.json(serializedReport);
   } catch (err) {
@@ -341,19 +399,19 @@ router.get("/reports", async (req, res) => {
       try {
         const report = await reports.getReport(i);
         const votes = await reports.getReportVotes(i);
-        
+
+        // Contract getReport returns: titleCid, descriptionCid, upvotes, downvotes, creator, resolved, createdAt, resolvedAt, removed
         reportsData.push({
           id: i.toString(),
           titleCid: report[0],
           descriptionCid: report[1],
-          evidenceHashCid: report[2],
-          upvotes: report[3].toString(),
-          downvotes: report[4].toString(),
-          creator: report[5],
-          resolved: report[6],
-          assignedTo: report[7],
-          createdAt: report[8].toString(),
-          resolvedAt: report[9].toString(),
+          upvotes: report[2].toString(),
+          downvotes: report[3].toString(),
+          creator: report[4],
+          resolved: report[5],
+          createdAt: report[6].toString(),
+          resolvedAt: report[7].toString(),
+          removed: report[8],
           netVotes: votes[2].toString(),
           totalVotes: votes[3].toString()
         });
@@ -362,7 +420,6 @@ router.get("/reports", async (req, res) => {
         continue;
       }
     }
-    
     res.json({
       reports: reportsData,
       totalReports,
@@ -399,14 +456,13 @@ router.get("/reports/filter", async (req, res) => {
           id: i.toString(),
           titleCid: report[0],
           descriptionCid: report[1],
-          evidenceHashCid: report[2],
-          upvotes: report[3].toString(),
-          downvotes: report[4].toString(),
-          creator: report[5],
-          resolved: report[6],
-          assignedTo: report[7],
-          createdAt: report[8].toString(),
-          resolvedAt: report[9].toString(),
+          upvotes: report[2].toString(),
+          downvotes: report[3].toString(),
+          creator: report[4],
+          resolved: report[5],
+          assignedTo: report[6],
+          createdAt: report[7].toString(),
+          resolvedAt: report[8].toString(),
           netVotes: votes[2].toString(),
           totalVotes: votes[3].toString()
         });

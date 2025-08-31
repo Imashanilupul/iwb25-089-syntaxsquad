@@ -1436,13 +1436,23 @@ service /api on apiListener {
     # + return - Created report data or error
     resource function post reports(http:Request request) returns json|error {
         log:printInfo("Create report endpoint called");
+        // Parse JSON payload defensively so we can return clear errors instead of 500
+        json payload;
+        var maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            log:printError("Create report: invalid JSON payload: " + maybePayload.message());
+            return error("Invalid JSON payload");
+        }
+        payload = maybePayload;
 
-        json payload = check request.getJsonPayload();
-
-    // Extract required fields
-    string reportTitle = check payload.report_title;
-    // evidence_hash is optional now (frontend may omit it)
-    string? evidenceHash = payload.evidence_hash is string ? check payload.evidence_hash : ();
+    // Extract required fields (return explicit error when missing)
+    string? reportTitleOpt = payload.report_title is string ? check payload.report_title : ();
+    if reportTitleOpt is () {
+        log:printError("Create report: missing report_title in payload: " + payload.toString());
+        return error("Missing required field: report_title");
+    }
+    string reportTitle = reportTitleOpt;
+    // evidence_hash removed from payload/schema
 
     // Extract optional fields
     string? description = payload.description is string ? check payload.description : ();
@@ -1456,9 +1466,9 @@ service /api on apiListener {
     string? blockchainReportId = payload.blockchain_report_id is string ? check payload.blockchain_report_id : ();
     string? titleCid = payload.title_cid is string ? check payload.title_cid : ();
     string? descriptionCid = payload.description_cid is string ? check payload.description_cid : ();
-    string? evidenceHashCid = payload.evidence_hash_cid is string ? check payload.evidence_hash_cid : ();
 
-    return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid, evidenceHashCid);
+    // Call ReportsService.createReport without evidenceHash/evidenceHashCid
+    return reportsService.createReport(reportTitle, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid);
     }
 
     # Update report by ID
@@ -1509,13 +1519,10 @@ service /api on apiListener {
         return reportsService.getReportsByStatus(resolved);
     }
 
-    # Get reports by evidence hash
-    #
-    # + evidenceHash - Evidence hash to search for
-    # + return - Filtered reports list or error
+    # Get reports by evidence hash (removed)
+    # + return - Unsupported endpoint error
     resource function get reports/evidence/[string evidenceHash]() returns json|error {
-        log:printInfo("Get reports by evidence hash endpoint called for hash: " + evidenceHash);
-        return reportsService.getReportsByEvidenceHash(evidenceHash);
+        return error("Reports by evidence hash endpoint is unsupported: evidence field removed from schema");
     }
 
     # Search reports by keyword
@@ -3051,7 +3058,8 @@ function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|erro
                 creator = check report.creator_address.ensureType(string);
             }
 
-            json|error createResult = reportsService.createReport(title, "blockchain_evidence", description, priority, creator, ());
+            // creator from blockchain is an address string; pass as assignedTo until mapping exists
+            json|error createResult = reportsService.createReport(title, description, priority, creator, ());
             if createResult is json {
                 newCount += 1;
                 log:printInfo(string `✅ Created report ${blockchainId}`);

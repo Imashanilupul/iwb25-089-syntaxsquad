@@ -6,7 +6,7 @@ const path = require('path');
 // Contract addresses for different networks
 const CONTRACT_ADDRESSES = {
   // From deployed-addresses.json
-  sepolia: "0x801ea44134FE48150915D3d203FEe3527bA7b410", // Update this with your actual Sepolia address
+  sepolia: "0xA174A3442e69734077c95aEB0C9c0AAFF9aed3Bc", // Update this with your actual Sepolia address
   // Add other networks as needed
 };
 
@@ -117,16 +117,20 @@ async function checkReportsData() {
         const report = await connectedContract.getReport(i);
         const votes = await connectedContract.getReportVotes(i);
         
-        const titleCid = report[0];
-        const descriptionCid = report[1];
-        const evidenceHashCid = report[2];
-        const upvotes = report[3];
-        const downvotes = report[4];
-        const creator = report[5];
-        const resolved = report[6];
-        const assignedTo = report[7];
-        const createdAt = report[8];
-        const resolvedAt = report[9];
+  // Support both old (title, description, evidence, ...) and new (title, description, ...)
+  const titleCid = report[0];
+  const descriptionCid = report[1];
+  // If contract returns evidenceCid as third element, preserve it; otherwise undefined
+  const possibleThird = report[2];
+  const hasEvidenceCid = typeof possibleThird === 'string' && possibleThird.trim().length > 0;
+  const evidenceHashCid = hasEvidenceCid ? possibleThird : undefined;
+  const upvotes = report[ hasEvidenceCid ? 3 : 2 ];
+  const downvotes = report[ hasEvidenceCid ? 4 : 3 ];
+  const creator = report[ hasEvidenceCid ? 5 : 4 ];
+  const resolved = report[ hasEvidenceCid ? 6 : 5 ];
+  const assignedTo = report[ hasEvidenceCid ? 7 : 6 ];
+  const createdAt = report[ hasEvidenceCid ? 8 : 7 ];
+  const resolvedAt = report[ hasEvidenceCid ? 9 : 8 ];
         
         // Votes data
         const netVotes = votes[2];
@@ -136,7 +140,11 @@ async function checkReportsData() {
         console.log(`👤 Creator: ${creator}`);
         console.log(`📝 Title CID: ${titleCid}`);
         console.log(`📄 Description CID: ${descriptionCid}`);
-        console.log(`🔍 Evidence Hash CID: ${evidenceHashCid}`);
+        if (evidenceHashCid) {
+          console.log(`🔍 Evidence Hash CID: ${evidenceHashCid}`);
+        } else {
+          console.log('🔍 Evidence Hash CID: <none>');
+        }
         console.log(`👍 Upvotes: ${upvotes.toString()}`);
         console.log(`👎 Downvotes: ${downvotes.toString()}`);
         console.log(`📊 Net Votes: ${netVotes.toString()}`);
@@ -178,11 +186,13 @@ async function checkReportsData() {
           console.log(`❌ Could not fetch description from IPFS: ${ipfsError.message}`);
         }
         
-        try {
-          const evidenceHash = await getFromPinata(evidenceHashCid);
-          console.log(`🔍 Evidence Hash: "${evidenceHash.substring(0, 50)}${evidenceHash.length > 50 ? '...' : ''}"`);
-        } catch (ipfsError) {
-          console.log(`❌ Could not fetch evidence hash from IPFS: ${ipfsError.message}`);
+        if (evidenceHashCid) {
+          try {
+            const evidenceHash = await getFromPinata(evidenceHashCid);
+            console.log(`🔍 Evidence Hash: "${evidenceHash.substring(0, 50)}${evidenceHash.length > 50 ? '...' : ''}"`);
+          } catch (ipfsError) {
+            console.log(`❌ Could not fetch evidence hash from IPFS: ${ipfsError.message}`);
+          }
         }
         
       } catch (error) {

@@ -2,9 +2,9 @@ const axios = require("axios");
 const FormData = require("form-data");
 const { Buffer } = require("buffer");
 
-// Load API keys from environment variables
-const PINATA_API_KEY = "12ad016cf769c3ca4480";
-const PINATA_SECRET_API_KEY = "ebfefaf77f032697f3da449271ee30b3bd73dbbf2a79c21e449bbc4f07527f26";
+// Load API keys from environment variables (fall back to embedded values if not provided)
+const PINATA_API_KEY = process.env.PINATA_API_KEY || "12ad016cf769c3ca4480";
+const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY || "ebfefaf77f032697f3da449271ee30b3bd73dbbf2a79c21e449bbc4f07527f26";
 
 async function uploadDescriptionToPinata(text) {
   const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
@@ -15,7 +15,8 @@ async function uploadDescriptionToPinata(text) {
 
   try {
     const res = await axios.post(url, formData, {
-      maxBodyLength: "Infinity",
+      // allow large payloads
+      maxBodyLength: Infinity,
       headers: {
         ...formData.getHeaders(),
         pinata_api_key: PINATA_API_KEY,
@@ -26,7 +27,7 @@ async function uploadDescriptionToPinata(text) {
     console.log("✅ Uploaded to IPFS with CID:", res.data.IpfsHash);
     return res.data.IpfsHash;
   } catch (error) {
-    console.error("❌ Error uploading to Pinata:", error.response?.data || error.message);
+  console.error("❌ Error uploading to Pinata:", error.response?.data || error.message);
     throw error;
   }
 }
@@ -42,7 +43,4 @@ async function getFromPinata(cid) {
     throw error;
   }
 }
-
-getFromPinata("Qmd3BftiZ81NniGXSjWViEFdaamAFyKV5PTLYnSDRDYFJN")
-
 module.exports = { uploadDescriptionToPinata, getFromPinata };
