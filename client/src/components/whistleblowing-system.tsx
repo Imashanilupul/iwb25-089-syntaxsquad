@@ -391,60 +391,50 @@ Timestamp: ${timestamp}
         console.warn("Could not parse event for report id", e)
       }
 
-      // Step 10: After successful blockchain tx, create the final report record in backend
+      // Step 10: After successful blockchain tx, notify the web3 service which will
+      // validate the tx and create the DB record via the backend. This ensures
+      // the DB write only happens after on-chain confirmation.
       try {
-        const createResp = await fetch("http://localhost:8080/api/reports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_SMART_CONTRACTS_API || 'http://localhost:3001';
+        const notifyResp = await fetch(`${SMART_CONTRACTS_API_BASE}/report/notify-create-report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            report_title: reportForm.title,
+            reportTitle: reportForm.title,
             description: reportForm.description,
             priority: getCategoryPriority(reportForm.category),
-            wallet_address: address,
-            tx_hash: tx.hash,
-            block_number: receipt.blockNumber,
-            blockchain_report_id: blockchainReportId,
-            title_cid: titleCid,
-            description_cid: descriptionCid,
-          }),
-        })
+            walletAddress: address,
+            txHash: tx.hash,
+            blockNumber: receipt.blockNumber,
+            blockchainReportId: blockchainReportId,
+            titleCid,
+            descriptionCid,
+            evidenceHashCid
+          })
+        });
 
-        if (!createResp.ok) {
-          const txt = await createResp.text()
-          console.warn("Backend create returned non-ok status:", createResp.status, txt)
-          throw new Error(`Failed to create report: ${createResp.status} ${txt}`)
+        if (!notifyResp.ok) {
+          const txt = await notifyResp.text();
+          console.warn('Notify create returned non-ok status:', notifyResp.status, txt);
+          throw new Error(`Failed to notify create: ${notifyResp.status} ${txt}`);
         }
 
-        toast({
-          title: "✅ Report submitted successfully!",
-          description: "Your anonymous report has been saved to blockchain and backend",
-        })
+        const notifyJson = await notifyResp.json();
+        if (notifyJson.success) {
+          toast({ title: '✅ Report submitted successfully!', description: 'Your anonymous report has been saved to blockchain and backend' });
 
-        // Refresh report statistics to include the new report
-        await refreshReportStatistics();
+          // Refresh report statistics to include the new report
+          await refreshReportStatistics();
 
-        // Reset form
-        setReportForm({
-          category: "",
-          title: "",
-          description: "",
-        })
-
-        console.log("Report submitted:", {
-          blockchainReportId,
-          txHash: tx.hash,
-          titleCid,
-          descriptionCid,
-          evidenceHashCid,
-        })
+          // Reset form
+          setReportForm({ category: '', title: '', description: '' });
+        } else {
+          console.warn('notify-create-report response:', notifyJson);
+          throw new Error(notifyJson.message || 'Unknown error creating report in DB');
+        }
       } catch (err) {
-        console.error("Failed to persist report after tx:", err)
-        toast({
-          title: "⚠️ Backend save failed",
-          description:
-            "The blockchain transaction succeeded but saving the report to the backend failed. Please contact an administrator or try again.",
-          variant: "destructive",
-        })
+        console.error('Failed to persist report after tx via notify-create-report:', err);
+        toast({ title: 'Report saved on-chain but failed to persist in DB', description: String(err), variant: 'destructive' });
       }
     } catch (error: any) {
       console.error("Failed to submit report:", error)

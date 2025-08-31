@@ -3,6 +3,7 @@ const { ethers } = require("hardhat");
 const { uploadDescriptionToPinata, getFromPinata } = require("./ipfs.js");
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -155,7 +156,16 @@ router.post("/resolve-report", async (req, res) => {
   try {
     const tx = await reports.connect(signers[signerIndex]).resolveReport(reportId);
     await tx.wait();
-    res.json({ message: "Report resolved!" });
+    // After on-chain confirmation, update the backend DB via Ballerina server
+    try {
+      const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
+      const resp = await axios.post(`${ballerinaUrl}/api/reports/${reportId}/resolve`);
+      return res.json({ message: "Report resolved on-chain and DB updated", db: resp.data });
+    } catch (dbErr) {
+      // If DB update fails, still return success for the on-chain tx but indicate DB error
+      console.error('Failed to update DB after on-chain resolve:', dbErr.message || dbErr);
+      return res.status(500).json({ message: 'On-chain resolve succeeded but DB update failed', error: dbErr.message || String(dbErr) });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -169,6 +179,71 @@ router.post("/reopen-report", async (req, res) => {
     res.json({ message: "Report reopened!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: after a client-side (wallet) transaction confirmed, notify this service
+// so it can validate the tx and create the DB row via the Ballerina backend.
+router.post('/notify-create-report', async (req, res) => {
+  const {
+    reportTitle,
+    description,
+    priority,
+    walletAddress,
+    txHash,
+    blockNumber,
+    blockchainReportId,
+    titleCid,
+    descriptionCid,
+    evidenceHashCid
+  } = req.body || {};
+
+  if (!txHash) {
+    return res.status(400).json({ success: false, error: 'txHash is required' });
+  }
+
+  try {
+    // Attempt to verify the transaction receipt using the first signer/provider
+    const provider = signers && signers[0] && signers[0].provider;
+    let receipt = null;
+    if (provider) {
+      receipt = await provider.getTransactionReceipt(txHash);
+    }
+
+    if (!receipt) {
+      // If no receipt found, respond with 202 Accepted so client can retry later
+      return res.status(202).json({ success: false, message: 'Transaction not yet mined', txHash });
+    }
+
+    if (receipt.status !== 1) {
+      return res.status(400).json({ success: false, message: 'Transaction failed on-chain', txHash, receipt });
+    }
+
+    // Build payload for Ballerina backend
+    const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
+    const payload = {
+      report_title: reportTitle,
+      description: description,
+      priority: priority || 'MEDIUM',
+      wallet_address: walletAddress,
+      tx_hash: txHash,
+      block_number: blockNumber || receipt.blockNumber,
+      blockchain_report_id: blockchainReportId || null,
+      title_cid: titleCid || null,
+      description_cid: descriptionCid || null,
+      evidence_hash_cid: evidenceHashCid || null
+    };
+
+    try {
+      const resp = await axios.post(`${ballerinaUrl}/api/reports`, payload, { headers: { 'Content-Type': 'application/json' } });
+      return res.json({ success: true, message: 'DB created', db: resp.data, txReceipt: receipt });
+    } catch (dbErr) {
+      console.error('Failed to create DB record:', dbErr.message || dbErr);
+      return res.status(500).json({ success: false, message: 'On-chain succeeded but DB create failed', error: dbErr.message || String(dbErr), txReceipt: receipt });
+    }
+  } catch (err) {
+    console.error('notify-create-report error', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
   }
 });
 

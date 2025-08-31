@@ -156,11 +156,28 @@ export const reportService = {
   // Mark report as resolved
   async resolveReport(reportId: number): Promise<Report> {
     try {
-      const response = await apiService.post<ReportResponse>(`/api/reports/${reportId}/resolve`, {})
-      if (response.success && !Array.isArray(response.data)) {
-        return response.data
+      // Call the smart-contracts web3 service which will perform the on-chain tx
+      // and then call the backend to update the DB after confirmation.
+      const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_SMART_CONTRACTS_API || 'http://localhost:3001';
+      const resp = await fetch(`${SMART_CONTRACTS_API_BASE}/report/resolve-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId, signerIndex: 0 })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to resolve on-chain: ${txt}`);
       }
-      throw new Error(response.message || 'Failed to resolve report')
+      const json = await resp.json();
+      // If the web3 service returns the updated DB row under `db` or message only,
+      // fall back to fetching the report from the backend API.
+      if (json.db && json.db.data) {
+        return json.db.data as Report;
+      }
+      // Fallback: request the backend REST API report
+      const backendResp = await apiService.get<ReportResponse>(`/api/reports/${reportId}`);
+      if (backendResp.success && !Array.isArray(backendResp.data)) return backendResp.data;
+      throw new Error('Failed to resolve report or fetch updated report');
     } catch (error) {
       console.error('Error resolving report:', error)
       throw error
