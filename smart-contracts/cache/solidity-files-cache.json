@@ -191,8 +191,8 @@
       ]
     },
     "C:\\Users\\user\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\report\\reports.sol": {
-      "lastModificationDate": 1756483498829,
-      "contentHash": "48733ac122e499e7110dff36c3b2906d",
+      "lastModificationDate": 1756636691439,
+      "contentHash": "6af38fc38ce8fdd3d069cc78eb16aa68",
       "sourceName": "contracts/report/reports.sol",
       "solcConfig": {
         "version": "0.8.20",

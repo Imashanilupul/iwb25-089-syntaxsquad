@@ -34,7 +34,6 @@ public type Project record {
     decimal allocatedBudget;
     decimal spentBudget;
     string state;
-    string province;
     string ministry;
     string? viewDetails;
 };
@@ -42,7 +41,6 @@ public type Project record {
 // Transaction model
 public type Transaction record {
     int id;
-    int categoryId;
     string time;
     decimal spent;
     decimal allocated;
@@ -90,7 +88,6 @@ public type Report record {
     string lastUpdatedTime;
     string priority;
     string assignedTo;
-    string evidenceHash;
     boolean resolvedStatus;
     int? userId;
 };
@@ -170,7 +167,6 @@ public type CreateReportRequest record {
     string reportTitle;
     string priority;
     string assignedTo;
-    string evidenceHash;
     int? userId;
 };
 

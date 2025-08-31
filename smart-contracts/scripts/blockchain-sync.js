@@ -386,7 +386,6 @@ async function processReport(connectedContract, i) {
     creation_time: Number(report[8].toString()),
     resolution_time: Number(report[9].toString()),
     creator: 1,
-    evidence_hash: `blockchain_${i}`,
     created_time: new Date().toISOString()
   };
 }
@@ -856,7 +855,7 @@ async function createPetition(data) {
 // Reports
 async function getAllReports() {
   return await queryDatabase('reports', {
-    select: 'id,title,description,priority,upvotes,downvotes,creator,resolved_status,evidence_hash,removed',
+    select: 'id,title,description,priority,upvotes,downvotes,creator,resolved_status,removed',
     order: 'id'
   });
 }
@@ -871,7 +870,7 @@ async function createReport(data) {
     id: data.id,
     creator: data.creator || null,
     resolved_status: data.resolved_status || false,
-    evidence_hash: data.evidence_hash || `blockchain_${data.id}`,
+  // evidence_hash removed from DB schema - omit from sync
     removed: data.removed || false
   };
   return await createRecord('reports', reportData);

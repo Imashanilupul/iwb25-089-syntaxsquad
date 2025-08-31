@@ -209,7 +209,7 @@ public class ReportsService {
     # + descriptionCid - Optional IPFS CID for the description
     # + evidenceHashCid - Optional IPFS CID for the evidence hash
     # + return - Created report data or error
-    public function createReport(string reportTitle, string? evidenceHash = (), string? description = (), string priority = "MEDIUM", string? assignedTo = (), int? userId = (), string? walletAddress = (), string? blockchainTxHash = (), int? blockchainBlockNumber = (), string? blockchainReportId = (), string? titleCid = (), string? descriptionCid = (), string? evidenceHashCid = ()) returns json|error {
+    public function createReport(string reportTitle, string? description = (), string? priority = (), string? assignedTo = (), int? userId = (), string? walletAddress = (), string? blockchainTxHash = (), int? blockchainBlockNumber = (), string? blockchainReportId = (), string? titleCid = (), string? descriptionCid = ()) returns json|error {
         do {
             // Validate input
             if reportTitle.trim().length() == 0 {
@@ -219,10 +219,11 @@ public class ReportsService {
             // Evidence hash is optional now; frontend may omit it
             
             // Validate priority
+            string priorityStr = priority is string ? priority : "MEDIUM";
             string[] validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
             boolean isValidPriority = false;
             foreach string validPriority in validPriorities {
-                if priority == validPriority {
+                if priorityStr == validPriority {
                     isValidPriority = true;
                     break;
                 }
@@ -232,8 +233,8 @@ public class ReportsService {
             }
             
             json payload = {
-                "report_title": reportTitle,
-                "priority": priority
+                "title": reportTitle,
+                "priority": priorityStr
             };
             
             // Add optional fields
@@ -246,12 +247,11 @@ public class ReportsService {
             }
             
             if userId is int {
-                payload = check payload.mergeJson({"user_id": userId});
+                // DB column is 'creator'
+                payload = check payload.mergeJson({"creator": userId});
             }
             
-            if walletAddress is string && walletAddress.trim().length() > 0 {
-                payload = check payload.mergeJson({"wallet_address": walletAddress});
-            }
+            // wallet_address is not a column in the current reports table; ignore it
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/reports", payload, headers);
@@ -288,7 +288,7 @@ public class ReportsService {
                 // Try to extract response body for debugging
                 string|error respBody = response.getTextPayload();
                 string bodyStr = respBody is string ? respBody : "(no body)";
-                log:printError("Supabase create report failed: status=" + response.statusCode.toString() + " body=" + bodyStr);
+                log:printError("Supabase create report failed: status=" + response.statusCode.toString() + " body=" + bodyStr + " payload=" + payload.toString());
                 return error("Failed to create report: " + response.statusCode.toString() + " " + bodyStr);
             }
 
@@ -312,11 +312,11 @@ public class ReportsService {
             map<json> payloadMap = {};
             
             // Build update payload from provided data
-            json|error reportTitle = updateData.report_title;
+            json|error reportTitle = updateData.title;
             if reportTitle is json {
                 string|error titleStr = reportTitle.ensureType(string);
                 if titleStr is string && titleStr.trim().length() > 0 {
-                    payloadMap["report_title"] = titleStr;
+                    payloadMap["title"] = titleStr;
                 } else {
                     return error("Report title cannot be empty");
                 }
@@ -359,15 +359,7 @@ public class ReportsService {
                 }
             }
             
-            json|error evidenceHash = updateData.evidence_hash;
-            if evidenceHash is json {
-                string|error hashStr = evidenceHash.ensureType(string);
-                if hashStr is string && hashStr.trim().length() > 0 {
-                    payloadMap["evidence_hash"] = hashStr;
-                } else {
-                    return error("Evidence hash cannot be empty");
-                }
-            }
+            // evidence_hash field removed from schema - ignore if present
             
             json|error resolvedStatus = updateData.resolved_status;
             if resolvedStatus is json {
@@ -389,7 +381,7 @@ public class ReportsService {
             json payload = payloadMap;
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
             if response.statusCode != 200 {
@@ -427,7 +419,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
             
             if response.statusCode != 200 && response.statusCode != 204 {
@@ -455,9 +447,11 @@ public class ReportsService {
         if userId <= 0 {
             return error("User ID must be a positive integer");
         }
+
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?user_id=eq." + userId.toString() + "&removed=eq.false";
+            // DB uses 'creator' column to reference the user who created the report
+            string endpoint = "/rest/v1/reports?creator=eq." + userId.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             if response.statusCode != 200 {
                 return error("Failed to get reports by user: " + response.statusCode.toString());
@@ -523,7 +517,8 @@ public class ReportsService {
     public function getReportsByStatus(boolean resolved) returns json|error {
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?resolved=eq." + resolved.toString() + "&removed=eq.false";
+            // Use resolved_status column
+            string endpoint = "/rest/v1/reports?resolved_status=eq." + resolved.toString() + "&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             if response.statusCode != 200 {
                 return error("Failed to get reports by status: " + response.statusCode.toString());
@@ -548,30 +543,7 @@ public class ReportsService {
     # + evidenceHash - Evidence hash to search for
     # + return - Reports list or error
     public function getReportsByEvidenceHash(string evidenceHash) returns json|error {
-        // Validate input
-        if evidenceHash.trim().length() == 0 {
-            return error("Evidence hash cannot be empty");
-        }
-        do {
-            map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?evidence_hash=eq." + evidenceHash + "&removed=eq.false";
-            http:Response response = check self.supabaseClient->get(endpoint, headers);
-            if response.statusCode != 200 {
-                return error("Failed to get reports by evidence hash: " + response.statusCode.toString());
-            }
-            json result = check response.getJsonPayload();
-            json[] reports = check result.ensureType();
-            return {
-                "success": true,
-                "message": "Reports retrieved successfully by evidence hash",
-                "data": reports,
-                "count": reports.length(),
-                "evidenceHash": evidenceHash,
-                "timestamp": time:utcNow()[0]
-            };
-        } on fail error e {
-            return error("Failed to get reports by evidence hash: " + e.message());
-        }
+        return error("getReportsByEvidenceHash is unsupported: evidence field removed from schema");
     }
 
     # Search reports by keyword
@@ -586,7 +558,8 @@ public class ReportsService {
         do {
             map<string> headers = self.getHeaders();
             string searchTerm = "%" + keyword + "%";
-            string endpoint = "/rest/v1/reports?or=(report_title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&removed=eq.false";
+            // Search by title (DB column) or description
+            string endpoint = "/rest/v1/reports?or=(title.ilike." + searchTerm + ",description.ilike." + searchTerm + ")&removed=eq.false";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             if response.statusCode != 200 {
                 return error("Failed to search reports: " + response.statusCode.toString());
@@ -722,7 +695,7 @@ public class ReportsService {
             };
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
             if response.statusCode != 200 {
@@ -766,7 +739,7 @@ public class ReportsService {
             };
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
             if response.statusCode != 200 {
@@ -799,15 +772,12 @@ public class ReportsService {
     public function validateReportData(json reportData) returns json {
         string[] errors = [];
         
-        json|error reportTitle = reportData.report_title;
+        json|error reportTitle = reportData.title;
         if reportTitle is error || reportTitle.toString().trim().length() == 0 {
             errors.push("Report title is required and cannot be empty");
         }
         
-        json|error evidenceHash = reportData.evidence_hash;
-        if evidenceHash is error || evidenceHash.toString().trim().length() == 0 {
-            errors.push("Evidence hash is required and cannot be empty");
-        }
+    // evidence_hash removed from schema - no longer validated
         
         json|error priority = reportData.priority;
         if priority is json {
@@ -841,61 +811,16 @@ public class ReportsService {
     # + blockchainReportId - Blockchain report ID
     # + titleCid - IPFS CID for title
     # + descriptionCid - IPFS CID for description
-    # + evidenceHashCid - IPFS CID for evidence hash
     # + return - Confirmed report data or error
-    public function confirmReportDraft(int reportId, string? txHash, int? blockNumber, string? blockchainReportId, string? titleCid, string? descriptionCid, string? evidenceHashCid) returns json|error {
-        do {
-            map<string> headers = self.getHeaders(true);
-            
-            // Prepare update data
-            map<json> updateData = {};
-            
-            if txHash is string {
-                updateData["blockchain_tx_hash"] = txHash;
-            }
-            if blockNumber is int {
-                updateData["blockchain_block_number"] = blockNumber;
-            }
-            if blockchainReportId is string {
-                updateData["blockchain_report_id"] = blockchainReportId;
-            }
-            if titleCid is string {
-                updateData["title_cid"] = titleCid;
-            }
-            if descriptionCid is string {
-                updateData["description_cid"] = descriptionCid;
-            }
-            if evidenceHashCid is string {
-                updateData["evidence_hash_cid"] = evidenceHashCid;
-            }
-            
-            updateData["status"] = "CONFIRMED";
-            updateData["confirmed_at"] = time:utcToString(time:utcNow());
-            
-            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
-            http:Response response = check self.supabaseClient->patch(endpoint, updateData, headers);
-            
-            if response.statusCode != 200 {
-                return error("Failed to confirm report draft: " + response.statusCode.toString());
-            }
-            
-            json result = check response.getJsonPayload();
-            json[] reports = check result.ensureType();
-            
-            if reports.length() > 0 {
-                return {
-                    "success": true,
-                    "message": "Report draft confirmed successfully",
-                    "data": reports[0],
-                    "timestamp": time:utcNow()[0]
-                };
-            } else {
-                return error("Report not found");
-            }
-            
-        } on fail error e {
-            return error("Failed to confirm report draft: " + e.message());
-        }
+    public function confirmReportDraft(int reportId, string? txHash, int? blockNumber, string? blockchainReportId, string? titleCid, string? descriptionCid) returns json|error {
+    // The current reports table does not store on-chain metadata (tx hash, block number,
+    // IPFS CIDs, or a 'status'/'confirmed_at' columns). To keep the DB schema stable we
+    // do not attempt to write those fields here. If you need to persist on-chain metadata
+    // please either:
+    //  - add the necessary columns to the reports table (blockchain_tx_hash, blockchain_block_number,
+    //    blockchain_report_id, title_cid, description_cid, evidence_hash_cid, status, confirmed_at),
+    //  - OR store confirmation metadata in a separate table that references reports.id.
+    return error("confirmReportDraft is unsupported with current DB schema. Add on-chain metadata columns or use a separate table to store confirmations.");
     }
 
     # Like a report and update priority based on votes

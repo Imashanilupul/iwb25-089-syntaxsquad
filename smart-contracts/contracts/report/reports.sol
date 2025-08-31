@@ -10,7 +10,6 @@ contract Reports {
   struct Report {
     string titleCid;
     string descriptionCid;
-    string evidenceHashCid;
     uint256 upvotes;
     uint256 downvotes;
     address creator;
@@ -32,8 +31,7 @@ contract Reports {
     uint256 indexed reportId,
     address indexed creator,
     string titleCid,
-    string descriptionCid,
-    string evidenceHashCid
+    string descriptionCid
   );
   event ReportUpvoted(uint256 indexed reportId, address indexed voter);
   event ReportDownvoted(uint256 indexed reportId, address indexed voter);
@@ -59,21 +57,13 @@ contract Reports {
     _;
   }
 
-  /**
-   * Create a new report
-   * @param titleCid IPFS CID for report title
-   * @param descriptionCid IPFS CID for report description
-   * @param evidenceHashCid IPFS CID for evidence hash
-   * @return reportId The ID of the created report
-   */
+
   function createReport(
     string calldata titleCid,
-    string calldata descriptionCid,
-    string calldata evidenceHashCid
-  ) external onlyAuthorized onlyOncePerDay returns (uint256) {
+    string calldata descriptionCid
+  ) external onlyAuthorized returns (uint256) {
     require(bytes(titleCid).length > 0, "Title CID cannot be empty");
     require(bytes(descriptionCid).length > 0, "Description CID cannot be empty");
-    require(bytes(evidenceHashCid).length > 0, "Evidence hash CID cannot be empty");
 
     reportCount++;
     uint256 reportId = reportCount;
@@ -81,7 +71,6 @@ contract Reports {
     Report storage r = reports[reportId];
     r.titleCid = titleCid;
     r.descriptionCid = descriptionCid;
-    r.evidenceHashCid = evidenceHashCid;
     r.creator = msg.sender;
     r.resolved = false;
     r.upvotes = 0;
@@ -91,7 +80,7 @@ contract Reports {
 
     lastCreatedAt[msg.sender] = block.timestamp;
 
-    emit ReportCreated(reportId, msg.sender, titleCid, descriptionCid, evidenceHashCid);
+  emit ReportCreated(reportId, msg.sender, titleCid, descriptionCid);
     return reportId;
   }
 
@@ -211,7 +200,6 @@ contract Reports {
     returns (
       string memory titleCid,
       string memory descriptionCid,
-      string memory evidenceHashCid,
       uint256 upvotes,
       uint256 downvotes,
       address creator,
@@ -227,7 +215,6 @@ contract Reports {
     return (
       r.titleCid,
       r.descriptionCid,
-      r.evidenceHashCid,
       r.upvotes,
       r.downvotes,
       r.creator,
