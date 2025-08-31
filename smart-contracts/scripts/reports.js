@@ -119,7 +119,7 @@ router.post("/create-report", async (req, res) => {
   let descriptionCid = providedDescriptionCid;
 
   try {
-  // If client provided a txHash, verify the on-chain receipt first and then create DB
+    // If client provided a txHash, verify the on-chain receipt only (do NOT create DB record here)
     if (req.body && req.body.txHash) {
       const txHash = req.body.txHash;
       const provider = signers && signers[0] && signers[0].provider;
@@ -145,29 +145,8 @@ router.post("/create-report", async (req, res) => {
         return res.status(400).json({ success: false, message: 'Transaction failed on-chain', txHash, receipt });
       }
 
-      // Build payload for Ballerina backend using client-provided fields
-      const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
-      const payload = {
-        report_title: reportTitle || req.body.reportTitle || null,
-        description: description || req.body.description || null,
-        priority: priority || req.body.priority || 'MEDIUM',
-        assigned_to: assignedTo || req.body.assignedTo || null,
-        user_id: userId || req.body.userId || null,
-        wallet_address: walletAddress || req.body.walletAddress || null,
-        tx_hash: txHash,
-        block_number: req.body.blockNumber || receipt.blockNumber,
-        blockchain_report_id: req.body.blockchainReportId || null,
-        title_cid: titleCid || req.body.titleCid || null,
-        description_cid: descriptionCid || req.body.descriptionCid || null,
-      };
-
-      try {
-        const resp = await axios.post(`${ballerinaUrl}/api/reports`, payload, { headers: { 'Content-Type': 'application/json' } });
-        return res.json({ success: true, message: 'On-chain verified and DB create succeeded', db: resp.data, txReceipt: receipt });
-      } catch (dbErr) {
-        console.error('Failed to create DB record after client on-chain tx:', dbErr.message || dbErr);
-        return res.status(502).json({ success: false, message: 'On-chain succeeded but DB create failed', error: dbErr.message || String(dbErr), txReceipt: receipt });
-      }
+      // Only verify and return success, do NOT create DB record here
+      return res.json({ success: true, message: 'On-chain transaction verified', txReceipt: receipt });
     }
 
     // Fallback: if no txHash provided, server will perform the on-chain tx and then create DB

@@ -22,7 +22,7 @@ async function main() {
   // const petitionsAddress = await petitions.getAddress();
   // console.log("✅ Petitions deployed to:", petitionsAddress);
 
-  const authRegistryAddress="0x801ea44134FE48150915D3d203FEe3527bA7b410";
+  const authRegistryAddress="0x010Fa40999Fa27a1Ac4599b3eCecC3A716A2439b";
   // // Deploy Reports contract
   console.log("\n3. Deploying Reports...");
   const Reports = await hre.ethers.getContractFactory("Reports");
