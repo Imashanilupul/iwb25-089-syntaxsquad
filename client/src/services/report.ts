@@ -6,7 +6,8 @@ export interface Report {
   report_title: string
   description?: string
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-  evidence_hash: string
+  evidence_hash?: string
+  evidence_hash?: string
   assigned_to?: string
   user_id?: number
   resolved_status: boolean
@@ -275,8 +276,13 @@ export const reportService = {
   // Check user vote on a report
   async checkUserVote(reportId: number, walletAddress: string): Promise<string | null> {
     try {
+      if (!reportId || isNaN(reportId as any)) {
+        console.warn('Invalid reportId passed to checkUserVote:', reportId)
+        return null
+      }
+      const encodedAddress = encodeURIComponent(walletAddress)
       const response = await apiService.get<{ success: boolean; data: { vote: string | null } }>(
-        `/api/reports/${reportId}/vote/${walletAddress}`
+        `/api/reports/${reportId}/vote/${encodedAddress}`
       );
       if (response.success) {
         return response.data.vote;

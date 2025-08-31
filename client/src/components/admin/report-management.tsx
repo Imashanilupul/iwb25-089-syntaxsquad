@@ -561,9 +561,13 @@ export function ReportManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded">
-                        {report.evidence_hash.slice(0, 16)}...
-                      </code>
+                      {report.evidence_hash ? (
+                        <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded">
+                          {report.evidence_hash.slice(0, 16)}...
+                        </code>
+                      ) : (
+                        <span className="text-xs text-slate-400">N/A</span>
+                      )}
                     </TableCell>
                     <TableCell>{formatDate(report.created_time)}</TableCell>
                     <TableCell className="text-right">

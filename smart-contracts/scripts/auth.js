@@ -4,7 +4,7 @@ const path = require("path");
 const router = express.Router();
 require("dotenv").config({ path: path.join(__dirname, '../.env') });
 
-const contractAddress = "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9"; // Sepolia contract address
+const contractAddress = "0x010Fa40999Fa27a1Ac4599b3eCecC3A716A2439b"; // Sepolia contract address
 const abi = require("../artifacts/contracts/auth/auth.sol/AuthRegistry.json").abi;
 
 // Use Sepolia RPC and your wallet private key from .env
@@ -16,9 +16,9 @@ if (!process.env.PRIVATE_KEY) {
   process.exit(1);
 }
 
-// Remove 0x prefix if present
-const privateKey = process.env.PRIVATE_KEY.startsWith('0x') ? process.env.PRIVATE_KEY.slice(2) : process.env.PRIVATE_KEY;
-const ownerWallet = new ethers.Wallet("711c388121a972ce793b108837e7361e4106c1ef5347f7f3b67fbd54b5fe94e4", provider);
+// Remove 0x prefix if present and create owner wallet from env
+const rawKey = process.env.PRIVATE_KEY.startsWith('0x') ? process.env.PRIVATE_KEY : '0x' + process.env.PRIVATE_KEY;
+const ownerWallet = new ethers.Wallet(rawKey, provider);
 const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Authorize a user (only owner)
@@ -54,6 +54,25 @@ router.post("/register", async (req, res) => {
   }
 
   try {
+    // Validate address format
+    if (!ethers.isAddress(userAddress)) {
+      return res.status(400).json({ error: `Invalid Ethereum address: ${userAddress}` });
+    }
+
+    // Verify configured owner wallet is the contract owner
+    let contractOwner
+    try {
+      contractOwner = await authRegistry.owner()
+    } catch (err) {
+      console.error('Failed to read contract owner:', err && err.message ? err.message : err)
+      return res.status(500).json({ error: 'Failed to read contract owner for debug. Check provider and contract address.' })
+    }
+
+    if (contractOwner.toLowerCase() !== ownerWallet.address.toLowerCase()) {
+      console.error(`Owner mismatch: configured owner ${ownerWallet.address} != contract owner ${contractOwner}`)
+      return res.status(400).json({ error: `Configured owner address (${ownerWallet.address}) does not match contract owner (${contractOwner}). Registration must be performed by the contract owner.` })
+    }
+
     console.log(`Registering user with address: ${userAddress}`);
     console.log(`User data:`, userData);
     
