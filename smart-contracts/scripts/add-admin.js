@@ -14,7 +14,7 @@ const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Add the admin addresses you want here
 const ADMIN_ADDRESSES = [
-  "0x67e046683ec00e611c7F3C2a4e6497e6A6069874", // Replace with actual admin address
+  "0xE2B42646cf1158659490A865Ed475156E15CB676", // Replace with actual admin address
    // Replace with actual admin address
 ];
 

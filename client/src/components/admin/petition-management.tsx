@@ -13,6 +13,7 @@ import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Progress } from "@/components/ui/progress"
 import { Search, Calendar, Loader2, X, MessageSquare, Users, TrendingUp } from "lucide-react"
 import { petitionService, type Petition as PetitionType, type PetitionStatistics } from "@/services/petition"
+import { useRef } from "react"
 import { petitionActivityService } from "@/services/petition-activity"
 import { useToast } from "@/hooks/use-toast"
 
@@ -28,6 +29,41 @@ export function PetitionManagement() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [searchResults, setSearchResults] = useState<string>("")
   const [signatureCounts, setSignatureCounts] = useState<Record<number, number>>({})
+
+  // For tracking which petition is being deleted
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  // Remove petition from database and update UI
+  const handleRemovePetition = async (petitionId: number) => {
+    if (!window.confirm("Are you sure you want to delete this petition? This action cannot be undone.")) return;
+    setDeletingId(petitionId);
+    try {
+      setLoading(true);
+      await petitionService.deletePetition(petitionId);
+      setPetitions((prev) => prev.filter((p) => p.id !== petitionId));
+      setTotalItems((prev) => prev - 1);
+      setSignatureCounts((prev) => {
+        const updated = { ...prev };
+        delete updated[petitionId];
+        return updated;
+      });
+      await loadStatistics();
+      toast({
+        title: "Success",
+        description: "Petition has been removed successfully.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Failed to remove petition:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove petition. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setDeletingId(null);
+    }
+  };
 
   // Pagination state  
   const [currentPage, setCurrentPage] = useState(1)
@@ -384,42 +420,55 @@ export function PetitionManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {getPaginatedPetitions().map((petition) => {
-                  const currentSignatures = getSignatureCount(petition.id)
-                  const requiredSignatures = petition.required_signature_count
-                  const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
-                  
-                  // Determine display status - show "completed" if progress is 100%
-                  const displayStatus = progress >= 100 ? "COMPLETED" : petition.status
+  {getPaginatedPetitions().map((petition) => {
+    const currentSignatures = getSignatureCount(petition.id)
+    const requiredSignatures = petition.required_signature_count
+    const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
+    
+    // Determine display status - show "completed" if progress is 100%
+    const displayStatus = progress >= 100 ? "COMPLETED" : petition.status
 
-                  return (
-                    <TableRow key={petition.id}>
-                      <TableCell className="font-medium max-w-xs">
-                        <div>
-                          <p className="font-semibold">{petition.title}</p>
-                          <p className="text-sm text-slate-500 truncate">{petition.description}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(displayStatus)} variant="secondary">
-                          {formatStatus(displayStatus)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span>{formatNumber(currentSignatures)}</span>
-                            <span>{formatNumber(requiredSignatures)}</span>
-                          </div>
-                          <Progress value={progress} className="h-2" />
-                          <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
+    return (
+      <TableRow key={petition.id}>
+        <TableCell className="font-medium max-w-xs">
+          <div>
+            <p className="font-semibold">{petition.title}</p>
+            <p className="text-sm text-slate-500 truncate">{petition.description}</p>
+          </div>
+        </TableCell>
+        <TableCell>
+          <Badge className={getStatusColor(displayStatus)} variant="secondary">
+            {formatStatus(displayStatus)}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>{formatNumber(currentSignatures)}</span>
+              <span>{formatNumber(requiredSignatures)}</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+            <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
+          </div>
+        </TableCell>
+        <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
+
+        {/* Remove Button */}
+        <TableCell>
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={() => handleRemovePetition(petition.id)}
+              disabled={deletingId === petition.id || loading}
+            >
+              {deletingId === petition.id ? "Removing..." : "Remove"}
+            </Button>
+        </TableCell>
+      </TableRow>
+    )
+  })}
+</TableBody>
+
             </Table>
           )}
           

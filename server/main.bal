@@ -1323,37 +1323,61 @@ service /api on apiListener {
     # Get user by email
     #
     # + email - Email to search for
-    # + return - User data or error
-    resource function get users/email/[string email]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/email/[string email]() returns json {
         log:printInfo("Get user by email endpoint called for email: " + email);
-        return usersService.getUserByEmail(email);
+        json|error res = usersService.getUserByEmail(email);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by email failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by NIC
     #
     # + nic - NIC to search for
-    # + return - User data or error
-    resource function get users/nic/[string nic]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/nic/[string nic]() returns json {
         log:printInfo("Get user by NIC endpoint called for NIC: " + nic);
-        return usersService.getUserByNic(nic);
+        json|error res = usersService.getUserByNic(nic);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by NIC failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by mobile number
     #
     # + mobile - Mobile number to search for
-    # + return - User data or error
-    resource function get users/mobile/[string mobile]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/mobile/[string mobile]() returns json {
         log:printInfo("Get user by mobile endpoint called for mobile: " + mobile);
-        return usersService.getUserByMobile(mobile);
+        json|error res = usersService.getUserByMobile(mobile);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by mobile failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Get user by EVM address
     #
     # + evm - EVM address to search for
-    # + return - User data or error
-    resource function get users/evm/[string evm]() returns json|error {
+    # + return - User data or a JSON error object
+    resource function get users/evm/[string evm]() returns json {
         log:printInfo("Get user by EVM endpoint called for EVM: " + evm);
-        return usersService.getUserByEvm(evm);
+        json|error res = usersService.getUserByEvm(evm);
+        if res is json {
+            return res;
+        } else {
+            log:printError("Get user by EVM failed: " + res.message());
+            return {"success": false, "message": res.message()};
+        }
     }
 
     # Search users by keyword
@@ -1415,17 +1439,26 @@ service /api on apiListener {
 
         json payload = check request.getJsonPayload();
 
-        // Extract required fields
-        string reportTitle = check payload.report_title;
-        string evidenceHash = check payload.evidence_hash;
+    // Extract required fields
+    string reportTitle = check payload.report_title;
+    // evidence_hash is optional now (frontend may omit it)
+    string? evidenceHash = payload.evidence_hash is string ? check payload.evidence_hash : ();
 
-        // Extract optional fields
-        string? description = payload.description is string ? check payload.description : ();
-        string priority = payload.priority is string ? check payload.priority : "MEDIUM";
-        string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
-        int? userId = payload.user_id is int ? check payload.user_id : ();
+    // Extract optional fields
+    string? description = payload.description is string ? check payload.description : ();
+    string priority = payload.priority is string ? check payload.priority : "MEDIUM";
+    string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
+    int? userId = payload.user_id is int ? check payload.user_id : ();
 
-        return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId);
+    // Optional blockchain metadata (allow client to send these after tx)
+    string? blockchainTxHash = payload.tx_hash is string ? check payload.tx_hash : ();
+    int? blockchainBlockNumber = payload.block_number is int ? check payload.block_number : ();
+    string? blockchainReportId = payload.blockchain_report_id is string ? check payload.blockchain_report_id : ();
+    string? titleCid = payload.title_cid is string ? check payload.title_cid : ();
+    string? descriptionCid = payload.description_cid is string ? check payload.description_cid : ();
+    string? evidenceHashCid = payload.evidence_hash_cid is string ? check payload.evidence_hash_cid : ();
+
+    return reportsService.createReport(reportTitle, evidenceHash, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid, evidenceHashCid);
     }
 
     # Update report by ID

@@ -57,7 +57,6 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
     category: "",
     title: "",
     description: "",
-    evidence: null as File | null,
   })
 
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
@@ -78,6 +77,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
   // Add upvote/downvote state for reports
   const [reportVotes, setReportVotes] = useState<{ [id: number]: 'upvote' | 'downvote' | null }>({});
+  const [openReportDetails, setOpenReportDetails] = useState<{ [id: number]: boolean }>({});
   const [reportCounts, setReportCounts] = useState<{ [id: string]: { upvote: number, downvote: number } }>({
     'LK-2024-001': { upvote: 50, downvote: 5 },
     'LK-2024-002': { upvote: 120, downvote: 10 },
@@ -129,6 +129,14 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
       // Update local vote state
       setReportVotes((prev) => ({ ...prev, [id]: type }));
+
+      // Update local report counts immediately for optimistic UI
+      setReports((prev) => prev.map(r => {
+        if (r.report_id !== id) return r;
+        const likes = (r.likes || 0) + (type === 'upvote' ? 1 : 0) - (reportVotes[id] === 'downvote' && type === 'upvote' ? 1 : 0);
+        const dislikes = (r.dislikes || 0) + (type === 'downvote' ? 1 : 0) - (reportVotes[id] === 'upvote' && type === 'downvote' ? 1 : 0);
+        return { ...r, likes, dislikes } as Report;
+      }));
 
       // Refresh report statistics to reflect the new vote
       await refreshReportStatistics();
@@ -268,16 +276,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
         userAddress: address, // For hashing only, not stored directly
       }
 
-      // If evidence file is provided, include it in hash
-      if (reportForm.evidence) {
-        const fileContent = await readFileAsText(reportForm.evidence)
-        evidenceData.evidenceFile = {
-          name: reportForm.evidence.name,
-          size: reportForm.evidence.size,
-          type: reportForm.evidence.type,
-          content: fileContent.substring(0, 1000), // Only hash first 1000 chars for privacy
-        }
-      }
+  // No file evidence is included in this flow; evidenceHash is derived from category/title/description/timestamp
 
       // Generate evidence hash from report data
       const evidenceHash = await generateEvidenceHash(JSON.stringify(evidenceData))
@@ -323,37 +322,6 @@ Timestamp: ${timestamp}
         description: "Preparing report for blockchain submission...",
       })
 
-      // Step 6: Save report draft to Ballerina backend first (to get draftId)
-      const userId = getUserId(address)
-      let draftId: string;
-
-      // Replace the fetch block with this axios version with try-catch
-      try {
-        const ballerinaResp = await axios.post("http://localhost:8080/api/reports", {
-          report_title: reportForm.title,
-          description: reportForm.description,
-          evidence_hash: evidenceHash,
-          priority: getCategoryPriority(reportForm.category),
-          wallet_address: address,
-        });
-
-        const ballerinaData = ballerinaResp.data;
-        draftId = ballerinaData?.data?.report_id || ballerinaData?.report_id || ballerinaData?.id;
-        
-        if (!draftId) {
-          throw new Error("Could not determine draftId from Ballerina response");
-        }
-      } catch (ballerinaError: any) {
-        if (axios.isAxiosError(ballerinaError)) {
-          const errorMsg = ballerinaError.response?.data?.message || 
-                           ballerinaError.response?.data?.error || 
-                           ballerinaError.message;
-          throw new Error(`Failed to create report draft: ${ballerinaError.response?.status} ${errorMsg}`);
-        } else {
-          throw new Error(`Failed to create report draft: ${ballerinaError.message || ballerinaError}`);
-        }
-      }
-
       // Step 7: Prepare IPFS + contract info from the prepare service
       const prepRes = await fetch("http://localhost:3001/report/prepare-report", {
         method: "POST",
@@ -362,7 +330,6 @@ Timestamp: ${timestamp}
           title: reportForm.title,
           description: reportForm.description,
           evidenceHash: evidenceHash,
-          draftId: draftId,
         }),
       })
 
@@ -424,48 +391,61 @@ Timestamp: ${timestamp}
         console.warn("Could not parse event for report id", e)
       }
 
-      // Step 10: Confirm draft with Ballerina backend
+      // Step 10: After successful blockchain tx, create the final report record in backend
       try {
-        await fetch(`http://localhost:8080/api/reports/${draftId}/confirm`, {
+        const createResp = await fetch("http://localhost:8080/api/reports", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            txHash: tx.hash,
-            blockNumber: receipt.blockNumber,
-            blockchainReportId,
-            titleCid,
-            descriptionCid,
-            evidenceHashCid,
+            report_title: reportForm.title,
+            description: reportForm.description,
+            priority: getCategoryPriority(reportForm.category),
+            wallet_address: address,
+            tx_hash: tx.hash,
+            block_number: receipt.blockNumber,
+            blockchain_report_id: blockchainReportId,
+            title_cid: titleCid,
+            description_cid: descriptionCid,
           }),
         })
+
+        if (!createResp.ok) {
+          const txt = await createResp.text()
+          console.warn("Backend create returned non-ok status:", createResp.status, txt)
+          throw new Error(`Failed to create report: ${createResp.status} ${txt}`)
+        }
+
+        toast({
+          title: "✅ Report submitted successfully!",
+          description: "Your anonymous report has been saved to blockchain and backend",
+        })
+
+        // Refresh report statistics to include the new report
+        await refreshReportStatistics();
+
+        // Reset form
+        setReportForm({
+          category: "",
+          title: "",
+          description: "",
+        })
+
+        console.log("Report submitted:", {
+          blockchainReportId,
+          txHash: tx.hash,
+          titleCid,
+          descriptionCid,
+          evidenceHashCid,
+        })
       } catch (err) {
-        console.log("Backend confirmation failed:", err)
+        console.error("Failed to persist report after tx:", err)
+        toast({
+          title: "⚠️ Backend save failed",
+          description:
+            "The blockchain transaction succeeded but saving the report to the backend failed. Please contact an administrator or try again.",
+          variant: "destructive",
+        })
       }
-
-      toast({
-        title: "✅ Report submitted successfully!",
-        description: "Your anonymous report has been saved to blockchain and backend",
-      })
-
-      // Refresh report statistics to include the new report
-      await refreshReportStatistics();
-
-      // Reset form
-      setReportForm({
-        category: "",
-        title: "",
-        description: "",
-        evidence: null,
-      })
-
-      console.log("Report submitted:", {
-        draftId,
-        blockchainReportId,
-        txHash: tx.hash,
-        titleCid,
-        descriptionCid,
-        evidenceHashCid,
-      })
     } catch (error: any) {
       console.error("Failed to submit report:", error)
 
@@ -514,21 +494,7 @@ Timestamp: ${timestamp}
     }
   }
 
-  // Read file as text for evidence processing
-  const readFileAsText = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve((e.target?.result as string) || "")
-      reader.onerror = (e) => reject(e)
-
-      // For binary files, convert to base64 for hashing
-      if (file.type.startsWith("image/") || file.type === "application/pdf") {
-        reader.readAsDataURL(file)
-      } else {
-        reader.readAsText(file)
-      }
-    })
-  }
+  // (evidence file reading removed — evidence hash is derived from textual fields only)
 
   // Normalize an Ethereum address (ensure 0x prefix and proper format)
   const normalizeAddress = (addr?: string | null) => {
@@ -1268,7 +1234,7 @@ Timestamp: ${timestamp}
         description: "Please confirm the transaction in your wallet",
       })
 
-      // 3) Send transaction from user's wallet using ethers and Sepolia network
+  // 3) Send transaction from user's wallet using ethers and Sepolia network
       const ethers = await import("ethers")
       // Use BrowserProvider for ESM v6 in browser
       const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
@@ -1381,11 +1347,34 @@ Timestamp: ${timestamp}
       setIsLoadingReports(true);
       try {
         const data = await reportService.getAllReports();
-        setReports(data);
-        
-        // Check user votes if wallet is connected
+        // Normalize reports: some backends return `id` or `reportId` instead of `report_id`
+        // Also handle vote column name variations: likes/dislikes OR upvotes/downvotes
+        const normalized = data.map((r: any) => {
+          const idCandidate = r.report_id ?? r.id ?? r.reportId ?? r.reportIdString ?? null;
+          const reportIdNum = idCandidate == null ? undefined : Number(idCandidate);
+          // Normalize title fields from different backends
+          const title = r.report_title ?? r.title ?? r.reportTitle ?? '';
+
+          // Coalesce vote fields from different possible shapes
+          const rawLikes = r.likes ?? r.like ?? r.upvotes ?? r.upvote ?? (r.votes && r.votes.likes);
+          const rawDislikes = r.dislikes ?? r.dislike ?? r.downvotes ?? r.downvote ?? (r.votes && r.votes.dislikes);
+
+          const likesNum = Number.isFinite(Number(rawLikes)) ? Number(rawLikes) : 0;
+          const dislikesNum = Number.isFinite(Number(rawDislikes)) ? Number(rawDislikes) : 0;
+
+          return {
+            ...r,
+            report_id: reportIdNum ?? r.report_id,
+            report_title: title,
+            likes: likesNum,
+            dislikes: dislikesNum,
+          } as Report & any;
+        });
+        setReports(normalized);
+
+        // Check user votes if wallet is connected (use normalized data so IDs and shapes are consistent)
         if (address) {
-          await checkUserReportVotes(data);
+          await checkUserReportVotes(normalized);
         }
         
         // Refresh statistics after fetching reports
@@ -1488,13 +1477,78 @@ Timestamp: ${timestamp}
 
   // Allow users to change their vote
   const changeVote = async (reportId: number, newVoteType: 'upvote' | 'downvote') => {
-    if (!address) return;
+    if (!address) {
+      toast({ title: 'Wallet Required', description: 'Connect your wallet to vote', variant: 'destructive' });
+      return;
+    }
 
+    // Find report to get blockchain id fallback
+    const report = reports.find(r => r.report_id === reportId);
     try {
-      // Call the new vote
-      await handleReportVote(reportId, newVoteType);
-    } catch (error) {
+      // Step 1: call prepare endpoint to get contract info (we pass minimal dummy payload)
+      const prepRes = await fetch('http://localhost:3001/report/prepare-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: report?.report_title || 'vote', description: 'vote', evidenceHash: '0x0' })
+      });
+
+      if (!prepRes.ok) {
+        const txt = await prepRes.text();
+        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`);
+      }
+
+      const prepJson = await prepRes.json();
+      const { contractAddress, contractAbi } = prepJson;
+      if (!contractAddress || !contractAbi) throw new Error('Contract information not available');
+
+      // Step 2: send tx from user's wallet
+      const ethers = await import('ethers');
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any);
+      await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
+      const signer = await provider.getSigner();
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer);
+
+      // Determine blockchain report id (use stored blockchain id if available)
+      const blockchainId = (report as any)?.blockchain_report_id || (report as any)?.blockchainReportId || reportId;
+
+      let tx;
+      if (newVoteType === 'upvote') {
+        tx = await contract.upvoteReport(blockchainId);
+      } else {
+        tx = await contract.downvoteReport(blockchainId);
+      }
+
+      toast({ title: 'Transaction sent', description: tx.hash });
+      const receipt = await tx.wait();
+      toast({ title: 'Transaction confirmed', description: `Block ${receipt.blockNumber}` });
+
+      // Step 3: persist vote to backend and update UI from returned report
+      let updatedReport;
+      if (newVoteType === 'upvote') {
+        updatedReport = await reportService.likeReport(reportId, address);
+      } else {
+        updatedReport = await reportService.dislikeReport(reportId, address);
+      }
+
+      // Update local state with new data from backend (single source of truth)
+      setReports((prev) => prev.map(r => r.report_id === reportId ? updatedReport : r));
+      setReportVotes((prev) => ({ ...prev, [reportId]: newVoteType }));
+
+      // Show priority change if it occurred
+      const currentReport = reports.find(r => r.report_id === reportId);
+      if (currentReport && currentReport.priority !== updatedReport.priority) {
+        setPriorityChanges(prev => ({ ...prev, [reportId]: `${currentReport.priority} → ${updatedReport.priority}` }));
+        setTimeout(() => {
+          setPriorityChanges(prev => {
+            const newChanges = { ...prev };
+            delete newChanges[reportId];
+            return newChanges;
+          });
+        }, 5000);
+      }
+    } catch (error: any) {
       console.error('Failed to change vote:', error);
+      toast({ title: 'Vote failed', description: error?.message || 'Failed to record vote', variant: 'destructive' });
     }
   };
 
@@ -1744,8 +1798,8 @@ Timestamp: ${timestamp}
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <p className="text-sm text-slate-600">Evidence Hash</p>
-                      <p className="font-mono text-sm">{report.evidence_hash}</p>
+                      <p className="text-sm text-slate-600">Submitted By</p>
+                      <p className="font-medium text-sm">{report.assigned_to || 'Anonymous'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Assigned To</p>
@@ -1758,8 +1812,8 @@ Timestamp: ${timestamp}
                       <span>Blockchain verified</span>
                     </div>
                     <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      View Details
+                    <Button variant="outline" size="sm" onClick={() => setOpenReportDetails(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}>
+                      {openReportDetails[report.report_id] ? 'Hide Details' : 'View Details'}
                     </Button>
                       {/* Upvote/Downvote Buttons for Reports */}
                       <div className="flex items-center gap-1">
@@ -1800,6 +1854,15 @@ Timestamp: ${timestamp}
                       </div>
                     </div>
                   </div>
+                  {/* Details area (toggle) */}
+                  {openReportDetails[report.report_id] && (
+                    <div className="mt-3 rounded bg-gray-50 p-3">
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{report.description || 'No description available'}</p>
+                      {(report as any).title_cid && (
+                        <p className="text-xs text-slate-400 mt-2">Title CID: <span className="font-mono">{(report as any).title_cid}</span></p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -2045,91 +2108,6 @@ Timestamp: ${timestamp}
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Evidence (Optional)</label>
-                  <div
-                    className="cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-4 text-center transition-colors hover:border-slate-400"
-                    onClick={() => document.getElementById("evidence-upload")?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.add("border-blue-400", "bg-blue-50")
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-blue-400", "bg-blue-50")
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-blue-400", "bg-blue-50")
-                      const files = e.dataTransfer.files
-                      if (files.length > 0) {
-                        const file = files[0]
-                        // Check file size (max 10MB)
-                        if (file.size > 10 * 1024 * 1024) {
-                          toast({
-                            title: "File too large",
-                            description: "Please select a file smaller than 10MB",
-                            variant: "destructive",
-                          })
-                          return
-                        }
-                        setReportForm({ ...reportForm, evidence: file })
-                      }
-                    }}
-                  >
-                    <Upload className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-                    {reportForm.evidence ? (
-                      <div>
-                        <p className="text-sm text-slate-600">
-                          Selected: {reportForm.evidence.name}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Size: {(reportForm.evidence.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setReportForm({ ...reportForm, evidence: null })
-                          }}
-                          className="mt-2 text-xs text-red-600 hover:text-red-800"
-                        >
-                          Remove file
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-slate-600">Drop files here or click to upload</p>
-                        <p className="text-xs text-slate-500">
-                          Files will be encrypted and hashed for verification
-                        </p>
-                      </div>
-                    )}
-                    <input
-                      id="evidence-upload"
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
-                      title="Upload evidence file"
-                      aria-label="Upload evidence file"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          // Check file size (max 10MB)
-                          if (file.size > 10 * 1024 * 1024) {
-                            toast({
-                              title: "File too large",
-                              description: "Please select a file smaller than 10MB",
-                              variant: "destructive",
-                            })
-                            return
-                          }
-                          setReportForm({ ...reportForm, evidence: file })
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
 
                 <div className="rounded-lg bg-blue-50 p-3">
                   <div className="flex items-center gap-2 text-sm text-blue-800">

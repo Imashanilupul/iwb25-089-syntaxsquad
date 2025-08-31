@@ -225,34 +225,32 @@ export function ProposalManagement() {
     }
 
     if (editingId) {
-      // Handle proposal edit using smart contract API
+      // Handle proposal edit by performing wallet-signed contract call (changeProposalStatus)
       try {
         await validateWallet(address!)
 
-        const editRes = await fetch("http://localhost:3001/proposal/edit-proposal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            proposalId: editingId,
-            newStatus: formData.activeStatus,
-            signerIndex: 0 // Using first signer for now, should be dynamic based on user
-          })
-        })
+        // Fetch contract info (ABI + address) so the client can create a contract instance
+        const infoRes = await fetch('http://localhost:3001/proposal/contract-info')
+        if (!infoRes.ok) throw new Error('Failed to fetch contract info for on-chain edit')
+        const info = await infoRes.json()
+        const { contractAddress, contractAbi } = info
+        if (!contractAddress || !contractAbi) throw new Error('Contract info missing address or abi')
 
-        if (!editRes.ok) {
-          const errorText = await editRes.text()
-          throw new Error(`Edit failed: ${editRes.status} - ${errorText}`)
-        }
+        // Use user's wallet to send the transaction
+        const ethers = await import('ethers')
+        if (!window.ethereum) throw new Error('MetaMask not found')
+        await (window.ethereum as any).request({ method: 'eth_requestAccounts' })
+        const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+        const signer = await provider.getSigner()
+        const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
 
-        const editData = await editRes.json()
-        console.log("Edit successful:", editData)
+        const tx = await contract.changeProposalStatus(editingId, formData.activeStatus)
+        toast({ title: `📤 Transaction sent: ${tx.hash?.slice?.(0, 10) || tx.hash}` })
+        await tx.wait()
 
-        toast({
-          title: "✅ Success",
-          description: "Proposal status updated successfully on blockchain"
-        })
+        toast({ title: '✅ Proposal status updated on blockchain' })
 
-        // Reset form and reload data
+        // Reload from DB to reflect on-chain change
         setFormData({
           title: "",
           shortDescription: "",
@@ -266,14 +264,9 @@ export function ProposalManagement() {
         setEditingId(null)
         setIsDialogOpen(false)
         loadData()
-
       } catch (error: any) {
-        console.error("Edit failed:", error)
-        toast({
-          title: "❌ Failed to update proposal",
-          description: error.message || "Unknown error",
-          variant: "destructive"
-        })
+        console.error('Edit failed:', error)
+        toast({ title: '❌ Failed to update proposal', description: error.message || 'Unknown error', variant: 'destructive' })
       }
       return
     }

@@ -91,6 +91,20 @@ router.post("/prepare-proposal", async (req, res) => {
   }
 });
 
+// Return contract address & ABI so clients can perform wallet-signed transactions
+router.get('/contract-info', async (req, res) => {
+  try {
+    if (!proposals) {
+      return res.status(500).json({ error: 'Proposals contract not initialized' })
+    }
+    const contractAbi = proposals.interface.formatJson()
+    res.json({ contractAddress, contractAbi: JSON.parse(contractAbi) })
+  } catch (err) {
+    console.error('Failed to get contract info', err)
+    res.status(500).json({ error: err.message || 'Failed to get contract info' })
+  }
+})
+
 // Create proposal
 router.post("/create-proposal", async (req, res) => {
   const { titleCid, shortDescriptionCid, descriptionInDetailsCid, categoryId, expiredDate, signerIndex } = req.body;

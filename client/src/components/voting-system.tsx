@@ -242,18 +242,43 @@ Timestamp: ${timestamp}
       await (window.ethereum as any).request({ method: "eth_requestAccounts" })
       const signer = await provider.getSigner()
 
-      // Contract configuration
-      const contractAddress = "0xff40F4C374c1038378c7044720B939a2a0219a2f" // Updated with correct Sepolia Proposals contract address
-      
+      // Contract configuration - use the deployed Proposals address
+      // NOTE: keep this in sync with smart-contracts/deployed-addresses.json or use an API endpoint for production
+      const contractAddress = "0xDdBE9c97C837F837c165ba972Efc371B2a09fdea"
+
       // Contract ABI for voting functions
       const contractAbi = [
         "function voteYes(uint256 proposalId) external",
         "function voteNo(uint256 proposalId) external",
-        "function getProposal(uint256 proposalId) external view returns (string, string, string, uint256, uint256, address, bool, uint256, uint256, uint256, uint256)",
+        // Match on-chain return shape (includes `removed` at the end)
+        "function getProposal(uint256 proposalId) external view returns (string,string,string,uint256,uint256,address,bool,uint256,uint256,uint256,uint256,bool)",
         "function getUserVote(uint256 proposalId, address user) external view returns (bool, bool)"
       ]
 
       const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      // Pre-check: read proposal on-chain to avoid sending a tx that will revert
+      try {
+        const onChainProposal = await contract.getProposal(proposalId)
+        const activeOnChain = onChainProposal[6]
+        const expiredOnChain = Number(onChainProposal[7] || 0)
+
+        // Get current blockchain time
+        const latestBlock = await provider.getBlock('latest')
+        const blockTimestamp = Number(latestBlock.timestamp)
+
+        if (!activeOnChain) {
+          throw new Error('Smart contract error: Proposal is not active')
+        }
+
+        if (expiredOnChain && blockTimestamp >= expiredOnChain) {
+          throw new Error('Smart contract error: Proposal has expired')
+        }
+      } catch (readErr: any) {
+        // If read failed because of invalid proposal id or other reason, surface a clear message
+        const msg = readErr && readErr.message ? readErr.message : String(readErr)
+        throw new Error(msg.includes('Proposal does not exist') ? `Smart contract error: ${msg}` : msg)
+      }
 
       toast.info(`🔐 Please confirm the ${voteType.toUpperCase()} vote transaction in your wallet`)
 
