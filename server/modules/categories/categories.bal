@@ -126,15 +126,55 @@ public class CategoriesService {
                 return error("Allocated budget cannot be negative");
             }
 
+            // Supabase table requires explicit category_id (no serial/default).
+            // Get current max category_id and increment to produce a new unique id.
+            int nextCategoryId = 1;
+            string maxIdEndpoint = "/rest/v1/categories?select=category_id&order=category_id.desc&limit=1";
+            http:Response maxIdResp = check self.supabaseClient->get(maxIdEndpoint, self.getHeaders());
+            if maxIdResp.statusCode == 200 {
+                json maxBody = check maxIdResp.getJsonPayload();
+                json[] items = check maxBody.ensureType();
+                if items.length() > 0 {
+                    json first = items[0];
+                    if first is map<json> {
+                        json|error idJson = first["category_id"];
+                        if idJson is json {
+                            int|error idVal = idJson.ensureType(int);
+                            if idVal is int {
+                                nextCategoryId = idVal + 1;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // If we cannot read current max id, fail early with useful message
+                return error("Failed to determine next category_id: HTTP " + maxIdResp.statusCode.toString());
+            }
+
+            // Ensure the id will fit into smallint
+            if nextCategoryId > 32767 {
+                return error("Category ID overflow: cannot assign new category_id (exceeds smallint)");
+            }
+
             json payload = {
+                "category_id": nextCategoryId,
                 "category_name": categoryName,
                 "allocated_budget": allocatedBudget,
                 "spent_budget": 0d // Will be calculated from projects
             };
 
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            http:Response response = check self.supabaseClient->post("/rest/v1/categories", payload, headers);
-            
+            // Use non-throwing call to inspect HTTP errors (Response|error)
+            http:Response|error responseOrErr = self.supabaseClient->post("/rest/v1/categories", payload, headers);
+
+            if responseOrErr is error {
+                // Return the error message for non-HTTP Response errors (network/client issues)
+                string errMsg = responseOrErr.message();
+                return error("Failed to create category: " + errMsg);
+            }
+
+            http:Response response = responseOrErr;
+
             if response.statusCode == 201 {
                 // Check if response has content
                 json|error result = response.getJsonPayload();
@@ -165,7 +205,23 @@ public class CategoriesService {
                     }
                 }
             } else {
-                return error("Failed to create category: " + response.statusCode.toString());
+                // Non-201 response: try to parse error body
+                json|error errBody = response.getJsonPayload();
+                string details = "HTTP " + response.statusCode.toString();
+                if errBody is json {
+                    details += " - " + errBody.toString();
+                }
+
+                if response.statusCode == 409 {
+                    return {
+                        "success": false,
+                        "message": "Category already exists",
+                        "details": details,
+                        "timestamp": time:utcNow()[0]
+                    };
+                }
+
+                return error("Failed to create category: " + details);
             }
 
         } on fail error e {
