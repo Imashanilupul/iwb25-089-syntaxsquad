@@ -365,6 +365,7 @@ modules = [
 	{org = "user", packageName = "server_bal", moduleName = "server_bal"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.categories"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.chat_service"},
+	{org = "user", packageName = "server_bal", moduleName = "server_bal.db"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.jwt"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.petition_activities"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.petitions"},
