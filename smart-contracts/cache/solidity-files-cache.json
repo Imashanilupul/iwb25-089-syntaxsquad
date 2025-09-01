@@ -38,13 +38,8 @@
         "AuthRegistry"
       ]
     },
-<<<<<<< HEAD
     "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\petition\\petitions.sol": {
       "lastModificationDate": 1756729012872,
-=======
-    "C:\\Users\\User\\OneDrive\\Documents\\GitHub\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\petition\\petitions.sol": {
-      "lastModificationDate": 1756582385068,
->>>>>>> bcfd92fe9e8ba7547268d17b1e6f38fb0180ec1b
       "contentHash": "80f0bd1dd16fd252736e182e1082c0c7",
       "sourceName": "contracts/petition/petitions.sol",
       "solcConfig": {
@@ -81,13 +76,8 @@
         "Petitions"
       ]
     },
-<<<<<<< HEAD
     "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\policy\\policy.sol": {
       "lastModificationDate": 1756729012872,
-=======
-    "C:\\Users\\User\\OneDrive\\Documents\\GitHub\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\policy\\policy.sol": {
-      "lastModificationDate": 1756582385069,
->>>>>>> bcfd92fe9e8ba7547268d17b1e6f38fb0180ec1b
       "contentHash": "7b088099bb2052806283b93eeeffa02b",
       "sourceName": "contracts/policy/policy.sol",
       "solcConfig": {
@@ -124,13 +114,8 @@
         "Policies"
       ]
     },
-<<<<<<< HEAD
     "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\project\\project.sol": {
       "lastModificationDate": 1756729012872,
-=======
-    "C:\\Users\\User\\OneDrive\\Documents\\GitHub\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\project\\project.sol": {
-      "lastModificationDate": 1756582385070,
->>>>>>> bcfd92fe9e8ba7547268d17b1e6f38fb0180ec1b
       "contentHash": "17208080d1755f6b3228e9ab981dbb05",
       "sourceName": "contracts/project/project.sol",
       "solcConfig": {
@@ -167,13 +152,8 @@
         "Project"
       ]
     },
-<<<<<<< HEAD
     "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\proposal\\proposals.sol": {
       "lastModificationDate": 1756729012872,
-=======
-    "C:\\Users\\User\\OneDrive\\Documents\\GitHub\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\proposal\\proposals.sol": {
-      "lastModificationDate": 1756582385070,
->>>>>>> bcfd92fe9e8ba7547268d17b1e6f38fb0180ec1b
       "contentHash": "e3e52dbeeba75d7c7378014d3c907039",
       "sourceName": "contracts/proposal/proposals.sol",
       "solcConfig": {
@@ -210,15 +190,9 @@
         "Proposals"
       ]
     },
-<<<<<<< HEAD
     "C:\\Users\\anjan\\OneDrive\\Documents\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\report\\reports.sol": {
       "lastModificationDate": 1756729012874,
       "contentHash": "6af38fc38ce8fdd3d069cc78eb16aa68",
-=======
-    "C:\\Users\\User\\OneDrive\\Documents\\GitHub\\Transparent-Governance-Platform-Ballerina\\smart-contracts\\contracts\\report\\reports.sol": {
-      "lastModificationDate": 1756582385072,
-      "contentHash": "48733ac122e499e7110dff36c3b2906d",
->>>>>>> bcfd92fe9e8ba7547268d17b1e6f38fb0180ec1b
       "sourceName": "contracts/report/reports.sol",
       "solcConfig": {
         "version": "0.8.20",

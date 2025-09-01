@@ -152,31 +152,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Function to validate if wallet address is linked to a registered Asgardeo user
+  // Function to check if wallet address is authorized on blockchain
   const validateUserRegistration = async (walletAddress: string, asgardeoUser?: any) => {
     try {
-      console.log('AuthContext: Validating user registration for wallet:', walletAddress);
-      // First check existing wallet verification
-      const walletAuthRes = await axios.get(`http://localhost:8080/api/auth/isauthorized/${walletAddress}`);
+      console.log('AuthContext: Checking blockchain authorization for wallet:', walletAddress);
       
-      // Check if this wallet is linked to a registered user in Asgardeo
-      const userValidationRes = await axios.post('http://localhost:8080/api/auth/validate-user', {
-        walletAddress,
-        asgardeoUserId: asgardeoUser?.sub,
-        asgardeoUser
-      });
+      // Call the /is-authorized endpoint to check if user is authorized on blockchain
+      const authRes = await axios.get(`http://localhost:3001/auth/is-authorized/${walletAddress}`);
+      
+      const isAuthorized = authRes.data.isAuthorized;
       
       const result = {
-        walletVerified: walletAuthRes.data.verified,
-        isRegisteredUser: userValidationRes.data.isRegistered,
-        jwt: userValidationRes.data.token || walletAuthRes.data.token,
-        userData: userValidationRes.data.userData
+        walletVerified: isAuthorized,
+        isRegisteredUser: isAuthorized, // For blockchain auth, registered = authorized
       };
       
-      console.log('AuthContext: User validation result:', result);
+      console.log('AuthContext: Blockchain authorization result:', result);
       return result;
     } catch (error) {
-      console.error("AuthContext: User validation failed:", error);
+      console.error("AuthContext: Blockchain authorization check failed:", error);
       return {
         walletVerified: false,
         isRegisteredUser: false,
@@ -188,23 +182,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Main authentication function
   const handleAuthentication = async () => {
-    console.log('AuthContext: Starting authentication process...');
+    console.log('AuthContext: Starting blockchain authentication process...');
     setAuth(prev => ({ ...prev, isLoading: true, error: null }));
     
     try {
-      // Get Asgardeo user info
-      const asgardeoUser = await getAsgardeoUserInfo();
-      
       if (isConnected && address) {
-        console.log('AuthContext: Wallet connected, validating user...');
-        // Wallet is connected, now validate user registration
-        const validation = await validateUserRegistration(address, asgardeoUser);
+        console.log('AuthContext: Wallet connected, checking blockchain authorization...');
+        // Only check blockchain authorization (no Asgardeo for main portal)
+        const validation = await validateUserRegistration(address);
         
         const newAuthState = {
           address,
           walletVerified: validation.walletVerified,
           verified: validation.walletVerified, // Legacy compatibility
-          asgardeoUser,
+          asgardeoUser: null, // No Asgardeo for main portal
           isRegisteredUser: validation.isRegisteredUser,
           isFullyAuthenticated: validation.walletVerified && validation.isRegisteredUser,
           jwt: validation.jwt,
@@ -217,14 +208,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         saveAuthState(newAuthState);
       } else {
         console.log('AuthContext: No wallet connected, clearing auth state');
-        // No wallet connected - clear saved auth state
-        clearSavedAuthState();
-        
+        // No wallet connected - clear auth state
         const newAuthState = {
           address: null,
           walletVerified: false,
           verified: false, // Legacy compatibility
-          asgardeoUser,
+          asgardeoUser: null,
           isRegisteredUser: false,
           isFullyAuthenticated: false,
           jwt: null,
@@ -236,7 +225,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('AuthContext: Authentication error:', error);
-      clearSavedAuthState(); // Clear saved state on error
       setAuth(prev => ({
         ...prev,
         isLoading: false,
