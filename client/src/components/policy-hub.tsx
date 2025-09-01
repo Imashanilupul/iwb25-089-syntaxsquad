@@ -495,10 +495,34 @@ export function PolicyHub() {
                     </div>
 
                     <div className="flex justify-between items-center pt-2 border-t">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        // Open policy in new tab or modal
-                        window.open(`data:text/html,<html><body><h1>${policy.name}</h1><p>${policy.view_full_policy}</p></body></html>`, '_blank')
-                      }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const raw = policy.view_full_policy;
+                          const url = (typeof raw === 'string' && raw.trim()) ? raw.trim() : undefined;
+                          if (!url) {
+                            toast({ title: 'No link available', description: 'This policy does not have a full-policy link.' });
+                            return;
+                          }
+
+                          // Normalize common cases: add https if it looks like www..., convert ipfs:// to a gateway URL
+                          let finalUrl = url;
+                          if (/^www\./i.test(finalUrl)) {
+                            finalUrl = 'https://' + finalUrl;
+                          }
+                          if (/^ipfs:\/\//i.test(finalUrl)) {
+                            finalUrl = finalUrl.replace(/^ipfs:\/\//i, 'https://ipfs.io/ipfs/');
+                          }
+
+                          // Ensure it's an absolute http(s) URL before opening; if not, still try to open but prefer noopener
+                          try {
+                            window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                          } catch (e) {
+                            toast({ title: 'Unable to open link', description: 'The policy link appears to be invalid.' });
+                          }
+                        }}
+                      >
                         View Full Policy
                       </Button>
                       
