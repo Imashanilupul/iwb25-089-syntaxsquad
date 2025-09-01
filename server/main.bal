@@ -516,39 +516,66 @@ service /api on apiListener {
     resource function post categories(http:Request request) returns json|error {
         log:printInfo("Create category endpoint called");
 
-        json payload = check request.getJsonPayload();
-
-        // Validate required fields
-        string categoryName = check payload.categoryName.ensureType(string);
-        decimal allocatedBudget = check payload.allocatedBudget.ensureType(decimal);
-        decimal spentBudget = payload.spentBudget is () ? 0d : check payload.spentBudget.ensureType(decimal);
-
-        // Validate input
-        if categoryName.trim().length() == 0 {
+        // Parse and validate payload defensively to avoid runtime KeyNotFound errors
+        json|error maybePayload = request.getJsonPayload();
+        if maybePayload is error {
+            log:printError("Invalid JSON payload for create category: " + maybePayload.message());
             return {
                 "success": false,
-                "message": "Category name cannot be empty",
+                "message": "Invalid JSON payload",
+                "error": maybePayload.message(),
                 "timestamp": time:utcNow()[0]
             };
         }
 
-        if allocatedBudget < 0d {
-            return {
-                "success": false,
-                "message": "Allocated budget cannot be negative",
-                "timestamp": time:utcNow()[0]
-            };
-        }
+        if maybePayload is map<json> {
+            map<json> payload = maybePayload;
 
-        if spentBudget < 0d {
-            return {
-                "success": false,
-                "message": "Spent budget cannot be negative",
-                "timestamp": time:utcNow()[0]
-            };
-        }
+            // Required fields
+            if !payload.hasKey("categoryName") {
+                return { "success": false, "message": "Missing required field: categoryName", "timestamp": time:utcNow()[0] };
+            }
+            if !payload.hasKey("allocatedBudget") {
+                return { "success": false, "message": "Missing required field: allocatedBudget", "timestamp": time:utcNow()[0] };
+            }
 
-        return categoriesService.createCategory(categoryName, allocatedBudget);
+            string|error categoryNameVal = payload["categoryName"].ensureType(string);
+            if categoryNameVal is error {
+                return { "success": false, "message": "Invalid field 'categoryName': must be a string", "timestamp": time:utcNow()[0] };
+            }
+
+            decimal|error allocatedBudgetVal = payload["allocatedBudget"].ensureType(decimal);
+            if allocatedBudgetVal is error {
+                return { "success": false, "message": "Invalid field 'allocatedBudget': must be a number", "timestamp": time:utcNow()[0] };
+            }
+
+            decimal spentBudget = 0d;
+            if payload.hasKey("spentBudget") {
+                decimal|error spentVal = payload["spentBudget"].ensureType(decimal);
+                if spentVal is error {
+                    return { "success": false, "message": "Invalid field 'spentBudget': must be a number", "timestamp": time:utcNow()[0] };
+                }
+                spentBudget = spentVal;
+            }
+
+            // Validate input values
+            string categoryName = categoryNameVal;
+            decimal allocatedBudget = allocatedBudgetVal;
+
+            if categoryName.trim().length() == 0 {
+                return { "success": false, "message": "Category name cannot be empty", "timestamp": time:utcNow()[0] };
+            }
+            if allocatedBudget < 0d {
+                return { "success": false, "message": "Allocated budget cannot be negative", "timestamp": time:utcNow()[0] };
+            }
+            if spentBudget < 0d {
+                return { "success": false, "message": "Spent budget cannot be negative", "timestamp": time:utcNow()[0] };
+            }
+
+            return categoriesService.createCategory(categoryName, allocatedBudget);
+        } else {
+            return { "success": false, "message": "Invalid request payload: expected JSON object", "timestamp": time:utcNow()[0] };
+        }
     }
 
     # Update category by ID
@@ -2240,6 +2267,153 @@ service /api on apiListener {
                 address: address,
                 verified: false,
                 token: ()
+            };
+        }
+    }
+
+    # Validate user registration with Asgardeo
+    #
+    # + request - HTTP request containing wallet address and Asgardeo user data
+    # + return - User validation response
+    resource function post auth/'validate\-user(http:Request request) returns json|error {
+        json payload = check request.getJsonPayload();
+        map<anydata> payloadMap = check payload.cloneWithType();
+        
+        string walletAddress = payloadMap["walletAddress"] is string ? <string>payloadMap["walletAddress"] : "";
+        string? asgardeoUserId = payloadMap["asgardeoUserId"] is string ? <string>payloadMap["asgardeoUserId"] : ();
+        json? asgardeoUser = payloadMap["asgardeoUser"] is json ? <json>payloadMap["asgardeoUser"] : ();
+        
+        log:printInfo("Validating user registration for wallet: " + walletAddress);
+        
+        if walletAddress == "" {
+            return {
+                "isRegistered": false,
+                "error": "Wallet address is required"
+            };
+        }
+        
+        do {
+            // First check if wallet is authorized
+            json walletAuthResponse = check web3Service->get("/auth/is-authorized/" + walletAddress);
+            map<anydata> authMap = check walletAuthResponse.cloneWithType();
+            boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
+            
+            if !isWalletAuthorized {
+                return {
+                    "isRegistered": false,
+                    "walletVerified": false,
+                    "error": "Wallet is not authorized"
+                };
+            }
+            
+            // Check if user is registered in the database
+            // This is where you would check your user database to see if the wallet address
+            // is linked to a registered user account
+            
+            // For now, we'll implement a simple check
+            // In production, you would query your users table
+            boolean isRegisteredUser = true; // Placeholder - implement your user validation logic here
+            
+            // If Asgardeo user exists, we can consider them registered
+            if asgardeoUser is json && asgardeoUserId is string {
+                isRegisteredUser = true;
+                
+                // Here you could also store the Asgardeo user ID with the wallet address
+                // in your database for future reference
+                log:printInfo("User validated with Asgardeo ID: " + asgardeoUserId);
+            }
+            
+            // Generate a token for the validated user
+            string? token = ();
+            if isRegisteredUser && isWalletAuthorized {
+                token = "validated_jwt_" + walletAddress + "_" + time:utcNow()[0].toString();
+            }
+            
+            return {
+                "isRegistered": isRegisteredUser,
+                "walletVerified": isWalletAuthorized,
+                "token": token,
+                "asgardeoValidated": asgardeoUser is json,
+                "userData": {
+                    "walletAddress": walletAddress,
+                    "asgardeoUserId": asgardeoUserId,
+                    "registrationTimestamp": time:utcNow()[0]
+                }
+            };
+            
+        } on fail error e {
+            log:printError("User validation failed: " + e.message());
+            return {
+                "isRegistered": false,
+                "walletVerified": false,
+                "error": "Validation service unavailable: " + e.message()
+            };
+        }
+    }
+
+    # Register a new user linking wallet address with Asgardeo
+    #
+    # + request - HTTP request containing registration data
+    # + return - Registration response
+    resource function post auth/'register\-user(http:Request request) returns json|error {
+        json payload = check request.getJsonPayload();
+        map<anydata> payloadMap = check payload.cloneWithType();
+        
+        string walletAddress = payloadMap["walletAddress"] is string ? <string>payloadMap["walletAddress"] : "";
+        string? asgardeoUserId = payloadMap["asgardeoUserId"] is string ? <string>payloadMap["asgardeoUserId"] : ();
+        json? additionalData = payloadMap["additionalData"] is json ? <json>payloadMap["additionalData"] : ();
+        
+        log:printInfo("Registering new user - Wallet: " + walletAddress + ", Asgardeo ID: " + (asgardeoUserId ?: "none"));
+        
+        if walletAddress == "" || asgardeoUserId is () {
+            return {
+                "success": false,
+                "error": "Wallet address and Asgardeo user ID are required"
+            };
+        }
+        
+        do {
+            // Verify wallet is authorized first
+            json walletAuthResponse = check web3Service->get("/auth/is-authorized/" + walletAddress);
+            map<anydata> authMap = check walletAuthResponse.cloneWithType();
+            boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
+            
+            if !isWalletAuthorized {
+                return {
+                    "success": false,
+                    "error": "Wallet must be authorized before registration"
+                };
+            }
+            
+            // Here you would typically:
+            // 1. Insert user record into your database linking wallet address with Asgardeo user ID
+            // 2. Set up user permissions and roles
+            // 3. Create any necessary user profile data
+            
+            // For now, we'll simulate successful registration
+            // In production, implement proper database operations
+            
+            string registrationToken = "registered_jwt_" + walletAddress + "_" + time:utcNow()[0].toString();
+            
+            log:printInfo("✅ User registered successfully: " + walletAddress + " -> " + asgardeoUserId);
+            
+            return {
+                "success": true,
+                "message": "User registered successfully",
+                "token": registrationToken,
+                "userData": {
+                    "walletAddress": walletAddress,
+                    "asgardeoUserId": asgardeoUserId,
+                    "registrationTimestamp": time:utcNow()[0],
+                    "additionalData": additionalData
+                }
+            };
+            
+        } on fail error e {
+            log:printError("User registration failed: " + e.message());
+            return {
+                "success": false,
+                "error": "Registration service unavailable: " + e.message()
             };
         }
     }

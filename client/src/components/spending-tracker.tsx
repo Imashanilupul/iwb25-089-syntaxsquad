@@ -284,7 +284,7 @@ export function SpendingTracker() {
       className="h-64"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={budgetData}>
+        <BarChart data={budgetData} margin={{bottom:80}}>
           <XAxis 
             dataKey="category" 
             angle={-30} 

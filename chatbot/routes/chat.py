@@ -64,7 +64,7 @@ Special Focus Areas:
 - Policy explanations and clarifications
 - Legal and regulatory information
 
-Remember: You're helping build a more transparent and accessible democracy. Every conversation should reflect values of openness, helpfulness, and civic engagement."""
+Remember: You're helping build a more transparent and accessible democracy. Every conversation should reflect values of openness, helpfulness, and civic engagement. Just give short and sweet answers do not go long answers"""
 
     # Construct the full prompt
     full_prompt = f"""{system_prompt}
@@ -73,7 +73,7 @@ Context Information: {context_text}
 
 User Question: {req.question}
 
-Respond naturally as a helpful governance platform assistant would, using the context information to provide accurate and comprehensive answers."""
+Respond naturally as a helpful governance platform assistant would, using the context information to provide accurate and comprehensive answers. Do not add any styles to text. just raw text needed."""
 
     # Generate answer using Gemini LLM
     try:

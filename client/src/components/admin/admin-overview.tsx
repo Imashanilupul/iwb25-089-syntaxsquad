@@ -221,7 +221,7 @@ export function AdminOverview() {
       </div>
 
       {/* Geographic and Government Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">National Coverage</CardTitle>
@@ -245,7 +245,7 @@ export function AdminOverview() {
             <p className="text-xs text-slate-500">Ministries and departments</p>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Secondary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -324,9 +324,9 @@ export function AdminOverview() {
                     tick={{ fontSize: 12 }}
                   />
                   <YAxis 
-                    tickFormatter={(value) => formatCurrency(value)}
-                    fontSize={12}
-                  />
+  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+  fontSize={12}
+/>
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     formatter={(value) => [formatCurrency(Number(value)), ""]}
@@ -362,13 +362,13 @@ export function AdminOverview() {
                     tick={{ fontSize: 12 }}
                   />
                   <YAxis 
-                    tickFormatter={(value) => formatCurrency(value)}
-                    fontSize={12}
-                  />
-                  <ChartTooltip
-                    content={<ChartTooltipContent />}
-                    formatter={(value) => [formatCurrency(Number(value)), ""]}
-                  />
+  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+  fontSize={12}
+/>
+<ChartTooltip
+  content={<ChartTooltipContent />}
+  formatter={(value) => [`${(Number(value) / 1000000).toFixed(1)}M`, ""]}
+/>
                   <Line 
                     type="monotone" 
                     dataKey="amount" 
