@@ -320,67 +320,7 @@ Timestamp: ${timestamp}
       description: "Creating report on blockchain...",
     })
 
-    // Optional: previous server-side create attempt (kept for compatibility)
-    let contractData = null
-    try {
-      const smartContractResponse = await fetch(
-        "http://localhost:3001/report/create-report",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            reportTitle: reportForm.title,
-            description: reportForm.description,
-            category: reportForm.category,
-            signerIndex: 0, // Use first signer for demo
-          }),
-        }
-      )
-
-      if (smartContractResponse.ok) {
-        contractData = await smartContractResponse.json()
-        console.log("✅ Smart contract report created:", contractData)
-      } else {
-        console.warn(
-          "⚠️ Smart contract service responded with error:",
-          smartContractResponse.status
-        )
-      }
-    } catch (blockchainError) {
-      console.warn(
-        "⚠️ Smart contract service unavailable, continuing with database storage only:",
-        blockchainError
-      )
-    }
-
-    // Step 3: Save report draft to Ballerina backend (required to obtain draftId)
-    const ballerinaResp = await fetch("http://localhost:8080/api/reports", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        report_title: reportForm.title,
-        description: reportForm.description,
-        category: reportForm.category,
-        priority: getCategoryPriority(reportForm.category),
-        wallet_address: address,
-      }),
-    })
-
-    if (!ballerinaResp.ok) {
-      const txt = await ballerinaResp.text()
-      throw new Error(`Failed to create draft: ${ballerinaResp.status} ${txt}`)
-    }
-
-    const ballerinaData = await ballerinaResp.json()
-    // try to extract draft id from common response shapes
-    const draftId = ballerinaData?.data?.id || ballerinaData?.id || ballerinaData?.report?.id
-    if (!draftId) {
-      throw new Error("Could not determine draftId from Ballerina response")
-    }
-
-    // Step 4: Prepare IPFS + contract info from the prepare service
+    // Step 3: Prepare IPFS + contract info from the prepare service
     const prepRes = await fetch("http://localhost:3001/report/prepare-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -406,7 +346,7 @@ Timestamp: ${timestamp}
       description: "Please confirm the transaction in your wallet",
     })
 
-    // Send transaction from user's wallet using ethers and Sepolia network (EXACT same as petition)
+    // Send transaction from user's wallet using ethers and Sepolia network
     const ethers = await import("ethers")
     // Use BrowserProvider for ESM v6 in browser
     const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
@@ -415,7 +355,7 @@ Timestamp: ${timestamp}
     const signer = await provider.getSigner()
     const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
 
-    // Send transaction (same pattern as petition)
+    // Send transaction
     const tx = await contract.createReport(titleCid, descriptionCid)
     toast({ title: "Transaction sent", description: tx.hash })
 
@@ -450,24 +390,38 @@ Timestamp: ${timestamp}
       console.warn("Could not parse event for report id", e)
     }
 
-    // Confirm draft with Ballerina backend (same pattern as petition)
-    try {
-      await fetch(`http://localhost:8080/api/reports/${draftId}/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          txHash: tx.hash,
-          blockNumber: receipt.blockNumber,
-          blockchainReportId,
-          titleCid,
-          descriptionCid,
-        }),
-      })
-    } catch (err) {
-      console.log(err)
-    }
+    // Step 4: Create database record with blockchain metadata
+    const ballerinaResp = await fetch("http://localhost:8080/api/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report_title: reportForm.title,
+        description: reportForm.description,
+        category: reportForm.category,
+        priority: getCategoryPriority(reportForm.category),
+        wallet_address: address,
+        tx_hash: tx.hash,
+        block_number: receipt.blockNumber,
+        blockchain_report_id: blockchainReportId,
+        title_cid: titleCid,
+        description_cid: descriptionCid,
+      }),
+    })
 
-    toast({ title: "Report created", description: "Saved to blockchain and backend" })
+    if (!ballerinaResp.ok) {
+      const txt = await ballerinaResp.text()
+      console.error("Failed to create database record after successful blockchain transaction:", txt)
+      // Don't throw error here since blockchain tx succeeded
+      toast({ 
+        title: "⚠️ Partial Success", 
+        description: "Report created on blockchain but database record failed. Please contact support.",
+        variant: "destructive"
+      })
+    } else {
+      const ballerinaData = await ballerinaResp.json()
+      console.log("✅ Database record created:", ballerinaData)
+      toast({ title: "✅ Report created", description: "Successfully saved to blockchain and database" })
+    }
 
     // Reset form
     setReportForm({
@@ -478,9 +432,6 @@ Timestamp: ${timestamp}
 
     // Refresh reports list and statistics
     await refreshReportStatistics()
-
-    console.log("Smart contract data:", contractData)
-    console.log("Database data:", ballerinaData)
   } catch (error: any) {
     console.error("Failed create flow:", error)
     
