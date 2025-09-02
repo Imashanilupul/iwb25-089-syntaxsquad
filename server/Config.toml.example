@@ -1,0 +1,9 @@
+# Server Configuration
+port = 
+
+# Supabase Configuration
+supabaseUrl = ""
+
+
+# service_role secret key (for server-side use with full permissions):
+supabaseServiceRoleKey = ""
