@@ -23,7 +23,7 @@ interface WalletAuthValidation {
 
 export class EnhancedAuthService {
   private static readonly ASGARDEO_API_BASE = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL;
-  private static readonly BACKEND_API_BASE = process.env.NEXT_PUBLIC_API_URL;
+  private static readonly BACKEND_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   /**
    * Validates that the connected wallet matches the wallet registered with the Asgardeo user

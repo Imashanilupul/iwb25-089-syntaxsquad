@@ -352,7 +352,7 @@ export function RegistrationDialog() {
     // Debounce the request to avoid rapid backend calls while user types
     duplicateCheckTimers.current[field] = window.setTimeout(async () => {
       try {
-        const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
+        const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080'
         let endpoint = ''
         
         switch (field) {
@@ -412,7 +412,7 @@ export function RegistrationDialog() {
     if (!evmAddress.trim()) return false
 
     try {
-      const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080'
+      const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080'
       const response = await fetch(`${BACKEND_API_BASE}/api/users/evm/${encodeURIComponent(evmAddress)}`)
       
       if (response.ok) {
@@ -579,7 +579,7 @@ export function RegistrationDialog() {
         biometricData: enableBiometric ? biometricData : null
       }
 
-      console.log("Registering user with data:", registrationData)
+  console.debug("Registering user with data:", registrationData)
       
       const result = await registerUser(registrationData)
       

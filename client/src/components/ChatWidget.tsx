@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send } from "lucide-react";
 import axios, { AxiosError } from "axios";
 
+const CHATBOT_BASE_URL = process.env.NEXT_PUBLIC_CHATBOT_BASE_URL || 'http://localhost:8001';
+
 interface Message {
   id: number;
   text: string;
@@ -60,7 +62,7 @@ const ChatWidget: React.FC = () => {
     try {
       // Send message to the backend /chat endpoint using Axios
       const response = await axios.post<ChatResponse>(
-        "http://localhost:8001/chat",
+        `${CHATBOT_BASE_URL}/chat`,
         { question: inputMessage, top_k: 3 } as ChatRequest,
         {
           headers: {

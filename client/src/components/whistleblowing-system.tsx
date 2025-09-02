@@ -33,7 +33,7 @@ import {
 } from "lucide-react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts"
-import axios from 'axios';
+import axios from "axios"
 import { Report, reportService } from "@/services/report"
 import ChatWidget from "./ChatWidget.jsx"
 
@@ -52,6 +52,10 @@ interface WhistleblowingSystemProps {
 export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProps) {
   const { toast } = useToast()
   const { address, verified } = useAuth() // Get auth state
+
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
 
   const [reportForm, setReportForm] = useState({
     category: "",
@@ -76,95 +80,102 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
 
   // Add upvote/downvote state for reports
-  const [reportVotes, setReportVotes] = useState<{ [id: number]: 'upvote' | 'downvote' | null }>({});
-  const [openReportDetails, setOpenReportDetails] = useState<{ [id: number]: boolean }>({});
-  const [reportCounts, setReportCounts] = useState<{ [id: string]: { upvote: number, downvote: number } }>({
-    'LK-2024-001': { upvote: 50, downvote: 5 },
-    'LK-2024-002': { upvote: 120, downvote: 10 },
-  });
-  const [priorityChanges, setPriorityChanges] = useState<{ [id: number]: string }>({});
+  const [reportVotes, setReportVotes] = useState<{ [id: number]: "upvote" | "downvote" | null }>({})
+  const [openReportDetails, setOpenReportDetails] = useState<{ [id: number]: boolean }>({})
+  const [reportCounts, setReportCounts] = useState<{
+    [id: string]: { upvote: number; downvote: number }
+  }>({
+    "LK-2024-001": { upvote: 50, downvote: 5 },
+    "LK-2024-002": { upvote: 120, downvote: 10 },
+  })
+  const [priorityChanges, setPriorityChanges] = useState<{ [id: number]: string }>({})
 
   // Handler for upvote/downvote
-  const handleReportVote = async (id: number, type: 'upvote' | 'downvote') => {
+  const handleReportVote = async (id: number, type: "upvote" | "downvote") => {
     if (!address) {
       toast({
         title: "Wallet Required",
         description: "Please connect your wallet to vote on reports",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
     try {
-      let updatedReport: Report;
-      
-      if (type === 'upvote') {
-        updatedReport = await reportService.likeReport(id, address);
+      let updatedReport: Report
+
+      if (type === "upvote") {
+        updatedReport = await reportService.likeReport(id, address)
       } else {
-        updatedReport = await reportService.dislikeReport(id, address);
+        updatedReport = await reportService.dislikeReport(id, address)
       }
 
       // Update local state with new data from backend
-      setReports((prev) => prev.map(r => 
-        r.report_id === id ? updatedReport : r
-      ));
+      setReports((prev) => prev.map((r) => (r.report_id === id ? updatedReport : r)))
 
       // Check if priority changed
-      const currentReport = reports.find(r => r.report_id === id);
+      const currentReport = reports.find((r) => r.report_id === id)
       if (currentReport && currentReport.priority !== updatedReport.priority) {
-        setPriorityChanges(prev => ({
+        setPriorityChanges((prev) => ({
           ...prev,
-          [id]: `${currentReport.priority} → ${updatedReport.priority}`
-        }));
-        
+          [id]: `${currentReport.priority} → ${updatedReport.priority}`,
+        }))
+
         // Clear the priority change indicator after 5 seconds
         setTimeout(() => {
-          setPriorityChanges(prev => {
-            const newChanges = { ...prev };
-            delete newChanges[id];
-            return newChanges;
-          });
-        }, 5000);
+          setPriorityChanges((prev) => {
+            const newChanges = { ...prev }
+            delete newChanges[id]
+            return newChanges
+          })
+        }, 5000)
       }
 
       // Update local vote state
-      setReportVotes((prev) => ({ ...prev, [id]: type }));
+      setReportVotes((prev) => ({ ...prev, [id]: type }))
 
       // Update local report counts immediately for optimistic UI
-      setReports((prev) => prev.map(r => {
-        if (r.report_id !== id) return r;
-        const likes = (r.likes || 0) + (type === 'upvote' ? 1 : 0) - (reportVotes[id] === 'downvote' && type === 'upvote' ? 1 : 0);
-        const dislikes = (r.dislikes || 0) + (type === 'downvote' ? 1 : 0) - (reportVotes[id] === 'upvote' && type === 'downvote' ? 1 : 0);
-        return { ...r, likes, dislikes } as Report;
-      }));
+      setReports((prev) =>
+        prev.map((r) => {
+          if (r.report_id !== id) return r
+          const likes =
+            (r.likes || 0) +
+            (type === "upvote" ? 1 : 0) -
+            (reportVotes[id] === "downvote" && type === "upvote" ? 1 : 0)
+          const dislikes =
+            (r.dislikes || 0) +
+            (type === "downvote" ? 1 : 0) -
+            (reportVotes[id] === "upvote" && type === "downvote" ? 1 : 0)
+          return { ...r, likes, dislikes } as Report
+        })
+      )
 
       // Refresh report statistics to reflect the new vote
-      await refreshReportStatistics();
+      await refreshReportStatistics()
 
       toast({
         title: "Vote recorded!",
         description: `Your ${type} has been recorded. Priority updated to ${updatedReport.priority}`,
-      });
-
+      })
     } catch (error: any) {
-      console.error(`Failed to ${type} report:`, error);
-      
+      console.error(`Failed to ${type} report:`, error)
+
       // Handle specific error cases
       if (error.message && error.message.includes("already")) {
         toast({
           title: "Already voted",
           description: error.message,
           variant: "destructive",
-        });
+        })
       } else {
         toast({
           title: "Vote failed",
           description: error.message || `Failed to ${type} report`,
           variant: "destructive",
-        });
+        })
       }
     }
-  };
+  }
 
   // Get user ID from wallet address (consistent with petition signing)
   const getUserId = (walletAddress: string): number => {
@@ -179,321 +190,292 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   }
 
   // Submit anonymous report function
-  const submitReport = async () => {
-    // Prevent multiple simultaneous requests
-    if (isSubmittingReport) {
-      toast({
-        title: "Please wait",
-        description: "Report submission is already in progress",
-        variant: "destructive",
-      })
-      return
+  // Complete submitReport function - replace from line 107 to line 256
+// Submit anonymous report function - EXACT pattern as createPetition, no evidence hash
+// Submit anonymous report function - EXACT pattern as createPetition
+const submitReport = async () => {
+  // Prevent multiple simultaneous requests
+  if (isSubmittingReport) {
+    toast({
+      title: "Please wait",
+      description: "Report submission is already in progress",
+      variant: "destructive",
+    })
+    return
+  }
+
+  // Enhanced wallet address validation (using address from useAuth)
+  if (!address || address.trim() === "") {
+    toast({
+      title: "Wallet not connected",
+      description: "Please connect your wallet first using the Connect button",
+      variant: "destructive",
+    })
+    return
+  }
+
+  // Validate Ethereum address format
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    toast({
+      title: "Invalid wallet address",
+      description: "The wallet address format is invalid. Please reconnect your wallet.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  if (!reportForm.title || !reportForm.description || !reportForm.category) {
+    toast({
+      title: "Missing information",
+      description: "Please fill in all required fields",
+      variant: "destructive",
+    })
+    return
+  }
+
+  setIsSubmittingReport(true)
+  try {
+    // Step 1: Check if MetaMask/wallet is available
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
     }
 
-    // Check wallet connection
-    if (!address) {
-      toast({
-        title: "Wallet Required",
-        description: "Please connect your wallet to submit reports",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Validate Ethereum address format
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      toast({
-        title: "Invalid wallet address",
-        description: "The wallet address format is invalid. Please reconnect your wallet.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Validate form
-    if (!reportForm.category || !reportForm.title || !reportForm.description) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSubmittingReport(true)
+    // Step 2: Ensure we're connected to the right account
+    let accounts
     try {
-      // Step 1: Check if MetaMask/wallet is available
-      if (!window.ethereum) {
-        throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
-      }
+      accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+    } catch (accountError: any) {
+      console.error("Failed to get accounts:", accountError)
+      throw new Error("Failed to get wallet accounts. Please try again.")
+    }
 
-      // Step 2: Ensure we're connected to the right account
-      let accounts
+    if (accounts.length === 0) {
+      // Only request accounts if we don't have any
       try {
-        accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
-      } catch (accountError: any) {
-        console.error("Failed to get accounts:", accountError)
-        throw new Error("Failed to get wallet accounts. Please try again.")
-      }
-
-      if (accounts.length === 0) {
-        try {
-          toast({
-            title: "Account Access Required",
-            description: "Please approve wallet connection in MetaMask",
-          })
-          accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
-        } catch (requestError: any) {
-          if (requestError.code === -32002) {
-            throw new Error(
-              "MetaMask is already processing a connection request. Please check your MetaMask extension and try again."
-            )
-          } else if (requestError.code === 4001) {
-            throw new Error("User rejected wallet connection request")
-          }
-          throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+        toast({
+          title: "Account Access Required",
+          description: "Please approve wallet connection in MetaMask",
+        })
+        accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      } catch (requestError: any) {
+        if (requestError.code === -32002) {
+          throw new Error(
+            "MetaMask is already processing a connection request. Please check your MetaMask extension and try again."
+          )
+        } else if (requestError.code === 4001) {
+          throw new Error("User rejected wallet connection request")
         }
+        throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
       }
+    }
 
-      // Double-check the current account matches our address
-      const currentAccount = accounts[0]?.toLowerCase()
-      if (!currentAccount) {
-        throw new Error("No wallet account found. Please connect your wallet first.")
-      }
+    // Double-check the current account matches our address
+    const currentAccount = accounts[0]?.toLowerCase()
+    if (!currentAccount) {
+      throw new Error("No wallet account found. Please connect your wallet first.")
+    }
 
-      if (currentAccount !== address.toLowerCase()) {
-        throw new Error(
-          `Account mismatch. Please switch to ${address.slice(0, 6)}...${address.slice(-4)} in MetaMask`
-        )
-      }
+    if (currentAccount !== address.toLowerCase()) {
+      throw new Error(
+        `Account mismatch. Please switch to ${address.slice(0, 6)}...${address.slice(-4)} in MetaMask`
+      )
+    }
 
-      // Step 3: Create evidence hash (for anonymity and integrity)
-      let evidenceData: any = {
-        category: reportForm.category,
-        title: reportForm.title,
-        description: reportForm.description,
-        timestamp: new Date().toISOString(),
-        userAddress: address, // For hashing only, not stored directly
-      }
-
-  // No file evidence is included in this flow; evidenceHash is derived from category/title/description/timestamp
-
-      // Generate evidence hash from report data
-      const evidenceHash = await generateEvidenceHash(JSON.stringify(evidenceData))
-
-      // Step 4: Create a clear message to sign for authentication
-      const timestamp = new Date().toISOString()
-      const message = `🛡️ SUBMIT ANONYMOUS REPORT CONFIRMATION
+    // Step 3: Create a clear message to sign
+    const timestamp = new Date().toISOString()
+    const message = `🛡️ SUBMIT ANONYMOUS REPORT CONFIRMATION
 
 Title: ${reportForm.title}
+
+Description: ${reportForm.description}
+
 Category: ${reportForm.category}
-Evidence Hash: ${evidenceHash}
 
 Wallet: ${address}
 Timestamp: ${timestamp}
 
-⚠️ By signing this message, you confirm that you want to submit this anonymous report to the blockchain. Your identity will be cryptographically protected.`
+⚠️ By signing this message, you confirm that you want to submit this anonymous report to the blockchain. This action cannot be undone.`
 
-      toast({
-        title: "Signature Required",
-        description: "Please check your wallet to sign the report submission request",
+    toast({
+      title: "Signature Required",
+      description: "Please check your wallet to sign the report submission request",
+    })
+
+    // Step 4: Request signature from user
+    let signature
+    try {
+      signature = await (window.ethereum as any).request({
+        method: "personal_sign",
+        params: [message, address],
       })
-
-      // Step 5: Request signature from user
-      let signature
-      try {
-        signature = await (window.ethereum as any).request({
-          method: "personal_sign",
-          params: [message, address],
-        })
-      } catch (signError: any) {
-        if (signError.code === 4001) {
-          throw new Error("User rejected the signature request")
-        }
-        throw new Error(`Signature failed: ${signError.message || signError}`)
+    } catch (signError: any) {
+      if (signError.code === 4001) {
+        throw new Error("User rejected the signature request")
       }
-
-      if (!signature) {
-        throw new Error("No signature received from wallet")
-      }
-
-      toast({
-        title: "✅ Signature confirmed",
-        description: "Preparing report for blockchain submission...",
-      })
-
-      // Step 7: Prepare IPFS + contract info from the prepare service
-      const prepRes = await fetch("http://localhost:3001/report/prepare-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: reportForm.title,
-          description: reportForm.description,
-          evidenceHash: evidenceHash,
-        }),
-      })
-
-      if (!prepRes.ok) {
-        const txt = await prepRes.text()
-        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
-      }
-
-      const prepJson = await prepRes.json()
-      const { titleCid, descriptionCid, evidenceHashCid, contractAddress, contractAbi } = prepJson
-      if (!titleCid || !descriptionCid || !evidenceHashCid || !contractAddress || !contractAbi) {
-        throw new Error("Prepare endpoint did not return all required fields")
-      }
-
-      toast({
-        title: "Ready to submit",
-        description: "Please confirm the transaction in your wallet",
-      })
-
-      // Step 8: Send transaction from user's wallet using ethers and Sepolia network
-      const ethers = await import("ethers")
-      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
-      await (window.ethereum as any).request({ method: "eth_requestAccounts" })
-      const signer = await provider.getSigner()
-      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
-
-      // Send transaction to blockchain
-      const tx = await contract.createReport(titleCid, descriptionCid, evidenceHashCid)
-      toast({ title: "Transaction sent", description: tx.hash })
-
-      // Step 9: Wait for confirmation
-      const receipt = await tx.wait()
-      toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
-
-      // Try to decode event to get reportId
-      let blockchainReportId = null
-      try {
-        const iface = new (ethers as any).Interface(contractAbi)
-        for (const log of receipt.logs) {
-          try {
-            const parsed = iface.parseLog(log)
-            if (parsed && parsed.name && parsed.name.toLowerCase().includes("report")) {
-              blockchainReportId = parsed.args?.[0]?.toString() || null
-              break
-            }
-          } catch (e) {
-            // ignore non-matching logs
-          }
-        }
-        if (!blockchainReportId) {
-          try {
-            const count = await contract.reportCount()
-            blockchainReportId = count.toString()
-          } catch (e) {
-            // ignore
-          }
-        }
-      } catch (e) {
-        console.warn("Could not parse event for report id", e)
-      }
-
-      // Step 10: After successful blockchain tx, create the final report record in backend
-      try {
-        const createResp = await fetch("http://localhost:8080/api/reports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            report_title: reportForm.title,
-            description: reportForm.description,
-            priority: getCategoryPriority(reportForm.category),
-            wallet_address: address,
-            tx_hash: tx.hash,
-            block_number: receipt.blockNumber,
-            blockchain_report_id: blockchainReportId,
-            title_cid: titleCid,
-            description_cid: descriptionCid,
-          }),
-        })
-
-        if (!createResp.ok) {
-          const txt = await createResp.text()
-          console.warn("Backend create returned non-ok status:", createResp.status, txt)
-          throw new Error(`Failed to create report: ${createResp.status} ${txt}`)
-        }
-
-        toast({
-          title: "✅ Report submitted successfully!",
-          description: "Your anonymous report has been saved to blockchain and backend",
-        })
-
-        // Refresh report statistics to include the new report
-        await refreshReportStatistics();
-
-        // Reset form
-        setReportForm({
-          category: "",
-          title: "",
-          description: "",
-        })
-
-        console.log("Report submitted:", {
-          blockchainReportId,
-          txHash: tx.hash,
-          titleCid,
-          descriptionCid,
-          evidenceHashCid,
-        })
-      } catch (err) {
-        console.error("Failed to persist report after tx:", err)
-        toast({
-          title: "⚠️ Backend save failed",
-          description:
-            "The blockchain transaction succeeded but saving the report to the backend failed. Please contact an administrator or try again.",
-          variant: "destructive",
-        })
-      }
-    } catch (error: any) {
-      console.error("Failed to submit report:", error)
-
-      // Handle specific errors
-      if (error.message && error.message.includes("User not authorized")) {
-        toast({
-          title: "❌ Not Authorized",
-          description:
-            "Your wallet address is not authorized to submit reports. Please contact an administrator to get your address authorized in the system.",
-          variant: "destructive",
-        })
-      } else if (
-        error.message &&
-        error.message.includes("You can only create one report per day")
-      ) {
-        toast({
-          title: "❌ Daily Limit Reached",
-          description: "You can only submit one report per day. Please try again tomorrow.",
-          variant: "destructive",
-        })
-      } else if (error.message && error.message.includes("execution reverted")) {
-        const revertReason =
-          error.reason ||
-          error.message.match(/execution reverted: "?([^"]*)"?/)?.[1] ||
-          "Unknown contract error"
-        toast({
-          title: "❌ Blockchain Error",
-          description: `Transaction failed: ${revertReason}`,
-          variant: "destructive",
-        })
-      } else if (error.code === 4001) {
-        toast({
-          title: "Transaction Cancelled",
-          description: "You cancelled the report submission",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "❌ Submission Failed",
-          description: error?.message || "Failed to submit report. Please try again.",
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsSubmittingReport(false)
+      throw new Error(`Signature failed: ${signError.message || signError}`)
     }
-  }
 
+    if (!signature) {
+      throw new Error("No signature received from wallet")
+    }
+
+    toast({
+      title: "✅ Signature confirmed",
+      description: "Creating report on blockchain...",
+    })
+
+    // Step 3: Prepare IPFS + contract info from the prepare service
+    const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: reportForm.title,
+        description: reportForm.description,
+      }),
+    })
+
+    if (!prepRes.ok) {
+      const txt = await prepRes.text()
+      throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
+    }
+
+    const prepJson = await prepRes.json()
+    const { titleCid, descriptionCid, contractAddress, contractAbi } = prepJson
+    if (!titleCid || !descriptionCid || !contractAddress || !contractAbi) {
+      throw new Error("Prepare endpoint did not return all required fields")
+    }
+
+    toast({
+      title: "Ready to submit",
+      description: "Please confirm the transaction in your wallet",
+    })
+
+    // Send transaction from user's wallet using ethers and Sepolia network
+    const ethers = await import("ethers")
+    // Use BrowserProvider for ESM v6 in browser
+    const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+    // Request accounts (ensure connected)
+    await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+    const signer = await provider.getSigner()
+    const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+    // Send transaction
+    const tx = await contract.createReport(titleCid, descriptionCid)
+  toast({ title: "Transaction sent", description: tx.hash })
+
+    // Wait for confirmation
+    const receipt = await tx.wait()
+  toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
+
+    // Try to decode event to get reportId
+    let blockchainReportId = null
+    try {
+      const iface = new (ethers as any).Interface(contractAbi)
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log)
+          if (parsed && parsed.name && parsed.name.toLowerCase().includes("report")) {
+            blockchainReportId = parsed.args?.[0]?.toString() || null
+            break
+          }
+        } catch (e) {
+          // ignore non-matching logs
+        }
+      }
+    if (!blockchainReportId) {
+        try {
+          const count = await contract.reportCount()
+      blockchainReportId = count.toString()
+        } catch (e) {
+      // ignore
+        }
+      }
+    } catch (e) {
+      console.warn("Could not parse event for report id", e)
+    }
+
+    // Step 4: Create database record with blockchain metadata
+    const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/reports`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report_title: reportForm.title,
+        description: reportForm.description,
+        category: reportForm.category,
+        priority: getCategoryPriority(reportForm.category),
+        wallet_address: address,
+        tx_hash: tx.hash,
+        block_number: receipt.blockNumber,
+        blockchain_report_id: blockchainReportId,
+        title_cid: titleCid,
+        description_cid: descriptionCid,
+      }),
+    })
+
+    if (!ballerinaResp.ok) {
+      const txt = await ballerinaResp.text()
+      console.error("Failed to create database record after successful blockchain transaction:", txt)
+      // Don't throw error here since blockchain tx succeeded
+      toast({ 
+        title: "⚠️ Partial Success", 
+        description: "Report created on blockchain but database record failed. Please contact support.",
+        variant: "destructive"
+      })
+    } else {
+  const ballerinaData = await ballerinaResp.json()
+  console.debug("✅ Database record created:", ballerinaData)
+      toast({ title: "✅ Report created", description: "Successfully saved to blockchain and database" })
+    }
+
+    // Reset form
+    setReportForm({
+      category: "",
+      title: "",
+      description: "",
+    })
+
+    // Refresh reports list and statistics
+    await refreshReportStatistics()
+  } catch (error: any) {
+    console.error("Failed create flow:", error)
+    
+    // Handle specific errors (keep your existing error handling)
+    if (error.message && error.message.includes("User not authorized")) {
+      toast({
+        title: "❌ Not Authorized",
+        description: "Your wallet address is not authorized to submit reports. Please contact an administrator to get your address authorized in the system.",
+        variant: "destructive",
+      })
+    } else if (error.message && error.message.includes("You can only create one report per day")) {
+      toast({
+        title: "❌ Daily Limit Reached",
+        description: "You can only submit one report per day. Please try again tomorrow.",
+        variant: "destructive",
+      })
+    } else if (error.message && error.message.includes("execution reverted")) {
+      const revertReason = error.reason || error.message.match(/execution reverted: "?([^"]*)"?/)?.[1] || "Unknown contract error"
+      toast({
+        title: "❌ Blockchain Error",
+        description: `Transaction failed: ${revertReason}`,
+        variant: "destructive",
+      })
+    } else if (error.code === 4001) {
+      toast({
+        title: "Transaction Cancelled",
+        description: "You cancelled the report submission",
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "❌ Submission Failed",
+        description: error?.message || "Failed to submit report. Please try again.",
+        variant: "destructive",
+      })
+    }
+  } finally {
+    setIsSubmittingReport(false)
+  }
+}
   // (evidence file reading removed — evidence hash is derived from textual fields only)
 
   // Normalize an Ethereum address (ensure 0x prefix and proper format)
@@ -542,7 +524,7 @@ Timestamp: ${timestamp}
         ? normalizeAddress(currentAccounts[0]) || normalizedAccount
         : normalizedAccount
 
-    console.log("Requesting personal_sign with address:", addressToUse)
+  console.debug("Requesting personal_sign with address:", addressToUse)
 
     // Try the common (message, address) order first
     try {
@@ -551,17 +533,17 @@ Timestamp: ${timestamp}
         params: [message, addressToUse],
       })
     } catch (err: any) {
-      console.log("First attempt failed:", err)
+  console.debug("First attempt failed:", err)
       // If provider complains about invalid params, try the reversed order
       if (err?.code === -32602 || /invalid params/i.test(String(err?.message || ""))) {
-        console.log("Trying reversed parameter order...")
+  console.debug("Trying reversed parameter order...")
         try {
           return await (window.ethereum as any).request({
             method: "personal_sign",
             params: [addressToUse, message],
           })
         } catch (err2: any) {
-          console.log("Second attempt also failed:", err2)
+          console.debug("Second attempt also failed:", err2)
           throw new Error(`Personal sign failed: ${err2.message || err2}`)
         }
       }
@@ -621,7 +603,7 @@ Timestamp: ${timestamp}
   const fetchPetitions = async () => {
     setIsLoadingPetitions(true)
     try {
-      const response = await fetch("http://localhost:8080/api/petitions")
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -656,7 +638,7 @@ Timestamp: ${timestamp}
   const fetchCategories = async () => {
     setIsLoadingCategories(true)
     try {
-      const response = await fetch("http://localhost:8080/api/categories")
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/categories`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -692,7 +674,7 @@ Timestamp: ${timestamp}
     for (const petition of petitionList) {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/petitions/${petition.id}/signed/${userId}`
+          `${BALLERINA_BASE_URL}/api/petitions/${petition.id}/signed/${userId}`
         )
         if (response.ok) {
           const data = await response.json()
@@ -802,7 +784,7 @@ By signing this message, you confirm your signature on this petition.`
       // Get contract address and ABI from the prepare service (same as petition creation)
       let blockchainSigningSuccess = false
       try {
-        const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+        const prepRes = await fetch(`${API_BASE_URL}/petition/prepare-petition`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -851,7 +833,7 @@ By signing this message, you confirm your signature on this petition.`
               })
             }
 
-            console.log(
+            console.debug(
               `Signing petition - DB ID: ${petitionId}, Blockchain ID: ${blockchainPetitionId}`
             )
 
@@ -866,7 +848,7 @@ By signing this message, you confirm your signature on this petition.`
               description: `Block: ${receipt.blockNumber}`,
             })
 
-            console.log("✅ Petition signed on blockchain:", receipt)
+            console.debug("✅ Petition signed on blockchain:", receipt)
             blockchainSigningSuccess = true
           }
         }
@@ -913,12 +895,12 @@ By signing this message, you confirm your signature on this petition.`
               "Failed to sign on blockchain. Your signature will only be recorded in the database.",
             variant: "destructive",
           })
-          console.log("⚠️ Continuing with database-only signing due to blockchain error")
+          console.debug("⚠️ Continuing with database-only signing due to blockchain error")
         }
       }
 
       // Submit signature to backend with user ID
-      const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions/${petitionId}/sign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -941,7 +923,7 @@ By signing this message, you confirm your signature on this petition.`
           )
 
           // Also create petition activity
-          await fetch("http://localhost:8080/api/petitionactivities", {
+          await fetch(`${BALLERINA_BASE_URL}/api/petitionactivities`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1153,7 +1135,7 @@ Timestamp: ${timestamp}
       let contractData = null
       try {
         const smartContractResponse = await fetch(
-          "http://localhost:3001/petition/create-petition",
+          `${API_BASE_URL}/petition/create-petition`,
           {
             method: "POST",
             headers: {
@@ -1168,9 +1150,9 @@ Timestamp: ${timestamp}
           }
         )
 
-        if (smartContractResponse.ok) {
+          if (smartContractResponse.ok) {
           contractData = await smartContractResponse.json()
-          console.log("✅ Smart contract petition created:", contractData)
+          console.debug("✅ Smart contract petition created:", contractData)
         } else {
           console.warn(
             "⚠️ Smart contract service responded with error:",
@@ -1185,7 +1167,7 @@ Timestamp: ${timestamp}
       }
 
       // Step 3: Save petition draft to Ballerina backend (required to obtain draftId)
-      const ballerinaResp = await fetch("http://localhost:8080/api/petitions", {
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/petitions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1209,7 +1191,7 @@ Timestamp: ${timestamp}
       }
 
       // Step 4: Prepare IPFS + contract info from the prepare service
-      const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+      const prepRes = await fetch(`${API_BASE_URL}/petition/prepare-petition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1234,7 +1216,7 @@ Timestamp: ${timestamp}
         description: "Please confirm the transaction in your wallet",
       })
 
-  // 3) Send transaction from user's wallet using ethers and Sepolia network
+      // 3) Send transaction from user's wallet using ethers and Sepolia network
       const ethers = await import("ethers")
       // Use BrowserProvider for ESM v6 in browser
       const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
@@ -1284,7 +1266,7 @@ Timestamp: ${timestamp}
 
       // 5) Confirm draft with Ballerina backend
       try {
-        await fetch(`http://localhost:8080/api/petitions/${draftId}/confirm`, {
+        await fetch(`${BALLERINA_BASE_URL}/api/petitions/${draftId}/confirm`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1296,7 +1278,7 @@ Timestamp: ${timestamp}
           }),
         })
       } catch (err) {
-        console.log(err)
+        console.error(err)
       }
 
       toast({ title: "Petition created", description: "Saved to blockchain and backend" })
@@ -1311,8 +1293,8 @@ Timestamp: ${timestamp}
       // Refresh petitions list
       fetchPetitions()
 
-      console.log("Smart contract data:", contractData)
-      console.log("Database data:", ballerinaData)
+  console.debug("Smart contract data:", contractData)
+  console.debug("Database data:", ballerinaData)
     } catch (error: any) {
       console.error("Failed create flow:", error)
       setLastError(error?.message || String(error))
@@ -1327,40 +1309,41 @@ Timestamp: ${timestamp}
   }
 
   // Reports state from backend
-  const [reports, setReports] = useState<Report[]>([]);
-  const [isLoadingReports, setIsLoadingReports] = useState(false);
-  
+  const [reports, setReports] = useState<Report[]>([])
+  const [isLoadingReports, setIsLoadingReports] = useState(false)
+
   // Report statistics state
   const [reportStatistics, setReportStatistics] = useState({
     total_reports: 0,
     resolved_reports: 0,
     unresolved_reports: 0,
     resolution_rate_percentage: 0,
-    priority_breakdown: {} as Record<string, number>
-  });
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
+    priority_breakdown: {} as Record<string, number>,
+  })
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0)
 
   // Fetch reports from backend
   React.useEffect(() => {
     const fetchReports = async () => {
-      setIsLoadingReports(true);
+      setIsLoadingReports(true)
       try {
-        const data = await reportService.getAllReports();
+        const data = await reportService.getAllReports()
         // Normalize reports: some backends return `id` or `reportId` instead of `report_id`
         // Also handle vote column name variations: likes/dislikes OR upvotes/downvotes
         const normalized = data.map((r: any) => {
-          const idCandidate = r.report_id ?? r.id ?? r.reportId ?? r.reportIdString ?? null;
-          const reportIdNum = idCandidate == null ? undefined : Number(idCandidate);
+          const idCandidate = r.report_id ?? r.id ?? r.reportId ?? r.reportIdString ?? null
+          const reportIdNum = idCandidate == null ? undefined : Number(idCandidate)
           // Normalize title fields from different backends
-          const title = r.report_title ?? r.title ?? r.reportTitle ?? '';
+          const title = r.report_title ?? r.title ?? r.reportTitle ?? ""
 
           // Coalesce vote fields from different possible shapes
-          const rawLikes = r.likes ?? r.like ?? r.upvotes ?? r.upvote ?? (r.votes && r.votes.likes);
-          const rawDislikes = r.dislikes ?? r.dislike ?? r.downvotes ?? r.downvote ?? (r.votes && r.votes.dislikes);
+          const rawLikes = r.likes ?? r.like ?? r.upvotes ?? r.upvote ?? (r.votes && r.votes.likes)
+          const rawDislikes =
+            r.dislikes ?? r.dislike ?? r.downvotes ?? r.downvote ?? (r.votes && r.votes.dislikes)
 
-          const likesNum = Number.isFinite(Number(rawLikes)) ? Number(rawLikes) : 0;
-          const dislikesNum = Number.isFinite(Number(rawDislikes)) ? Number(rawDislikes) : 0;
+          const likesNum = Number.isFinite(Number(rawLikes)) ? Number(rawLikes) : 0
+          const dislikesNum = Number.isFinite(Number(rawDislikes)) ? Number(rawDislikes) : 0
 
           return {
             ...r,
@@ -1368,189 +1351,205 @@ Timestamp: ${timestamp}
             report_title: title,
             likes: likesNum,
             dislikes: dislikesNum,
-          } as Report & any;
-        });
-        setReports(normalized);
+          } as Report & any
+        })
+        setReports(normalized)
 
         // Check user votes if wallet is connected (use normalized data so IDs and shapes are consistent)
         if (address) {
-          await checkUserReportVotes(normalized);
+          await checkUserReportVotes(normalized)
         }
-        
+
         // Refresh statistics after fetching reports
-        await refreshReportStatistics();
+        await refreshReportStatistics()
       } catch (e) {
         // Optionally show a toast
-        console.error('Failed to fetch reports:', e);
+        console.error("Failed to fetch reports:", e)
       } finally {
-        setIsLoadingReports(false);
+        setIsLoadingReports(false)
       }
-    };
-    fetchReports();
-  }, [address]);
+    }
+    fetchReports()
+  }, [address])
 
   // Check user votes when wallet address changes and reports are already loaded
   React.useEffect(() => {
     if (address && reports.length > 0) {
-      checkUserReportVotes(reports);
+      checkUserReportVotes(reports)
     }
-  }, [address, reports.length]);
+  }, [address, reports.length])
 
   // Fetch report statistics from backend
   React.useEffect(() => {
     const fetchReportStatistics = async () => {
-      setIsLoadingStats(true);
+      setIsLoadingStats(true)
       try {
-        const stats = await reportService.getReportStatistics();
-        setReportStatistics(stats);
+        const stats = await reportService.getReportStatistics()
+        setReportStatistics(stats)
       } catch (e) {
-        console.error('Failed to fetch report statistics:', e);
+        console.error("Failed to fetch report statistics:", e)
         // Fallback to calculating from current reports
         if (reports.length > 0) {
-          const resolved = reports.filter(r => r.resolved_status).length;
-          const unresolved = reports.filter(r => !r.resolved_status).length;
-          const total = reports.length;
-          const rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-          
+          const resolved = reports.filter((r) => r.resolved_status).length
+          const unresolved = reports.filter((r) => !r.resolved_status).length
+          const total = reports.length
+          const rate = total > 0 ? Math.round((resolved / total) * 100) : 0
+
           setReportStatistics({
             total_reports: total,
             resolved_reports: resolved,
             unresolved_reports: unresolved,
             resolution_rate_percentage: rate,
-            priority_breakdown: getDynamicPriorityStats()
-          });
+            priority_breakdown: getDynamicPriorityStats(),
+          })
         }
       } finally {
-        setIsLoadingStats(false);
+        setIsLoadingStats(false)
       }
-    };
-    fetchReportStatistics();
-  }, [reports.length, statsRefreshTrigger]);
+    }
+    fetchReportStatistics()
+  }, [reports.length, statsRefreshTrigger])
 
   // Function to refresh report statistics
   const refreshReportStatistics = async () => {
-    setStatsRefreshTrigger(prev => prev + 1);
-  };
+    setStatsRefreshTrigger((prev) => prev + 1)
+  }
 
   // Calculate average resolution time from resolved reports
   const getAverageResolutionTime = () => {
-    const resolvedReports = reports.filter(r => r.resolved_status && r.resolved_time);
-    if (resolvedReports.length === 0) return null;
-    
+    const resolvedReports = reports.filter((r) => r.resolved_status && r.resolved_time)
+    if (resolvedReports.length === 0) return null
+
     const totalDays = resolvedReports.reduce((sum, report) => {
-      const created = new Date(report.created_time);
-      const resolved = new Date(report.resolved_time!);
-      const diffTime = Math.abs(resolved.getTime() - created.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return sum + diffDays;
-    }, 0);
-    
-    return Math.round(totalDays / resolvedReports.length);
-  };
+      const created = new Date(report.created_time)
+      const resolved = new Date(report.resolved_time!)
+      const diffTime = Math.abs(resolved.getTime() - created.getTime())
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return sum + diffDays
+    }, 0)
+
+    return Math.round(totalDays / resolvedReports.length)
+  }
 
   // Check which reports the user has already voted on
   const checkUserReportVotes = async (reportList: Report[]) => {
-    if (!address) return;
+    if (!address) return
 
-    const votes: { [key: number]: "upvote" | "downvote" | null } = {};
-    
+    const votes: { [key: number]: "upvote" | "downvote" | null } = {}
+
     // Check user votes using the API
     for (const report of reportList) {
       try {
-        const voteType = await reportService.checkUserVote(report.report_id, address);
+        const voteType = await reportService.checkUserVote(report.report_id, address)
         // Map backend response ("like"/"dislike") to frontend format ("upvote"/"downvote")
-        if (voteType === 'like') {
-          votes[report.report_id] = 'upvote';
-        } else if (voteType === 'dislike') {
-          votes[report.report_id] = 'downvote';
+        if (voteType === "like") {
+          votes[report.report_id] = "upvote"
+        } else if (voteType === "dislike") {
+          votes[report.report_id] = "downvote"
         } else {
-          votes[report.report_id] = null;
+          votes[report.report_id] = null
         }
       } catch (error) {
-        console.error(`Error checking vote for report ${report.report_id}:`, error);
-        votes[report.report_id] = null;
+        console.error(`Error checking vote for report ${report.report_id}:`, error)
+        votes[report.report_id] = null
       }
     }
-    
-    setReportVotes(votes);
-  };
+
+    setReportVotes(votes)
+  }
 
   // Allow users to change their vote
-  const changeVote = async (reportId: number, newVoteType: 'upvote' | 'downvote') => {
+  const changeVote = async (reportId: number, newVoteType: "upvote" | "downvote") => {
     if (!address) {
-      toast({ title: 'Wallet Required', description: 'Connect your wallet to vote', variant: 'destructive' });
-      return;
+      toast({
+        title: "Wallet Required",
+        description: "Connect your wallet to vote",
+        variant: "destructive",
+      })
+      return
     }
 
     // Find report to get blockchain id fallback
-    const report = reports.find(r => r.report_id === reportId);
+    const report = reports.find((r) => r.report_id === reportId)
     try {
       // Step 1: call prepare endpoint to get contract info (we pass minimal dummy payload)
-      const prepRes = await fetch('http://localhost:3001/report/prepare-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: report?.report_title || 'vote', description: 'vote', evidenceHash: '0x0' })
-      });
+      const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: report?.report_title || "vote",
+          description: "vote",
+          evidenceHash: "0x0",
+        }),
+      })
 
       if (!prepRes.ok) {
-        const txt = await prepRes.text();
-        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`);
+        const txt = await prepRes.text()
+        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
       }
 
-      const prepJson = await prepRes.json();
-      const { contractAddress, contractAbi } = prepJson;
-      if (!contractAddress || !contractAbi) throw new Error('Contract information not available');
+      const prepJson = await prepRes.json()
+      const { contractAddress, contractAbi } = prepJson
+      if (!contractAddress || !contractAbi) throw new Error("Contract information not available")
 
       // Step 2: send tx from user's wallet
-      const ethers = await import('ethers');
-      const provider = new (ethers as any).BrowserProvider(window.ethereum as any);
-      await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
-      const signer = await provider.getSigner();
-      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer);
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
 
       // Determine blockchain report id (use stored blockchain id if available)
-      const blockchainId = (report as any)?.blockchain_report_id || (report as any)?.blockchainReportId || reportId;
+      const blockchainId =
+        (report as any)?.blockchain_report_id || (report as any)?.blockchainReportId || reportId
 
-      let tx;
-      if (newVoteType === 'upvote') {
-        tx = await contract.upvoteReport(blockchainId);
+      let tx
+      if (newVoteType === "upvote") {
+        tx = await contract.upvoteReport(blockchainId)
       } else {
-        tx = await contract.downvoteReport(blockchainId);
+        tx = await contract.downvoteReport(blockchainId)
       }
 
-      toast({ title: 'Transaction sent', description: tx.hash });
-      const receipt = await tx.wait();
-      toast({ title: 'Transaction confirmed', description: `Block ${receipt.blockNumber}` });
+      toast({ title: "Transaction sent", description: tx.hash })
+      const receipt = await tx.wait()
+      toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
 
       // Step 3: persist vote to backend and update UI from returned report
-      let updatedReport;
-      if (newVoteType === 'upvote') {
-        updatedReport = await reportService.likeReport(reportId, address);
+      let updatedReport
+      if (newVoteType === "upvote") {
+        updatedReport = await reportService.likeReport(reportId, address)
       } else {
-        updatedReport = await reportService.dislikeReport(reportId, address);
+        updatedReport = await reportService.dislikeReport(reportId, address)
       }
 
       // Update local state with new data from backend (single source of truth)
-      setReports((prev) => prev.map(r => r.report_id === reportId ? updatedReport : r));
-      setReportVotes((prev) => ({ ...prev, [reportId]: newVoteType }));
+      setReports((prev) => prev.map((r) => (r.report_id === reportId ? updatedReport : r)))
+      setReportVotes((prev) => ({ ...prev, [reportId]: newVoteType }))
 
       // Show priority change if it occurred
-      const currentReport = reports.find(r => r.report_id === reportId);
+      const currentReport = reports.find((r) => r.report_id === reportId)
       if (currentReport && currentReport.priority !== updatedReport.priority) {
-        setPriorityChanges(prev => ({ ...prev, [reportId]: `${currentReport.priority} → ${updatedReport.priority}` }));
+        setPriorityChanges((prev) => ({
+          ...prev,
+          [reportId]: `${currentReport.priority} → ${updatedReport.priority}`,
+        }))
         setTimeout(() => {
-          setPriorityChanges(prev => {
-            const newChanges = { ...prev };
-            delete newChanges[reportId];
-            return newChanges;
-          });
-        }, 5000);
+          setPriorityChanges((prev) => {
+            const newChanges = { ...prev }
+            delete newChanges[reportId]
+            return newChanges
+          })
+        }, 5000)
       }
     } catch (error: any) {
-      console.error('Failed to change vote:', error);
-      toast({ title: 'Vote failed', description: error?.message || 'Failed to record vote', variant: 'destructive' });
+      console.error("Failed to change vote:", error)
+      toast({
+        title: "Vote failed",
+        description: error?.message || "Failed to record vote",
+        variant: "destructive",
+      })
     }
-  };
+  }
 
   const reportStats = [
     { month: "Jan", reports: 23, resolved: 18 },
@@ -1608,14 +1607,14 @@ Timestamp: ${timestamp}
 
   // Calculate dynamic priority statistics from current reports
   const getDynamicPriorityStats = () => {
-    const stats = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    reports.forEach(report => {
+    const stats = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+    reports.forEach((report) => {
       if (stats.hasOwnProperty(report.priority)) {
-        stats[report.priority as keyof typeof stats]++;
+        stats[report.priority as keyof typeof stats]++
       }
-    });
-    return stats;
-  };
+    })
+    return stats
+  }
 
   return (
     <div className="space-y-6">
@@ -1623,7 +1622,7 @@ Timestamp: ${timestamp}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Citizen Reporting & Petition System</h2>
         <p className="text-slate-600">
-          Anonymous reporting and public petitions for Sri Lankan governance
+          Anonymous Reporting And Public Petitions For Sri Lankan Governance
         </p>
       </div>
 
@@ -1666,206 +1665,240 @@ Timestamp: ${timestamp}
               Array.from({ length: 4 }).map((_, index) => (
                 <Card key={index} className="border-0 shadow-md">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-4 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-24 animate-pulse rounded bg-slate-200"></div>
+                    <div className="h-4 w-4 animate-pulse rounded bg-slate-200"></div>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-8 w-16 bg-slate-200 rounded animate-pulse mb-2"></div>
-                    <div className="h-3 w-20 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="mb-2 h-8 w-16 animate-pulse rounded bg-slate-200"></div>
+                    <div className="h-3 w-20 animate-pulse rounded bg-slate-200"></div>
                   </CardContent>
                 </Card>
               ))
             ) : (
               <>
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  </CardHeader>
+                  <CardContent>
                     {isLoadingStats ? (
-                      <div className="text-2xl font-bold animate-pulse">...</div>
+                      <div className="animate-pulse text-2xl font-bold">...</div>
                     ) : (
-                      <div className="text-2xl font-bold">{reportStatistics.unresolved_reports}</div>
+                      <div className="text-2xl font-bold">
+                        {reportStatistics.unresolved_reports}
+                      </div>
                     )}
-                <p className="text-xs text-slate-500">Under investigation</p>
-              </CardContent>
-            </Card>
+                    <p className="text-xs text-slate-500">Under investigation</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
                     {isLoadingStats ? (
-                      <div className="text-2xl font-bold animate-pulse">...</div>
+                      <div className="animate-pulse text-2xl font-bold">...</div>
                     ) : (
                       <div className="text-2xl font-bold">{reportStatistics.resolved_reports}</div>
                     )}
-                <p className="text-xs text-slate-500">This year</p>
-              </CardContent>
-            </Card>
+                    <p className="text-xs text-slate-500">This year</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
                     <FileText className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
+                  </CardHeader>
+                  <CardContent>
                     {isLoadingStats ? (
-                      <div className="text-2xl font-bold animate-pulse">...</div>
+                      <div className="animate-pulse text-2xl font-bold">...</div>
                     ) : (
                       <div className="text-2xl font-bold">{reportStatistics.total_reports}</div>
                     )}
                     <p className="text-xs text-slate-500">All time</p>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            <Card className="border-0 shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card className="border-0 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
                     <TrendingUp className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
+                  </CardHeader>
+                  <CardContent>
                     {isLoadingStats ? (
-                      <div className="text-2xl font-bold animate-pulse">...</div>
+                      <div className="animate-pulse text-2xl font-bold">...</div>
                     ) : (
-                      <div className="text-2xl font-bold">{reportStatistics.resolution_rate_percentage}%</div>
+                      <div className="text-2xl font-bold">
+                        {reportStatistics.resolution_rate_percentage}%
+                      </div>
                     )}
                     <p className="text-xs text-slate-500">Success rate</p>
                     {!isLoadingStats && getAverageResolutionTime() && (
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="mt-1 text-xs text-slate-400">
                         Avg. time: {getAverageResolutionTime()} days
                       </p>
                     )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
               </>
             )}
           </div>
-
-          
 
           {/* Reports List */}
           <div className="space-y-4">
             {isLoadingReports ? (
               <div className="flex justify-center py-8">Loading reports...</div>
-            ) : reports.map((report) => (
-              <Card key={report.report_id} className="border-0 shadow-md">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{report.report_title}</CardTitle>
-                        <Badge variant="outline">{report.priority}</Badge>
-                        <Badge className={getStatusColor(report.resolved_status ? 'Resolved' : 'Under Investigation')}>
-                          {report.resolved_status ? 'Resolved' : 'Under Investigation'}
-                        </Badge>
-                        {/* Priority change indicator */}
-                        {priorityChanges[report.report_id] && (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 animate-pulse">
-                            <TrendingUp className="h-3 w-3 mr-1" />
-                            {priorityChanges[report.report_id]}
+            ) : (
+              reports.map((report) => (
+                <Card key={report.report_id} className="border-0 shadow-md">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg">{report.report_title}</CardTitle>
+                          <Badge variant="outline">{report.priority}</Badge>
+                          <Badge
+                            className={getStatusColor(
+                              report.resolved_status ? "Resolved" : "Under Investigation"
+                            )}
+                          >
+                            {report.resolved_status ? "Resolved" : "Under Investigation"}
                           </Badge>
-                        )}
-                        <div className="text-xs text-slate-500">
-                          {report.likes && report.dislikes && (
-                            <span className="inline-flex items-center gap-1">
-                              <TrendingUp className="h-3 w-3" />
-                              Vote-based priority
-                            </span>
+                          {/* Priority change indicator */}
+                          {priorityChanges[report.report_id] && (
+                            <Badge
+                              variant="secondary"
+                              className="animate-pulse bg-blue-100 text-blue-800"
+                            >
+                              <TrendingUp className="mr-1 h-3 w-3" />
+                              {priorityChanges[report.report_id]}
+                            </Badge>
+                          )}
+                          <div className="text-xs text-slate-500">
+                            {report.likes && report.dislikes && (
+                              <span className="inline-flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3" />
+                                Vote-based priority
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-600">
+                          <span>ID: {report.report_id}</span>
+                          <span>•</span>
+                          <span>
+                            Submitted: {new Date(report.created_time).toLocaleDateString()}
+                          </span>
+                          {report.last_updated_time && (
+                            <>
+                              <span>•</span>
+                              <span>
+                                Updated: {new Date(report.last_updated_time).toLocaleDateString()}
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-600">
-                        <span>ID: {report.report_id}</span>
-                        <span>•</span>
-                        <span>Submitted: {new Date(report.created_time).toLocaleDateString()}</span>
-                        {report.last_updated_time && <><span>•</span><span>Updated: {new Date(report.last_updated_time).toLocaleDateString()}</span></>}
+                      <div className="text-right">
+                        <div className={`text-sm font-medium ${getPriorityColor(report.priority)}`}>
+                          {report.priority} Priority
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Net votes: {(report.likes || 0) - (report.dislikes || 0)}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-medium ${getPriorityColor(report.priority)}`}>
-                        {report.priority} Priority
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <p className="text-sm text-slate-600">Submitted By</p>
+                        <p className="text-sm font-medium">{report.assigned_to || "Anonymous"}</p>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        Net votes: {(report.likes || 0) - (report.dislikes || 0)}
+                      <div>
+                        <p className="text-sm text-slate-600">Assigned To</p>
+                        <p className="font-medium">{report.assigned_to || "Unassigned"}</p>
                       </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-slate-600">Submitted By</p>
-                      <p className="font-medium text-sm">{report.assigned_to || 'Anonymous'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Assigned To</p>
-                      <p className="font-medium">{report.assigned_to || 'Unassigned'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-2">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Hash className="h-3 w-3" />
-                      <span>Blockchain verified</span>
-                    </div>
-                    <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setOpenReportDetails(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}>
-                      {openReportDetails[report.report_id] ? 'Hide Details' : 'View Details'}
-                    </Button>
-                      {/* Upvote/Downvote Buttons for Reports */}
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-between border-t pt-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <Hash className="h-3 w-3" />
+                        <span>Blockchain verified</span>
+                      </div>
+                      <div className="flex gap-2">
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => changeVote(report.report_id, "upvote")}
-                          disabled={reportVotes[report.report_id] === "upvote"}
-                          className={
-                            reportVotes[report.report_id] === "upvote"
-                              ? "text-green-600 hover:text-green-700 bg-green-50"
-                              : "text-slate-500 hover:text-slate-700"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setOpenReportDetails((prev) => ({
+                              ...prev,
+                              [report.report_id]: !prev[report.report_id],
+                            }))
                           }
-                          title="Upvote this report"
                         >
-                          <ThumbsUp className="h-4 w-4" />
+                          {openReportDetails[report.report_id] ? "Hide Details" : "View Details"}
                         </Button>
-                        <span className="text-sm text-slate-600 font-medium min-w-[2rem] text-center">
-                          {report.likes || 0}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => changeVote(report.report_id, "downvote")}
-                          disabled={reportVotes[report.report_id] === "downvote"}
-                          className={
-                            reportVotes[report.report_id] === "downvote"
-                              ? "text-red-600 hover:text-red-700 bg-red-50"
-                              : "text-slate-500 hover:text-slate-700"
-                          }
-                          title="Downvote this report"
-                        >
-                          <ThumbsDown className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm text-slate-600 font-medium min-w-[2rem] text-center">
-                          {report.dislikes || 0}
-                        </span>
+                        {/* Upvote/Downvote Buttons for Reports */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => changeVote(report.report_id, "upvote")}
+                            disabled={reportVotes[report.report_id] === "upvote"}
+                            className={
+                              reportVotes[report.report_id] === "upvote"
+                                ? "bg-green-50 text-green-600 hover:text-green-700"
+                                : "text-slate-500 hover:text-slate-700"
+                            }
+                            title="Upvote this report"
+                          >
+                            <ThumbsUp className="h-4 w-4" />
+                          </Button>
+                          <span className="min-w-[2rem] text-center text-sm font-medium text-slate-600">
+                            {report.likes || 0}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => changeVote(report.report_id, "downvote")}
+                            disabled={reportVotes[report.report_id] === "downvote"}
+                            className={
+                              reportVotes[report.report_id] === "downvote"
+                                ? "bg-red-50 text-red-600 hover:text-red-700"
+                                : "text-slate-500 hover:text-slate-700"
+                            }
+                            title="Downvote this report"
+                          >
+                            <ThumbsDown className="h-4 w-4" />
+                          </Button>
+                          <span className="min-w-[2rem] text-center text-sm font-medium text-slate-600">
+                            {report.dislikes || 0}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {/* Details area (toggle) */}
-                  {openReportDetails[report.report_id] && (
-                    <div className="mt-3 rounded bg-gray-50 p-3">
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{report.description || 'No description available'}</p>
-                      {(report as any).title_cid && (
-                        <p className="text-xs text-slate-400 mt-2">Title CID: <span className="font-mono">{(report as any).title_cid}</span></p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {/* Details area (toggle) */}
+                    {openReportDetails[report.report_id] && (
+                      <div className="mt-3 rounded bg-gray-50 p-3">
+                        <p className="whitespace-pre-wrap text-sm text-slate-700">
+                          {report.description || "No description available"}
+                        </p>
+                        {(report as any).title_cid && (
+                          <p className="mt-2 text-xs text-slate-400">
+                            Title CID:{" "}
+                            <span className="font-mono">{(report as any).title_cid}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
 
@@ -1955,7 +1988,11 @@ Timestamp: ${timestamp}
                     : 0
                 const isThresholdMet =
                   (petition.signature_count || 0) >= petition.required_signature_count
-                const status = isThresholdMet ? "Threshold Met" : (petition.completed ? "Completed" : "Active")
+                const status = isThresholdMet
+                  ? "Threshold Met"
+                  : petition.completed
+                    ? "Completed"
+                    : "Active"
 
                 return (
                   <Card key={petition.id} className="border-0 shadow-md">
@@ -2056,7 +2093,7 @@ Timestamp: ${timestamp}
                   Submit Anonymous Report
                 </CardTitle>
                 <CardDescription>
-                  End-to-end encrypted submission with cryptographic anonymity
+                  End-To-End Encrypted Submission With Cryptographic Anonymity
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2107,7 +2144,6 @@ Timestamp: ${timestamp}
                     onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
                   />
                 </div>
-
 
                 <div className="rounded-lg bg-blue-50 p-3">
                   <div className="flex items-center gap-2 text-sm text-blue-800">
@@ -2177,7 +2213,7 @@ Timestamp: ${timestamp}
                   Create Smart Contract Petition
                 </CardTitle>
                 <CardDescription>
-                  Automated execution when signature threshold is met
+                  Automated Execution When Signature Threshold Is Met
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2294,8 +2330,6 @@ Timestamp: ${timestamp}
             </Card>
           </div>
         </TabsContent>
-
-        
       </Tabs>
     </div>
   )

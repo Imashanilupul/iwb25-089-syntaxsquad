@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('Clear-session: Starting comprehensive session cleanup...');
+  console.debug('Clear-session: Starting comprehensive session cleanup...');
     
     // Step 1: Try to get current session info before clearing
     let idToken = null;
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         idToken = parsed.id_token;
       }
     } catch (e) {
-      console.log('Clear-session: No valid session data found');
+      console.debug('Clear-session: No valid session data found');
     }
     
     // Create response that clears all authentication-related cookies
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    console.log('Clear-session: All authentication cookies cleared');
+  console.debug('Clear-session: All authentication cookies cleared');
     return response;
 
   } catch (error) {

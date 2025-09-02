@@ -224,7 +224,7 @@ export function SpendingTracker() {
             Real-Time Government Spending Tracker
           </h2>
           <p className="text-slate-600">
-            Blockchain-verified Sri Lankan government expenditure tracking
+            Blockchain-Verified Sri Lankan Government Expenditure Tracking
           </p>
         </div>
       </div>

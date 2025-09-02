@@ -30,6 +30,10 @@ import { useAppKitAccount } from "@reown/appkit/react"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 
 export function ProposalManagement() {
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -114,7 +118,7 @@ export function ProposalManagement() {
         })
       }
     } catch (error) {
-      console.error("Error loading data:", error)
+  console.debug("Error loading data:", error)
       toast({
         title: "Error",
         description: "Failed to load data. Please check your connection.",
@@ -230,7 +234,7 @@ export function ProposalManagement() {
         await validateWallet(address!)
 
         // Fetch contract info (ABI + address) so the client can create a contract instance
-        const infoRes = await fetch('http://localhost:3001/proposal/contract-info')
+        const infoRes = await fetch(`${API_BASE_URL}/proposal/contract-info`)
         if (!infoRes.ok) throw new Error('Failed to fetch contract info for on-chain edit')
         const info = await infoRes.json()
         const { contractAddress, contractAbi } = info
@@ -318,7 +322,7 @@ Timestamp: ${timestamp}
       })
 
       // Prepare IPFS + contract info from the prepare service (without draftId)
-      const prepRes = await fetch("http://localhost:3001/proposal/prepare-proposal", {
+      const prepRes = await fetch(`${API_BASE_URL}/proposal/prepare-proposal`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -398,7 +402,7 @@ Timestamp: ${timestamp}
       })
 
       try {
-        const ballerinaResp = await fetch("http://localhost:8080/api/proposals", {
+        const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/proposals`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -428,7 +432,7 @@ Timestamp: ${timestamp}
           })
         } else {
           const ballerinaData = await ballerinaResp.json()
-          console.log("Database save successful:", ballerinaData)
+          console.debug("Database save successful:", ballerinaData)
           toast({
             title: "🎉 Proposal created successfully",
             description: "Saved to blockchain and database"
@@ -538,7 +542,7 @@ Timestamp: ${timestamp}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Voting Proposals</h2>
-          <p className="text-slate-600">Manage voting proposals and track results</p>
+          <p className="text-slate-600">Manage Voting Proposals And Track Results</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

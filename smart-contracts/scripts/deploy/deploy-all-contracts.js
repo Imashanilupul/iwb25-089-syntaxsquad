@@ -2,7 +2,7 @@ const hre = require("hardhat");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
-  
+
   console.log("Deploying all governance contracts with the account:", deployer.address);
   console.log("Account balance:", (await deployer.provider.getBalance(deployer.address)).toString());
 
@@ -22,7 +22,7 @@ async function main() {
   const petitionsAddress = await petitions.getAddress();
   console.log("✅ Petitions deployed to:", petitionsAddress);
 
-  // // Deploy Reports contract
+  // Deploy Reports contract
   console.log("\n3. Deploying Reports...");
   const Reports = await hre.ethers.getContractFactory("Reports");
   const reports = await Reports.deploy(authRegistryAddress);
@@ -58,6 +58,9 @@ async function main() {
   // Authorize the deployer as admin
   console.log("\n7. Authorizing deployer address as admin...");
   await authRegistry.authorizeAdmin(deployer.address);
+    await authRegistry.authorizeUser("0xbEC83E49424a2b441C2bFf52c1a854BcB897B3ce");
+
+
   console.log("✅ Deployer authorized as admin successfully");
 
   console.log("\n🎉 Complete Deployment Summary:");

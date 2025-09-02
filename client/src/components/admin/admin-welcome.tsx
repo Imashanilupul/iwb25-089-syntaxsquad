@@ -33,7 +33,7 @@ export function AdminWelcome() {
       })
     } else if (isFullyAuthenticated) {
       // Both wallet and Asgardeo authenticated - redirect to admin portal
-      console.log('AdminWelcome: User is fully authenticated, redirecting to admin portal');
+      console.debug('AdminWelcome: User is fully authenticated, redirecting to admin portal');
       toast({
         title: "🚀 Authentication Complete!",
         description: "Redirecting to admin portal...",
@@ -44,7 +44,7 @@ export function AdminWelcome() {
       }, 1500)
     } else if (asgardeoUser && !isConnected) {
       // User has Asgardeo session but no wallet connected - sign out from Asgardeo
-      console.log('AdminWelcome: Asgardeo session found but no wallet connected, signing out');
+      console.debug('AdminWelcome: Asgardeo session found but no wallet connected, signing out');
       toast({
         title: "Session Cleared",
         description: "Please connect your wallet to continue.",
@@ -92,7 +92,7 @@ export function AdminWelcome() {
       }, 1500)
       
     } catch (error) {
-      console.error("Failed to disconnect wallet and clear session:", error)
+                console.debug("Failed to disconnect wallet and clear session:", error)
       // Clear saved state even on error
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
@@ -114,7 +114,7 @@ export function AdminWelcome() {
   const clearAsgardeoSession = async () => {
     try {
       // Show debug info before clearing
-      console.log('🔍 Session data before clearing:', debugAuthenticationData())
+  console.debug('🔍 Session data before clearing:', debugAuthenticationData())
       
       // Step 1: Call server-side session clearing endpoint
       const response = await fetch('/api/auth/clear-session', {
@@ -134,10 +134,10 @@ export function AdminWelcome() {
       
       // Step 3: Verify the cleanup was successful
       const sessionStatus = getSessionStatus()
-      console.log('📊 Session status after clearing:', sessionStatus)
+    console.debug('📊 Session status after clearing:', sessionStatus)
       
       if (sessionStatus.isCleared) {
-        console.log('✅ All Asgardeo session data and tokens cleared successfully')
+    console.debug('✅ All Asgardeo session data and tokens cleared successfully')
         return true
       } else {
         console.warn(`⚠️ ${sessionStatus.remainingAuthItems} authentication items still found:`, sessionStatus.details)

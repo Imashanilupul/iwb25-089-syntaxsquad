@@ -273,7 +273,7 @@ export function PetitionManagement() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">National Petition Management</h2>
-        <p className="text-slate-600">Manage citizen petitions across all provinces and districts</p>
+        <p className="text-slate-600">Manage Citizen Petitions Across All Provinces And Districts</p>
       </div>
 
       {/* Search and Filters */}

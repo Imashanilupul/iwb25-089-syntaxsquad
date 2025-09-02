@@ -96,10 +96,10 @@ export const policyService = {
   // Create new policy with blockchain integration
   async createPolicyWithBlockchain(data: CreatePolicyData): Promise<SinglePolicyResponse & { blockchain?: any }> {
     try {
-      console.log("🏛️ Creating policy with blockchain integration...");
+  console.debug("🏛️ Creating policy with blockchain integration...");
       
       // Step 1: Create policy in database via Ballerina backend
-      console.log("💾 Step 1: Creating policy in database...");
+  console.debug("💾 Step 1: Creating policy in database...");
       const dbResponse = await apiService.post<SinglePolicyResponse>('/api/policies', data)
       
       if (!dbResponse.success) {
@@ -116,11 +116,11 @@ export const policyService = {
       }
 
       // Step 3: Create policy on blockchain
-      console.log("⛓️ Step 2: Creating policy on blockchain...");
+  console.debug("⛓️ Step 2: Creating policy on blockchain...");
       const blockchainResponse = await createPolicyOnBlockchain(blockchainData)
       
       if (blockchainResponse.success && blockchainResponse.data) {
-        console.log("✅ Policy created on blockchain successfully!");
+  console.debug("✅ Policy created on blockchain successfully!");
         
         // Step 4: Update database with blockchain data if needed
         try {
@@ -133,7 +133,7 @@ export const policyService = {
           
           // Call confirm endpoint to update database with blockchain data
           await apiService.post(`/api/policies/${dbResponse.data.id}/confirm`, confirmPayload)
-          console.log("✅ Database updated with blockchain confirmation!");
+          console.debug("✅ Database updated with blockchain confirmation!");
           
         } catch (confirmError) {
           console.warn("⚠️ Failed to update database with blockchain data:", confirmError);

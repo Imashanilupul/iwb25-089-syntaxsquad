@@ -141,7 +141,7 @@ async function createAsgardeoUser(userData: CreateUserRequest, accessToken: stri
  */
 async function authorizeWalletOnBlockchain(walletAddress: string, asgardeoUserId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register-user`, {
+    const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/register-user`, {
       walletAddress,
       asgardeoUserId,
       additionalData: {
@@ -166,12 +166,12 @@ async function authorizeWalletOnBlockchain(walletAddress: string, asgardeoUserId
  */
 async function deleteAsgardeoUser(userId: string, accessToken: string): Promise<void> {
   try {
-    await axios.delete(`${ASGARDEO_BASE_URL}/scim2/Users/${userId}`, {
+  await axios.delete(`${ASGARDEO_BASE_URL}/scim2/Users/${userId}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
-    console.log(`Rolled back: Deleted Asgardeo user ${userId}`);
+  console.debug(`Rolled back: Deleted Asgardeo user ${userId}`);
   } catch (error) {
     console.error(`Failed to rollback user deletion for ${userId}:`, error);
   }
@@ -234,8 +234,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log successful registration
-    console.log(`✅ User registered successfully:`, {
+  // Log successful registration
+  console.debug(`✅ User registered successfully:`, {
       asgardeoUserId: userCreation.userId,
       walletAddress: userData.walletAddress,
       email: userData.email,

@@ -2,6 +2,10 @@ const express = require("express");
 const axios = require("axios");
 require('dotenv').config(); // Add this to load .env file
 
+// Environment variables
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
+const LOCAL_RPC_URL = process.env.LOCAL_RPC_URL || 'http://localhost:8545';
+
 // Database configuration from .env file
 const DB_CONFIG = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -63,7 +67,7 @@ try {
       console.log('Using default provider for network', networkName, 'with options', Object.keys(providerOptions));
     } catch (e) {
       // Final fallback to localhost RPC — this keeps behavior but will fail if no local node.
-      const localRpc = 'http://localhost:8545';
+      const localRpc = LOCAL_RPC_URL;
       provider = new (ethers.JsonRpcProvider ? ethers.JsonRpcProvider : ethers.providers.JsonRpcProvider)(localRpc);
       console.warn('Could not create default provider, falling back to local RPC', localRpc, 'error:', e.message);
     }
@@ -79,7 +83,7 @@ router.use((req, res, next) => {
   res.setTimeout(900000);
   
   // Add CORS headers for all requests
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header('Access-Control-Allow-Origin', FRONTEND_BASE_URL);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -386,7 +390,6 @@ async function processReport(connectedContract, i) {
     creation_time: Number(report[8].toString()),
     resolution_time: Number(report[9].toString()),
     creator: 1,
-    evidence_hash: `blockchain_${i}`,
     created_time: new Date().toISOString()
   };
 }
@@ -397,7 +400,7 @@ async function fetchPoliciesOptimized(blocksBack) {
   try {
     const connectedContract = await getContractInstance('Policies', CONTRACT_ADDRESSES.Policies);
     if (typeof connectedContract.policyCount === 'function') {
-      const policyCount = await connectedContract.policyCount();
+            const policyCount = await connectedContract.policyCount(); // Fetch the total number of policies
       const policiesData = [];
       
       for (let i = 1; i <= Number(policyCount.toString()); i++) {
@@ -428,7 +431,7 @@ async function fetchProjectsOptimized(blocksBack) {
   try {
     const connectedContract = await getContractInstance('Project', CONTRACT_ADDRESSES.Project);
     if (typeof connectedContract.projectCount === 'function') {
-      const projectCount = await connectedContract.projectCount();
+            const projectCount = await connectedContract.projectCount(); // Fetch the total number of projects
       const projectsData = [];
       
       for (let i = 1; i <= Number(projectCount.toString()); i++) {
@@ -463,7 +466,7 @@ router.get("/proposals/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     
@@ -520,7 +523,7 @@ router.get("/petitions/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     
@@ -576,7 +579,7 @@ router.get("/reports/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     
@@ -856,7 +859,7 @@ async function createPetition(data) {
 // Reports
 async function getAllReports() {
   return await queryDatabase('reports', {
-    select: 'id,title,description,priority,upvotes,downvotes,creator,resolved_status,evidence_hash,removed',
+    select: 'id,title,description,priority,upvotes,downvotes,creator,resolved_status,removed',
     order: 'id'
   });
 }
@@ -871,7 +874,7 @@ async function createReport(data) {
     id: data.id,
     creator: data.creator || null,
     resolved_status: data.resolved_status || false,
-    evidence_hash: data.evidence_hash || `blockchain_${data.id}`,
+  // evidence_hash removed from DB schema - omit from sync
     removed: data.removed || false
   };
   return await createRecord('reports', reportData);
@@ -1052,38 +1055,107 @@ async function createProject(data) {
 
 // ========================================
 // FIELD COMPARISON FUNCTIONS  
-function comparePolicyFields(dbPolicy, bcPolicy) {
+async function comparePolicyFields(dbPolicy, bcPolicy) {
   const updateData = {};
   let hasChanges = false;
-  // Example field comparisons, adjust as needed for your schema
-  if (dbPolicy.name !== bcPolicy.name) {
-    updateData.name = bcPolicy.name;
+
+  // Helper to detect likely CIDs (basic heuristics)
+  function isPossiblyCid(s) {
+    if (!s || typeof s !== 'string') return false;
+    const trimmed = s.trim();
+    if (trimmed.startsWith('Qm') || trimmed.startsWith('bafy') || trimmed.startsWith('ipfs://')) return true;
+    // common base58/46-ish check (loose)
+    if (/^[A-Za-z0-9_-]{20,100}$/.test(trimmed) && !/\s/.test(trimmed)) return true;
+    return false;
+  }
+
+  // Support raw arrays emitted by some contract readers
+  const raw = bcPolicy && bcPolicy.raw ? bcPolicy.raw : [];
+
+  const bcName = raw[0] !== undefined && raw[0] !== null ? raw[0] : (bcPolicy.name || '');
+  let bcDescriptionRaw = raw[1] !== undefined && raw[1] !== null ? raw[1] : (bcPolicy.description || '');
+  let bcViewRaw = raw[2] !== undefined && raw[2] !== null ? raw[2] : (bcPolicy.view_full_policy || bcPolicy.view || '');
+
+  // Resolve IPFS CIDs when present
+  let bcDescription = bcDescriptionRaw;
+  let bcView = bcViewRaw;
+  try {
+    if (typeof bcDescriptionRaw === 'string' && isPossiblyCid(bcDescriptionRaw)) {
+      bcDescription = await fetchIPFSContent(String(bcDescriptionRaw));
+    }
+  } catch (e) {
+    console.warn('Warning: failed to resolve policy description CID', e.message);
+  }
+
+  try {
+    if (typeof bcViewRaw === 'string' && isPossiblyCid(bcViewRaw)) {
+      bcView = await fetchIPFSContent(String(bcViewRaw));
+    }
+  } catch (e) {
+    console.warn('Warning: failed to resolve policy view CID', e.message);
+  }
+
+  const bcMinistry = raw[3] !== undefined && raw[3] !== null ? raw[3] : (bcPolicy.ministry || '');
+  const bcStatus = raw[4] !== undefined && raw[4] !== null ? raw[4] : (bcPolicy.status || '');
+  const bcSupportCount = raw[9] !== undefined ? Number(raw[9]) : (bcPolicy.supportCount || 0);
+  const bcIsActive = raw[11] !== undefined ? Boolean(raw[11]) : (bcPolicy.isActive || false);
+  const bcRemoved = raw[10] !== undefined ? Boolean(raw[10]) : (bcPolicy.removed || false);
+
+  // Compare fields and add to updateData when changed
+  if ((dbPolicy.name || '') !== (bcName || '')) {
+    updateData.name = bcName || '';
     hasChanges = true;
   }
-  if (dbPolicy.description !== bcPolicy.description) {
-    updateData.description = bcPolicy.description;
+
+  if ((dbPolicy.description || '') !== (bcDescription || '')) {
+    updateData.description = bcDescription || '';
     hasChanges = true;
   }
-  if (dbPolicy.ministry !== bcPolicy.ministry) {
-    updateData.ministry = bcPolicy.ministry;
+
+  if ((dbPolicy.view_full_policy || '') !== (bcView || '')) {
+    updateData.view_full_policy = bcView || '';
     hasChanges = true;
   }
-  if (dbPolicy.status !== bcPolicy.status) {
-    updateData.status = bcPolicy.status;
+
+  if ((dbPolicy.ministry || '') !== (bcMinistry || '')) {
+    updateData.ministry = bcMinistry || '';
     hasChanges = true;
   }
-  if (dbPolicy.supportCount !== bcPolicy.supportCount) {
-    updateData.supportCount = bcPolicy.supportCount;
+
+  if ((dbPolicy.status || '') !== (bcStatus || '')) {
+    updateData.status = bcStatus || '';
     hasChanges = true;
   }
-  if (dbPolicy.isActive !== bcPolicy.isActive) {
-    updateData.isActive = bcPolicy.isActive;
+
+  if ((Number(dbPolicy.supportCount) || 0) !== bcSupportCount) {
+    updateData.supportCount = bcSupportCount;
     hasChanges = true;
   }
-  if (dbPolicy.removed !== bcPolicy.removed) {
-    updateData.removed = bcPolicy.removed;
+
+  if ((dbPolicy.isActive || false) !== bcIsActive) {
+    updateData.isActive = bcIsActive;
     hasChanges = true;
   }
+
+  if ((dbPolicy.removed || false) !== bcRemoved) {
+    updateData.removed = bcRemoved;
+    hasChanges = true;
+  }
+
+  // Dates mapping if provided in bcPolicy
+  if (bcPolicy.createdAt && String(dbPolicy.created_at || dbPolicy.createdAt || '') !== String(bcPolicy.createdAt)) {
+    updateData.created_at = bcPolicy.createdAt;
+    hasChanges = true;
+  }
+  if (bcPolicy.updatedAt && String(dbPolicy.updated_at || dbPolicy.updatedAt || '') !== String(bcPolicy.updatedAt)) {
+    updateData.updated_at = bcPolicy.updatedAt;
+    hasChanges = true;
+  }
+  if (bcPolicy.effectiveDate && String(dbPolicy.effective_date || dbPolicy.effectiveDate || '') !== String(bcPolicy.effectiveDate)) {
+    updateData.effective_date = bcPolicy.effectiveDate;
+    hasChanges = true;
+  }
+
   return { hasChanges, updateData };
 }
 
@@ -1384,19 +1456,27 @@ async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
       if (!dbPolicy.id) continue;
       const bcPolicy = bcMap.get(dbPolicy.id);
       if (!bcPolicy) continue;
-      const needsUpdate = comparePolicyFields(dbPolicy, bcPolicy);
-      if (needsUpdate.hasChanges) {
-        try {
+
+      // comparePolicyFields is async and will resolve CIDs when present
+      try {
+        const needsUpdate = await comparePolicyFields(dbPolicy, bcPolicy);
+        if (needsUpdate.hasChanges) {
           await updateRecord('policies', dbPolicy.id, needsUpdate.updateData);
           updatedCount++;
           console.log(`🔄 Updated policy ${dbPolicy.id}`);
-        } catch (error) {
-          errors.push({ type: 'update', id: dbPolicy.id, error: error.message });
         }
+      } catch (error) {
+        errors.push({ type: 'update', id: dbPolicy.id, error: error.message });
       }
     }
 
     // 3. Add blockchain records not in DB
+    function isLikelyCid(s) {
+      if (!s || typeof s !== 'string') return false;
+      const t = s.trim();
+      return t.startsWith('Qm') || t.startsWith('bafy') || t.startsWith('ipfs://') || (/^[A-Za-z0-9_-]{20,100}$/.test(t) && !/\s/.test(t));
+    }
+
     for (const bcPolicy of blockchainPolicies) {
       if (!bcPolicy.id || dbMap.has(bcPolicy.id)) continue;
       try {
@@ -1408,11 +1488,33 @@ async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
           if (isNaN(num) || num < 1000000000) return null;
           return new Date(num * 1000).toISOString();
         }
+
+        // Resolve description and view from CID when needed
+        const descRaw = raw[1] !== undefined && raw[1] !== null ? raw[1] : (bcPolicy.description || '');
+        const viewRaw = raw[2] !== undefined && raw[2] !== null ? raw[2] : (bcPolicy.view_full_policy || '');
+
+        let resolvedDescription = descRaw;
+        let resolvedView = viewRaw;
+        try {
+          if (typeof descRaw === 'string' && isLikelyCid(descRaw)) {
+            resolvedDescription = await fetchIPFSContent(String(descRaw));
+          }
+        } catch (e) {
+          console.warn('Failed to resolve policy description CID for create:', e.message);
+        }
+        try {
+          if (typeof viewRaw === 'string' && isLikelyCid(viewRaw)) {
+            resolvedView = await fetchIPFSContent(String(viewRaw));
+          }
+        } catch (e) {
+          console.warn('Failed to resolve policy view CID for create:', e.message);
+        }
+
         const dbPolicyData = {
           id: bcPolicy.id,
           name: raw[0] || bcPolicy.name || '',
-          description: raw[1] || bcPolicy.description || '',
-          view_full_policy: raw[2] || bcPolicy.view_full_policy || '',
+          description: resolvedDescription || '',
+          view_full_policy: resolvedView || '',
           ministry: raw[3] || bcPolicy.ministry || '',
           status: raw[4] || bcPolicy.status || '',
           creator: raw[5] || bcPolicy.creator || '',
@@ -1423,7 +1525,7 @@ async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
           removed: raw[10] !== undefined ? Boolean(raw[10]) : (bcPolicy.removed || false),
           isActive: raw[11] !== undefined ? Boolean(raw[11]) : (bcPolicy.isActive || false)
         };
-        console.log('📝 Creating policy in DB:', JSON.stringify(dbPolicyData));
+        console.log('📝 Creating policy in DB:', JSON.stringify({ id: dbPolicyData.id, name: dbPolicyData.name }));
         await createPolicy(dbPolicyData);
         newCount++;
         console.log(`✅ Created policy ${bcPolicy.id}`);

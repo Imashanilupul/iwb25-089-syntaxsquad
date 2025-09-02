@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('Logout: Starting complete logout process...');
+  console.debug('Logout: Starting complete logout process...');
     
     // Step 1: Get the ID token for proper Asgardeo logout
     let idToken = null;
@@ -13,15 +13,15 @@ export async function POST(request: NextRequest) {
     
     try {
       const sessionCookie = request.cookies.get('asgardeo_session');
-      if (sessionCookie && sessionCookie.value) {
+        if (sessionCookie && sessionCookie.value) {
         sessionData = JSON.parse(sessionCookie.value);
         idToken = sessionData.tokens?.id_token || sessionData.id_token;
-        console.log('Logout: Found session data, ID token available:', !!idToken);
+        console.debug('Logout: Found session data, ID token available:', !!idToken);
       } else {
-        console.log('Logout: No session cookie found');
+        console.debug('Logout: No session cookie found');
       }
     } catch (e) {
-      console.log('Logout: Error parsing session data:', e);
+      console.debug('Logout: Error parsing session data:', e);
     }
     
     // Step 2: Build Asgardeo logout URL that shows logout confirmation page
@@ -34,13 +34,13 @@ export async function POST(request: NextRequest) {
         `id_token_hint=${idToken}&` +
         `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
         `prompt=logout`;
-      console.log('Logout: Built Asgardeo logout confirmation page URL with ID token');
+  console.debug('Logout: Built Asgardeo logout confirmation page URL with ID token');
     } else {
       // Fallback: Use specific Asgardeo logout endpoint without ID token
       asgardeoLogoutUrl = `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
         `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
         `client_id=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!)}`;
-      console.log('Logout: Built Asgardeo logout confirmation page URL (no ID token)');
+  console.debug('Logout: Built Asgardeo logout confirmation page URL (no ID token)');
     }
     
     // Step 3: Return the Asgardeo logout URL for direct redirect
@@ -104,11 +104,11 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    console.log('Logout: All authentication cookies cleared');
+  console.debug('Logout: All authentication cookies cleared');
     return response;
 
   } catch (error) {
-    console.error('Logout: Error during logout process:', error);
+  console.error('Logout: Error during logout process:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
       { success: false, error: 'Logout failed', details: errorMessage },
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('Logout: Direct logout redirect requested');
+  console.debug('Logout: Direct logout redirect requested');
     
     // Get ID token from cookies
     let idToken = null;
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
         idToken = sessionData.tokens?.id_token || sessionData.id_token;
       }
     } catch (e) {
-      console.log('Logout: No session data for direct logout');
+      console.debug('Logout: No session data for direct logout');
     }
     
     // Redirect directly to Asgardeo logout page

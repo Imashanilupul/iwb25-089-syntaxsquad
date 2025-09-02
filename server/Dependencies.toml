@@ -160,15 +160,6 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
-name = "lang.error"
-version = "0.0.0"
-scope = "testOnly"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"}
-]
-
-[[package]]
-org = "ballerina"
 name = "lang.int"
 version = "0.0.0"
 dependencies = [
@@ -294,20 +285,6 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
-name = "test"
-version = "0.0.0"
-scope = "testOnly"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "lang.array"},
-	{org = "ballerina", name = "lang.error"}
-]
-modules = [
-	{org = "ballerina", packageName = "test", moduleName = "test"}
-]
-
-[[package]]
-org = "ballerina"
 name = "time"
 version = "2.7.0"
 dependencies = [
@@ -357,7 +334,6 @@ dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "regex"},
-	{org = "ballerina", name = "test"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerinai", name = "observe"}
 ]
@@ -373,7 +349,6 @@ modules = [
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.projects"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.proposals"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.reports"},
-	{org = "user", packageName = "server_bal", moduleName = "server_bal.test_api_key"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.transactions"},
 	{org = "user", packageName = "server_bal", moduleName = "server_bal.users"}
 ]

@@ -55,18 +55,18 @@ export function PolicyHub() {
 
         // Fetch policy statistics
         const statsResponse = await policyService.getPolicyStatistics()
-        console.log('Policy stats response:', statsResponse)
+        console.debug('Policy stats response:', statsResponse)
         if (statsResponse.success) {
           setPolicyStats(statsResponse.statistics)
-          console.log('Set policy stats to:', statsResponse.statistics)
+          console.debug('Set policy stats to:', statsResponse.statistics)
         }
 
         // Fetch comment statistics
         const commentStatsResponse = await policyCommentService.getCommentStatistics()
-        console.log('Comment stats response:', commentStatsResponse)
+        console.debug('Comment stats response:', commentStatsResponse)
         if (commentStatsResponse.success) {
           setCommentStats(commentStatsResponse.data)
-          console.log('Set comment stats to:', commentStatsResponse.data)
+          console.debug('Set comment stats to:', commentStatsResponse.data)
         }
 
       } catch (error) {
@@ -358,7 +358,7 @@ export function PolicyHub() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Policy Discussion Forum</h2>
-          <p className="text-slate-600">Public consultation on Sri Lankan government policies</p>
+          <p className="text-slate-600">Public Consultation On Sri Lankan Government Policies</p>
         </div>
         <div className="flex gap-2">
         </div>

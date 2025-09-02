@@ -30,6 +30,10 @@ import { useAppKitAccount } from '@reown/appkit/react'
 import { useAuth } from "@/context/AuthContext"
 
 export function ProjectManagement() {
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   const [projects, setProjects] = useState<Project[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [ministries, setMinistries] = useState<string[]>([])
@@ -340,7 +344,7 @@ Timestamp: ${timestamp}
         })
 
         // Prepare IPFS + contract info from the prepare service
-        const prepRes = await fetch("http://localhost:3001/project/prepare-project", {
+        const prepRes = await fetch(`${API_BASE_URL}/project/prepare-project`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -525,7 +529,7 @@ Timestamp: ${timestamp}
         })
 
         // Prepare IPFS + contract info from the prepare service
-        const prepRes = await fetch("http://localhost:3001/project/prepare-project", {
+        const prepRes = await fetch(`${API_BASE_URL}/project/prepare-project`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -904,7 +908,7 @@ Timestamp: ${timestamp}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Project Management</h2>
-          <p className="text-slate-600">Manage government projects and their budgets</p>
+          <p className="text-slate-600">Manage Government Projects And Their Budgets</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

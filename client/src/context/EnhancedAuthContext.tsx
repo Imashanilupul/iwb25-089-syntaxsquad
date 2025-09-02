@@ -5,6 +5,8 @@ import { useAppKitAccount } from "@reown/appkit/react";
 import axios from "axios";
 import { EnhancedAuthService } from "@/services/enhanced-auth";
 
+const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
 type AuthState = {
   // Wallet authentication
   address: string | null;
@@ -69,7 +71,7 @@ export function EnhancedAuthProvider({ children }: { children: React.ReactNode }
       }
       return null;
     } catch (error) {
-      console.log('No Asgardeo session found:', error);
+      console.debug('No Asgardeo session found:', error);
       return null;
     }
   };
@@ -78,7 +80,7 @@ export function EnhancedAuthProvider({ children }: { children: React.ReactNode }
   const validateUserAuthentication = async (walletAddress: string, asgardeoUser?: any) => {
     try {
       // Step 1: Check basic wallet verification
-      const walletAuthRes = await axios.get(`http://localhost:8080/api/auth/isauthorized/${walletAddress}`);
+      const walletAuthRes = await axios.get(`${BALLERINA_BASE_URL}/api/auth/isauthorized/${walletAddress}`);
       const walletVerified = walletAuthRes.data.verified;
 
       if (!walletVerified) {
@@ -122,7 +124,7 @@ export function EnhancedAuthProvider({ children }: { children: React.ReactNode }
       }
 
       // Step 3: Check if user is registered (for users without Asgardeo session)
-      const userValidationRes = await axios.post('http://localhost:8080/api/auth/validate-user', {
+      const userValidationRes = await axios.post(`${BALLERINA_BASE_URL}/api/auth/validate-user`, {
         walletAddress,
         asgardeoUserId: asgardeoUser?.sub,
         asgardeoUser

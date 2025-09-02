@@ -19,7 +19,7 @@ export const InfoList = () => {
     const mounted = useClientMounted();
 
     useEffect(() => {
-        console.log("Events: ", events);
+        console.debug("Events: ", events);
     }, [events]);
 
   return !mounted ? null : (
