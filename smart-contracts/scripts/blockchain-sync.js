@@ -2,6 +2,10 @@ const express = require("express");
 const axios = require("axios");
 require('dotenv').config(); // Add this to load .env file
 
+// Environment variables
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
+const LOCAL_RPC_URL = process.env.LOCAL_RPC_URL || 'http://localhost:8545';
+
 // Database configuration from .env file
 const DB_CONFIG = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -63,7 +67,7 @@ try {
       console.log('Using default provider for network', networkName, 'with options', Object.keys(providerOptions));
     } catch (e) {
       // Final fallback to localhost RPC — this keeps behavior but will fail if no local node.
-      const localRpc = 'http://localhost:8545';
+      const localRpc = LOCAL_RPC_URL;
       provider = new (ethers.JsonRpcProvider ? ethers.JsonRpcProvider : ethers.providers.JsonRpcProvider)(localRpc);
       console.warn('Could not create default provider, falling back to local RPC', localRpc, 'error:', e.message);
     }
@@ -79,7 +83,7 @@ router.use((req, res, next) => {
   res.setTimeout(900000);
   
   // Add CORS headers for all requests
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header('Access-Control-Allow-Origin', FRONTEND_BASE_URL);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -462,7 +466,7 @@ router.get("/proposals/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     
@@ -519,7 +523,7 @@ router.get("/petitions/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     
@@ -575,7 +579,7 @@ router.get("/reports/blockchain-data", async (req, res) => {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Origin': FRONTEND_BASE_URL,
       'Access-Control-Allow-Credentials': 'true'
     });
     

@@ -37,7 +37,7 @@ cd ../shared && pnpm install
 **Client (.env.local):**
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
 ```
 
 **Server (.env):**
@@ -149,7 +149,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://server:5000
+      - NEXT_PUBLIC_API_BASE_URL=http://server:5000
 
   server:
     build: ./server

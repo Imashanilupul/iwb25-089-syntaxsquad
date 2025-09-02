@@ -53,6 +53,10 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const { toast } = useToast()
   const { address, verified } = useAuth() // Get auth state
 
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   const [reportForm, setReportForm] = useState({
     category: "",
     title: "",
@@ -321,7 +325,7 @@ Timestamp: ${timestamp}
     })
 
     // Step 3: Prepare IPFS + contract info from the prepare service
-    const prepRes = await fetch("http://localhost:3001/report/prepare-report", {
+    const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -391,7 +395,7 @@ Timestamp: ${timestamp}
     }
 
     // Step 4: Create database record with blockchain metadata
-    const ballerinaResp = await fetch("http://localhost:8080/api/reports", {
+    const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/reports`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -599,7 +603,7 @@ Timestamp: ${timestamp}
   const fetchPetitions = async () => {
     setIsLoadingPetitions(true)
     try {
-      const response = await fetch("http://localhost:8080/api/petitions")
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -634,7 +638,7 @@ Timestamp: ${timestamp}
   const fetchCategories = async () => {
     setIsLoadingCategories(true)
     try {
-      const response = await fetch("http://localhost:8080/api/categories")
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/categories`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -670,7 +674,7 @@ Timestamp: ${timestamp}
     for (const petition of petitionList) {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/petitions/${petition.id}/signed/${userId}`
+          `${BALLERINA_BASE_URL}/api/petitions/${petition.id}/signed/${userId}`
         )
         if (response.ok) {
           const data = await response.json()
@@ -780,7 +784,7 @@ By signing this message, you confirm your signature on this petition.`
       // Get contract address and ABI from the prepare service (same as petition creation)
       let blockchainSigningSuccess = false
       try {
-        const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+        const prepRes = await fetch(`${API_BASE_URL}/petition/prepare-petition`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -896,7 +900,7 @@ By signing this message, you confirm your signature on this petition.`
       }
 
       // Submit signature to backend with user ID
-      const response = await fetch(`http://localhost:8080/api/petitions/${petitionId}/sign`, {
+      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions/${petitionId}/sign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -919,7 +923,7 @@ By signing this message, you confirm your signature on this petition.`
           )
 
           // Also create petition activity
-          await fetch("http://localhost:8080/api/petitionactivities", {
+          await fetch(`${BALLERINA_BASE_URL}/api/petitionactivities`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1131,7 +1135,7 @@ Timestamp: ${timestamp}
       let contractData = null
       try {
         const smartContractResponse = await fetch(
-          "http://localhost:3001/petition/create-petition",
+          `${API_BASE_URL}/petition/create-petition`,
           {
             method: "POST",
             headers: {
@@ -1163,7 +1167,7 @@ Timestamp: ${timestamp}
       }
 
       // Step 3: Save petition draft to Ballerina backend (required to obtain draftId)
-      const ballerinaResp = await fetch("http://localhost:8080/api/petitions", {
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/petitions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1187,7 +1191,7 @@ Timestamp: ${timestamp}
       }
 
       // Step 4: Prepare IPFS + contract info from the prepare service
-      const prepRes = await fetch("http://localhost:3001/petition/prepare-petition", {
+      const prepRes = await fetch(`${API_BASE_URL}/petition/prepare-petition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1262,7 +1266,7 @@ Timestamp: ${timestamp}
 
       // 5) Confirm draft with Ballerina backend
       try {
-        await fetch(`http://localhost:8080/api/petitions/${draftId}/confirm`, {
+        await fetch(`${BALLERINA_BASE_URL}/api/petitions/${draftId}/confirm`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1469,7 +1473,7 @@ Timestamp: ${timestamp}
     const report = reports.find((r) => r.report_id === reportId)
     try {
       // Step 1: call prepare endpoint to get contract info (we pass minimal dummy payload)
-      const prepRes = await fetch("http://localhost:3001/report/prepare-report", {
+      const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -22,6 +22,8 @@ import { Plus, Edit, Trash2, DollarSign, Loader2, RefreshCw } from "lucide-react
 import { useToast } from "@/hooks/use-toast"
 import categoryService, { type Category, type CategoryFormData } from "@/services/category"
 
+const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
 export function CategoryManagement() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,7 +218,7 @@ export function CategoryManagement() {
       })
 
       try {
-        const healthCheck = await fetch('http://localhost:8080/api/categories', {
+        const healthCheck = await fetch(`${BALLERINA_BASE_URL}/api/categories`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         })
@@ -232,7 +234,7 @@ export function CategoryManagement() {
       } catch (connectError) {
         toast({
           title: "❌ Cannot connect to backend server",
-          description: "Please ensure the Ballerina server is running on http://localhost:8080",
+          description: `Please ensure the Ballerina server is running on ${BALLERINA_BASE_URL}`,
           variant: "destructive"
         })
         console.error("Connection test failed:", connectError)
@@ -264,7 +266,7 @@ export function CategoryManagement() {
       
       let errorMessage = "Failed to sync category spent budgets. Please try again."
       if (error.message?.includes("Network Error")) {
-        errorMessage = "Cannot connect to backend server. Please ensure the Ballerina server is running on http://localhost:8080"
+        errorMessage = `Cannot connect to backend server. Please ensure the Ballerina server is running on ${BALLERINA_BASE_URL}`
       } else if (error.response?.status) {
         errorMessage = `Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`
       }

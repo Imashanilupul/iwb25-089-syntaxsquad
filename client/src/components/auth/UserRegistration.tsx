@@ -13,6 +13,8 @@ import { Loader2, CheckCircle, XCircle, AlertTriangle, UserPlus } from 'lucide-r
 import { toast } from 'sonner';
 import axios from 'axios';
 
+const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
 export function UserRegistration() {
   const auth = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
@@ -55,7 +57,7 @@ export function UserRegistration() {
     setIsRegistering(true);
 
     try {
-      const response = await axios.post('http://localhost:8080/api/auth/register-user', {
+      const response = await axios.post(`${BALLERINA_BASE_URL}/api/auth/register-user`, {
         walletAddress: auth.address,
         asgardeoUserId: auth.asgardeoUser.sub,
         asgardeoUser: auth.asgardeoUser,

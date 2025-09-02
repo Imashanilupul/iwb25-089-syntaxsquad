@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 
+const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
 export function useUserRegistration() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export function useUserRegistration() {
 
     try {
       // Register user with backend
-      const response = await axios.post('http://localhost:8080/api/auth/register-user', {
+      const response = await axios.post(`${BALLERINA_BASE_URL}/api/auth/register-user`, {
         walletAddress: auth.address,
         asgardeoUserId: auth.asgardeoUser.sub,
         asgardeoUser: auth.asgardeoUser,

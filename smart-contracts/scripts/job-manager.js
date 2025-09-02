@@ -2,6 +2,9 @@ const express = require("express");
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
+require('dotenv').config();
+const NODE_API_BASE_URL = process.env.NODE_API_BASE_URL || 'http://localhost:3001';
+
 // BigInt serialization helper
 function serializeBigInt(key, value) {
   if (typeof value === 'bigint') {
@@ -159,7 +162,7 @@ async function executeBlockchainSyncJob(jobId, params) {
 
   try {
     // Call the comprehensive sync endpoint
-    const result = await axios.post('http://localhost:3001/sync/execute', {
+    const result = await axios.post(`${NODE_API_BASE_URL}/sync/execute`, {
       blocksBack,
       isFullSync
     }, { timeout: 900000 });

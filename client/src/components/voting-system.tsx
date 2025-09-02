@@ -27,6 +27,9 @@ interface VotingActivity {
 }
 
 export function VotingSystem() {
+  // Environment variables
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   const [selectedProposal, setSelectedProposal] = useState<number | null>(null)
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -319,8 +322,8 @@ Timestamp: ${timestamp}
 
       try {
         const apiEndpoint = voteType === "yes" 
-          ? `http://localhost:8080/api/proposal/vote-yes` 
-          : `http://localhost:8080/api/proposal/vote-no`
+          ? `${BALLERINA_BASE_URL}/api/proposal/vote-yes` 
+          : `${BALLERINA_BASE_URL}/api/proposal/vote-no`
 
         const apiResponse = await fetch(apiEndpoint, {
           method: "POST",
@@ -342,9 +345,9 @@ Timestamp: ${timestamp}
         }
 
         // ALWAYS update the database regardless of smart contract API success/failure
-        toast.info("� Updating database with vote...")
+        toast.info("📊 Updating database with vote...")
         try {
-          const databaseResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
+          const databaseResponse = await fetch(`${BALLERINA_BASE_URL}/api/proposals/vote`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -393,7 +396,7 @@ Timestamp: ${timestamp}
         // Even if smart contract API fails, still try to update the database
         toast.info("🔄 Updating database despite API failure...")
         try {
-          const fallbackResponse = await fetch(`http://localhost:8080/api/proposals/vote`, {
+          const fallbackResponse = await fetch(`${BALLERINA_BASE_URL}/api/proposals/vote`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -459,7 +462,7 @@ Timestamp: ${timestamp}
         console.error("Error voting:", err)
       }
       
-      toast.error(`❌ Failed to record vote: ${errorMessage}`)
+      toast.error(`❌ Failed to record vote: ${err}`)
     } finally {
       setVotingLoading(null)
     }

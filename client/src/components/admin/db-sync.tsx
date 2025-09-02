@@ -51,6 +51,9 @@ export function DbSync() {
   const { toast } = useToast()
   const { isConnected, address } = useAppKitAccount()
 
+  // Environment variables
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   // State
   const [isFullSync, setIsFullSync] = useState(false)
   const [syncProgress, setSyncProgress] = useState(0)
@@ -147,19 +150,19 @@ export function DbSync() {
     try {
       // Load current DB stats from each service
       const [petitionsRes, proposalsRes, reportsRes, policiesRes, projectsRes] = await Promise.all([
-        fetch("http://localhost:8080/api/petitions")
+        fetch(`${BALLERINA_BASE_URL}/api/petitions`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch("http://localhost:8080/api/proposals")
+        fetch(`${BALLERINA_BASE_URL}/api/proposals`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch("http://localhost:8080/api/reports")
+        fetch(`${BALLERINA_BASE_URL}/api/reports`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch("http://localhost:8080/api/policies")
+        fetch(`${BALLERINA_BASE_URL}/api/policies`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch("http://localhost:8080/api/projects")
+        fetch(`${BALLERINA_BASE_URL}/api/projects`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
       ])
@@ -206,7 +209,7 @@ export function DbSync() {
       setSyncProgress(10)
 
       // Start the comprehensive sync job on Node backend
-      const syncJobResponse = await fetch("http://localhost:8080/api/blockchain/sync", {
+      const syncJobResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,7 +236,7 @@ export function DbSync() {
       const pollJobStatus = async () => {
         try {
           const statusResponse = await fetch(
-            `http://localhost:8080/api/blockchain/sync/status/${jobId}`
+            `${BALLERINA_BASE_URL}/api/blockchain/sync/status/${jobId}`
           )
           if (!statusResponse.ok) {
             throw new Error(`Failed to get job status: ${statusResponse.statusText}`)
@@ -249,7 +252,7 @@ export function DbSync() {
             setSyncProgress(95)
 
             const resultResponse = await fetch(
-              `http://localhost:8080/api/blockchain/sync/result/${jobId}`
+              `${BALLERINA_BASE_URL}/api/blockchain/sync/result/${jobId}`
             )
             if (!resultResponse.ok) {
               throw new Error(`Failed to get job result: ${resultResponse.statusText}`)

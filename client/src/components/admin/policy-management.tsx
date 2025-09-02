@@ -30,6 +30,11 @@ import { useAppKitAccount } from "@reown/appkit/react"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 
 export function PolicyManagement() {
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+  console.log(`URL ISSSSSSSSSSSSSSSS ${BALLERINA_BASE_URL}`);
+
   const [policies, setPolicies] = useState<PolicyType[]>([])
   const [loading, setLoading] = useState(true)
   const [statistics, setStatistics] = useState<PolicyStatistics["statistics"] | null>(null)
@@ -435,7 +440,7 @@ Timestamp: ${timestamp}
       })
 
       // Save to Ballerina backend first to get draft ID
-      const ballerinaResp = await fetch("http://localhost:8080/api/policies", {
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/policies`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -458,7 +463,7 @@ Timestamp: ${timestamp}
       if (!draftId) throw new Error("Could not determine draftId from Ballerina response")
 
       // Prepare IPFS + contract info
-      const prepRes = await fetch("http://localhost:3001/policy/prepare-policy", {
+      const prepRes = await fetch(`${API_BASE_URL}/policy/prepare-policy`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -535,7 +540,7 @@ Timestamp: ${timestamp}
 
       // Confirm with backend
       try {
-        await fetch(`http://localhost:8080/api/policies/${draftId}/confirm`, {
+        await fetch(`${BALLERINA_BASE_URL}/api/policies/${draftId}/confirm`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

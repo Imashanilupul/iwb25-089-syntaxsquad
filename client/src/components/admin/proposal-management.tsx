@@ -30,6 +30,10 @@ import { useAppKitAccount } from "@reown/appkit/react"
 import { ConnectButton } from "@/components/walletConnect/wallet-connect"
 
 export function ProposalManagement() {
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
+
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -230,7 +234,7 @@ export function ProposalManagement() {
         await validateWallet(address!)
 
         // Fetch contract info (ABI + address) so the client can create a contract instance
-        const infoRes = await fetch('http://localhost:3001/proposal/contract-info')
+        const infoRes = await fetch(`${API_BASE_URL}/proposal/contract-info`)
         if (!infoRes.ok) throw new Error('Failed to fetch contract info for on-chain edit')
         const info = await infoRes.json()
         const { contractAddress, contractAbi } = info
@@ -318,7 +322,7 @@ Timestamp: ${timestamp}
       })
 
       // Prepare IPFS + contract info from the prepare service (without draftId)
-      const prepRes = await fetch("http://localhost:3001/proposal/prepare-proposal", {
+      const prepRes = await fetch(`${API_BASE_URL}/proposal/prepare-proposal`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -398,7 +402,7 @@ Timestamp: ${timestamp}
       })
 
       try {
-        const ballerinaResp = await fetch("http://localhost:8080/api/proposals", {
+        const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/proposals`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
