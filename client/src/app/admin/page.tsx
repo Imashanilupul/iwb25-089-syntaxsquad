@@ -46,7 +46,7 @@ export default function AdminPortal() {
     
     try {
       setIsProcessingOAuth(true)
-      console.log('OAuth Callback: Starting token exchange...')
+  console.debug('OAuth Callback: Starting token exchange...')
       
       // Call our server-side API to handle token exchange securely
       const response = await fetch('/api/auth/token-exchange', {
@@ -68,7 +68,7 @@ export default function AdminPortal() {
       }
 
       const result = await response.json()
-      console.log('OAuth Callback: Token exchange successful:', result)
+  console.debug('OAuth Callback: Token exchange successful:', result)
 
       if (result.success) {
         // Clean up URL parameters
@@ -82,7 +82,7 @@ export default function AdminPortal() {
         
         // Instead of reloading, trigger auth context refresh
         // The auth context will detect the new session cookie and update accordingly
-        console.log('OAuth callback successful, auth context should update automatically')
+  console.debug('OAuth callback successful, auth context should update automatically')
         
         // Show success message
         toast({
@@ -122,7 +122,7 @@ export default function AdminPortal() {
     
     // Handle OAuth callback
     if (code && state) {
-      console.log('Admin page: Detected OAuth callback with code and state')
+  console.debug('Admin page: Detected OAuth callback with code and state')
       handleOAuthCallback(code, state)
       return
     }
@@ -151,7 +151,7 @@ export default function AdminPortal() {
       // Give auth context time to update after OAuth
       const checkAuthAfterDelay = setTimeout(() => {
         if (!isFullyAuthenticated) {
-          console.log('Admin page: Not authenticated, redirecting to adminLogin')
+          console.debug('Admin page: Not authenticated, redirecting to adminLogin')
           router.push('/adminLogin')
         }
       }, 3000) // Wait 3 seconds for auth context to update
@@ -170,7 +170,7 @@ export default function AdminPortal() {
     if (!isRecentlyAuthenticated) {
       // Immediate redirect for clearly unauthenticated users
       const redirectTimer = setTimeout(() => {
-        console.log('Admin page: Not authenticated, redirecting to adminLogin')
+  console.debug('Admin page: Not authenticated, redirecting to adminLogin')
         router.push('/adminLogin')
       }, 1000) // Short delay to avoid race conditions
       
@@ -231,7 +231,7 @@ export default function AdminPortal() {
 
   const handleWalletDisconnect = async () => {
     try {
-      console.log('Admin: Starting complete logout process...')
+      console.debug('Admin: Starting complete logout process...')
       
       // Clear saved authentication state immediately
       localStorage.removeItem('adminAuthState')
@@ -240,14 +240,14 @@ export default function AdminPortal() {
       
       // First disconnect the wallet to avoid any conflicts
       try {
-        await disconnect()
-        console.log('Admin: Wallet disconnected successfully')
+  await disconnect()
+  console.debug('Admin: Wallet disconnected successfully')
       } catch (error) {
         console.warn('Admin: Wallet disconnect failed, but continuing logout:', error)
       }
       
-      // Call our comprehensive logout endpoint
-      console.log('Admin: Calling logout API endpoint...')
+  // Call our comprehensive logout endpoint
+  console.debug('Admin: Calling logout API endpoint...')
       const logoutResponse = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
@@ -257,26 +257,26 @@ export default function AdminPortal() {
       })
       
       if (logoutResponse.ok) {
-        const logoutResult = await logoutResponse.json()
-        console.log('Admin: Logout endpoint response:', logoutResult)
+  const logoutResult = await logoutResponse.json()
+  console.debug('Admin: Logout endpoint response:', logoutResult)
         
         if (logoutResult.redirectUrl) {
-          console.log('Admin: Redirecting to Asgardeo logout:', logoutResult.redirectUrl)
+          console.debug('Admin: Redirecting to Asgardeo logout:', logoutResult.redirectUrl)
           // Add a small delay to ensure local cleanup is complete
           setTimeout(() => {
             window.location.href = logoutResult.redirectUrl
           }, 100)
           return
         } else {
-          console.log('Admin: No redirect URL provided, using fallback')
+          console.debug('Admin: No redirect URL provided, using fallback')
         }
       } else {
         const errorText = await logoutResponse.text()
         console.warn('Admin: Logout endpoint failed:', logoutResponse.status, errorText)
       }
       
-      // Fallback: direct redirect to logout route
-      console.log('Admin: Using fallback logout redirect')
+  // Fallback: direct redirect to logout route
+  console.debug('Admin: Using fallback logout redirect')
       window.location.href = '/api/auth/logout'
       
     } catch (error) {

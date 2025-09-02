@@ -4,6 +4,8 @@ import ballerina/io;
 configurable string geminiApiKey = ?;
 configurable string chromadbUrl = "https://api.chroma.com";
 configurable string chromadbApiKey = ?;
+// Enable debug logging in development by setting this config to true
+configurable boolean enable_debug_logs = false;
 
 public service class ChatService {
     *http:Service;
@@ -12,17 +14,24 @@ public service class ChatService {
     final http:Client chromadbClient;
 
     public function init() returns error? {
-        io:println("Initializing ChatService...");
+        if (enable_debug_logs) {
+            io:println("Initializing ChatService...");
+        }
         self.geminiClient = check new ("https://generativelanguage.googleapis.com/v1beta");
         self.chromadbClient = check new (chromadbUrl);
-        io:println("ChatService initialized with Gemini URL: https://generativelanguage.googleapis.com/v1beta, ChromaDB URL: ", chromadbUrl);
+        if (enable_debug_logs) {
+            io:println("ChatService initialized with Gemini URL: https://generativelanguage.googleapis.com/v1beta, ChromaDB URL: ", chromadbUrl);
+        }
     }
 
     isolated resource function post chat(http:Caller caller, json payload) returns error? {
-        io:println("Received chat request with payload: ", payload.toString());
+        if (enable_debug_logs) {
+            io:println("Received chat request with payload: ", payload.toString());
+        }
 
         // Validate payload
         if payload !is map<json> {
+            // Log minimal error for payload validation
             io:println("Error: Payload is not a JSON object");
             return error("Payload must be a JSON object");
         }
@@ -34,25 +43,33 @@ public service class ChatService {
             return error("Missing or invalid 'query' field in payload");
         }
         string query = check queryJson.ensureType(string);
-        io:println("Extracted query: ", query);
+        if (enable_debug_logs) {
+            io:println("Extracted query: ", query);
+        }
 
         // ChromaDB request
         json searchReq = {
             "query_texts": [query],
             "n_results": 2
         };
-        io:println("ChromaDB request payload: ", searchReq.toString());
+        if (enable_debug_logs) {
+            io:println("ChromaDB request payload: ", searchReq.toString());
+        }
         http:Request chromaReq = new;
         chromaReq.setHeader("Authorization", "Bearer " + chromadbApiKey);
         chromaReq.setJsonPayload(searchReq);
-        io:println("Sending ChromaDB request to: ", chromadbUrl + "/api/v1/collections/faqs/query");
+        if (enable_debug_logs) {
+            io:println("Sending ChromaDB request to: ", chromadbUrl + "/api/v1/collections/faqs/query");
+        }
         http:Response|error searchResponse = self.chromadbClient->post("/api/v1/collections/faqs/query", chromaReq);
         if searchResponse is error {
             io:println("ChromaDB request failed: ", searchResponse.toString());
             return error("ChromaDB request failed: " + searchResponse.message());
         }
         json searchRes = check searchResponse.getJsonPayload();
-        io:println("ChromaDB response: ", searchRes.toString());
+        if (enable_debug_logs) {
+            io:println("ChromaDB response: ", searchRes.toString());
+        }
 
         // Validate ChromaDB response
         if searchRes !is map<json> {
@@ -66,14 +83,18 @@ public service class ChatService {
         }
         json[][] documents = <json[][]>documentsJson;
         json[] results = documents.length() > 0 ? documents[0] : [];
-        io:println("ChromaDB results: ", results.toString());
+        if (enable_debug_logs) {
+            io:println("ChromaDB results: ", results.toString());
+        }
 
         // Build context from results
         string context = "";
         foreach var item in results {
             context += item.toString() + "\n";
         }
-        io:println("Built context: ", context);
+        if (enable_debug_logs) {
+            io:println("Built context: ", context);
+        }
 
         // Gemini API request
         json chatReq = {
@@ -81,24 +102,31 @@ public service class ChatService {
                 {
                     "parts": [
                         {
-                            "text": "You are a support assistant. Use the provided context to answer the query accurately.\n\nContext: " + context + "\nQuery: " + query
+                            // Neutral prompt (removed assistant-like wording)
+                            "text": "Use the provided context to answer the query accurately.\n\nContext: " + context + "\nQuery: " + query
                         }
                     ]
                 }
             ]
         };
-        io:println("Gemini request payload: ", chatReq.toString());
+        if (enable_debug_logs) {
+            io:println("Gemini request payload: ", chatReq.toString());
+        }
         http:Request geminiReq = new;
         geminiReq.setHeader("Authorization", "Bearer " + geminiApiKey);
         geminiReq.setJsonPayload(chatReq);
-        io:println("Sending Gemini request to: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent");
+        if (enable_debug_logs) {
+            io:println("Sending Gemini request to: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent");
+        }
         http:Response|error chatResponse = self.geminiClient->post("/models/gemini-1.5-flash:generateContent", geminiReq);
         if chatResponse is error {
             io:println("Gemini request failed: ", chatResponse.toString());
             return error("Gemini request failed: " + chatResponse.message());
         }
         json chatRes = check chatResponse.getJsonPayload();
-        io:println("Gemini response: ", chatRes.toString());
+        if (enable_debug_logs) {
+            io:println("Gemini response: ", chatRes.toString());
+        }
 
         // Validate Gemini response
         if chatRes !is map<json> {
@@ -119,7 +147,9 @@ public service class ChatService {
                 response = (<map<json>>parts[0])["text"].toString();
             }
         }
-        io:println("Final response: ", response);
+        if (enable_debug_logs) {
+            io:println("Final response: ", response);
+        }
 
         check caller->respond({"response": response});
     }

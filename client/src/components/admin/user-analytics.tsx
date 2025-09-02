@@ -104,7 +104,7 @@ export function UserAnalytics() {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading analytics data...</span>
+        <span className="ml-2">Loading Analytics Data...</span>
       </div>
     )
   }
@@ -112,7 +112,7 @@ export function UserAnalytics() {
   if (!analytics) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-slate-600">Failed to load analytics data.</p>
+        <p className="text-slate-600">Failed To Load Analytics Data.</p>
       </div>
     )
   }
@@ -123,7 +123,7 @@ export function UserAnalytics() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Citizen Analytics Dashboard</h2>
-          <p className="text-slate-600">Privacy-preserving insights into citizen engagement and platform usage</p>
+          <p className="text-slate-600">Privacy-Preserving Insights Into Citizen Engagement And Platform Usage</p>
         </div>
         <div className="flex gap-4">
           <Button

@@ -93,11 +93,11 @@ export function forceCleanupAuthData(): void {
     return;
   }
 
-  console.log('🧹 Starting force cleanup of authentication data...');
+  console.debug('🧹 Starting force cleanup of authentication data...');
 
   // Get debug info before cleanup
   const beforeCleanup = debugAuthenticationData();
-  console.log('Before cleanup:', beforeCleanup);
+  console.debug('Before cleanup:', beforeCleanup);
 
   // Clear localStorage
   const localStorageKeys = Object.keys(localStorage);
@@ -108,8 +108,8 @@ export function forceCleanupAuthData(): void {
         lowerKey.includes('auth') ||
         lowerKey.includes('token') ||
         lowerKey.includes('session')) {
-      localStorage.removeItem(key);
-      console.log(`Removed localStorage: ${key}`);
+  localStorage.removeItem(key);
+  console.debug(`Removed localStorage: ${key}`);
     }
   });
 
@@ -122,8 +122,8 @@ export function forceCleanupAuthData(): void {
         lowerKey.includes('auth') ||
         lowerKey.includes('token') ||
         lowerKey.includes('session')) {
-      sessionStorage.removeItem(key);
-      console.log(`Removed sessionStorage: ${key}`);
+  sessionStorage.removeItem(key);
+  console.debug(`Removed sessionStorage: ${key}`);
     }
   });
 
@@ -143,7 +143,7 @@ export function forceCleanupAuthData(): void {
     document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
     document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${window.location.hostname}`;
-    console.log(`Cleared cookie: ${cookieName}`);
+  console.debug(`Cleared cookie: ${cookieName}`);
   });
 
   // Clear any remaining auth-related cookies
@@ -159,16 +159,16 @@ export function forceCleanupAuthData(): void {
         lowerName.includes('session')) {
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${window.location.hostname}`;
-      console.log(`Cleared found cookie: ${name}`);
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${window.location.hostname}`;
+  console.debug(`Cleared found cookie: ${name}`);
     }
   });
 
   // Get debug info after cleanup
   const afterCleanup = debugAuthenticationData();
-  console.log('After cleanup:', afterCleanup);
+  console.debug('After cleanup:', afterCleanup);
   
-  console.log('✅ Force cleanup completed');
+  console.debug('✅ Force cleanup completed');
 }
 
 /**

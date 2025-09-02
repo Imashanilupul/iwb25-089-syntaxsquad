@@ -33,7 +33,7 @@ export function PolicyManagement() {
   // Environment variables
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
   const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
-  console.log(`URL ISSSSSSSSSSSSSSSS ${BALLERINA_BASE_URL}`);
+  console.debug(`URL ${BALLERINA_BASE_URL}`);
 
   const [policies, setPolicies] = useState<PolicyType[]>([])
   const [loading, setLoading] = useState(true)
@@ -114,8 +114,8 @@ export function PolicyManagement() {
       setLoadingMinistries(true)
       const uniqueMinistries = await policyService.getUniqueMinistries()
       setMinistries(uniqueMinistries)
-    } catch (error) {
-      console.error("Failed to load ministries:", error)
+  } catch (error) {
+  console.debug("Failed to load ministries:", error)
       toast({
         title: "Error",
         description: "Failed to load ministries. Please try again.",
@@ -135,7 +135,7 @@ export function PolicyManagement() {
         setPagination(response.pagination)
       }
     } catch (error) {
-      console.error("Failed to load policies:", error)
+        console.error("Failed to load policies:", error)
       toast({
         title: "Error",
         description: "Failed to load policies. Please try again.",
@@ -551,7 +551,7 @@ Timestamp: ${timestamp}
           })
         })
       } catch (err) {
-        console.log(err)
+        console.error(err)
       }
 
       toast({
@@ -668,7 +668,7 @@ Timestamp: ${timestamp}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">National Policy Management</h2>
-          <p className="text-slate-600">Manage government policies across all ministries and provinces</p>
+          <p className="text-slate-600">Manage Government Policies Across All Ministries And Provinces</p>
         </div>
         
         <div className="flex items-center gap-4">

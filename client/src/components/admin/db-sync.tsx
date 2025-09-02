@@ -429,8 +429,8 @@ export function DbSync() {
             Database Blockchain Synchronization
           </CardTitle>
           <CardDescription>
-            Sync your database with the latest blockchain data to ensure data integrity and
-            consistency.
+            Sync Your Database With The Latest Blockchain Data To Ensure Data Integrity And
+            Consistency.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -535,8 +535,8 @@ export function DbSync() {
             )}
           </CardTitle>
           <CardDescription>
-            Sync your database with blockchain data. Choose partial sync for recent changes or full
-            sync for complete synchronization.
+            Sync Your Database With Blockchain Data. Choose Partial Sync For Recent Changes Or Full
+            Sync For Complete Synchronization.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -555,17 +555,9 @@ export function DbSync() {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${isFullSync ? "animate-spin" : ""}`} />
-                Partial Sync (Last 1000 blocks)
+                Full Sync (All Blocks)
               </Button>
-              <Button
-                onClick={() => syncFromBlockchain(0, true)}
-                disabled={isFullSync || syncStatus === "running"}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${isFullSync ? "animate-spin" : ""}`} />
-                Full Sync (All blocks)
-              </Button>
+
               {(syncResults.length > 0 || syncStatus !== "idle") && (
                 <Button
                   onClick={clearSyncData}

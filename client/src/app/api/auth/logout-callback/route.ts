@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('Logout callback: Processing Asgardeo logout callback');
+  console.debug('Logout callback: Processing Asgardeo logout callback');
     
     const { searchParams } = new URL(request.url);
     const state = searchParams.get('state');
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('Logout callback: Successful logout, redirecting to login');
+  console.debug('Logout callback: Successful logout, redirecting to login');
     return response;
 
   } catch (error) {

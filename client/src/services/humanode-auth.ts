@@ -71,7 +71,7 @@ export class HumanodeBiometricService {
         return
       }
 
-      console.log('Attempting to connect to real Humanode service...')
+  console.debug('Attempting to connect to real Humanode service...')
       
       // Try to connect to real service
       const controller = new AbortController()
@@ -100,7 +100,7 @@ export class HumanodeBiometricService {
 
       const data = await response.json()
       this.config.deviceSdkParams = data.result
-      console.log('Successfully connected to real Humanode service')
+  console.debug('Successfully connected to real Humanode service')
     } catch (error: any) {
       console.error('Failed to initialize Humanode service:', error)
       
@@ -345,7 +345,7 @@ export class HumanodeBiometricService {
     
     const hash = this.generateBiometricHash(livenessData.faceScan)
     
-    console.log('Mock biometric verification:', { 
+  console.debug('Mock biometric verification:', { 
       isUnique, 
       hash, 
       sessionId: livenessData.sessionId,

@@ -579,7 +579,7 @@ export function RegistrationDialog() {
         biometricData: enableBiometric ? biometricData : null
       }
 
-      console.log("Registering user with data:", registrationData)
+  console.debug("Registering user with data:", registrationData)
       
       const result = await registerUser(registrationData)
       

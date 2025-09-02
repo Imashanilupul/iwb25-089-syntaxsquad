@@ -71,7 +71,7 @@ export function EnhancedAuthProvider({ children }: { children: React.ReactNode }
       }
       return null;
     } catch (error) {
-      console.log('No Asgardeo session found:', error);
+      console.debug('No Asgardeo session found:', error);
       return null;
     }
   };

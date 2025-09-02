@@ -340,7 +340,7 @@ export function ReportManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">National Report Management</h2>
-          <p className="text-slate-600">Manage whistleblowing reports submitted by citizens across Sri Lanka</p>
+          <p className="text-slate-600">Manage Reports Submitted By Citizens Across Sri Lanka</p>
         </div>
       </div>
 

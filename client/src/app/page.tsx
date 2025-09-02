@@ -238,7 +238,7 @@ export default function CivicPlatform() {
                 Sri Lanka Transparent Governance Platform
               </h2>
               <p className="text-lg text-slate-600">
-                Blockchain-powered transparent governance for the Democratic Socialist Republic of
+                Blockchain-Powered Transparent Governance For The Democratic Socialist Republic of
                 Sri Lanka
               </p>
             </div>
@@ -311,7 +311,7 @@ export default function CivicPlatform() {
                     Recent Activities
                   </CardTitle>
                   <CardDescription>
-                    Latest updates across all platform modules
+                    Latest Updates Across All Platform Modules
                   </CardDescription>
                 </CardHeader>
 
@@ -391,7 +391,7 @@ export default function CivicPlatform() {
                     Blockchain Network Status
                   </CardTitle>
                   <CardDescription>
-                    Real-time network health and transaction metrics
+                    Real-Time Network Health And Transaction Metrics
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

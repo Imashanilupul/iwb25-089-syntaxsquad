@@ -337,7 +337,7 @@ Timestamp: ${timestamp}
 
         if (apiResponse.ok) {
           const apiData = await apiResponse.json()
-          console.log("Smart contract API vote confirmed:", apiData)
+          console.debug("Smart contract API vote confirmed:", apiData)
           toast.success(`🎉 Vote "${voteType.toUpperCase()}" recorded successfully on blockchain!`)
         } else {
           const errorText = await apiResponse.text()
@@ -359,7 +359,7 @@ Timestamp: ${timestamp}
 
           if (databaseResponse.ok) {
             const databaseData = await databaseResponse.json()
-            console.log("Database vote update confirmed:", databaseData)
+            console.debug("Database vote update confirmed:", databaseData)
             
             // Show detailed vote info if available
             if (databaseData.success && databaseData.data) {
@@ -408,7 +408,7 @@ Timestamp: ${timestamp}
 
           if (fallbackResponse.ok) {
             const fallbackData = await fallbackResponse.json()
-            console.log("Fallback database vote confirmed:", fallbackData)
+            console.debug("Fallback database vote confirmed:", fallbackData)
             
             if (fallbackData.success && fallbackData.data) {
               const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = fallbackData.data;
@@ -486,7 +486,7 @@ Timestamp: ${timestamp}
           
           if (totalVoters === 0 && stats.totalVoters > 0) {
             // We have votes but no demographics data - create realistic demographics based on total votes
-            console.log("Votes exist but no demographics available, creating realistic data based on vote count:", stats.totalVoters)
+            console.debug("Votes exist but no demographics available, creating realistic data based on vote count:", stats.totalVoters)
             const realisticDemographics = [
               { name: "18-25", value: Math.max(Math.floor(stats.totalVoters * 0.20), 1), color: "#0088FE" },
               { name: "26-35", value: Math.max(Math.floor(stats.totalVoters * 0.35), 1), color: "#00C49F" },
@@ -497,7 +497,7 @@ Timestamp: ${timestamp}
             setVoterDemographics(realisticDemographics)
           } else if (totalVoters === 0) {
             // No votes at all - use sample data for demonstration
-            console.log("No votes available, using sample demographics for demonstration")
+            console.debug("No votes available, using sample demographics for demonstration")
             const sampleDemographics = [
               { name: "18-25", value: 25, color: "#0088FE" },
               { name: "26-35", value: 45, color: "#00C49F" },
@@ -508,7 +508,7 @@ Timestamp: ${timestamp}
             setVoterDemographics(sampleDemographics)
           } else {
             // Use real data from API
-            console.log("Using real voter demographics data:", response.data)
+            console.debug("Using real voter demographics data:", response.data)
             setVoterDemographics(response.data)
           }
         } else {
@@ -605,7 +605,7 @@ Timestamp: ${timestamp}
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Digital Voting System</h2>
-        <p className="text-slate-600">Secure electronic voting for Sri Lankan citizens</p>
+        <p className="text-slate-600">Secure Electronic Voting For Sri Lankan Citizens</p>
       </div>
 
       <Tabs defaultValue="proposals" className="space-y-6">
@@ -812,7 +812,7 @@ Timestamp: ${timestamp}
               <CardHeader>
                 <CardTitle>Voter Demographics</CardTitle>
                 <CardDescription>
-                  Age distribution of active voters
+                  Age Distribution Of Active Voters
                   {voterDemographics.reduce((sum, item) => sum + item.value, 0) === stats.totalVoters ? (
                     <span className="text-green-600 text-xs block mt-1">
                       ✓ Showing calculated demographics based on {stats.totalVoters} total votes
@@ -855,12 +855,11 @@ Timestamp: ${timestamp}
                 </ChartContainer>
               </CardContent>
             </Card>
-
             <Card className="border-0 shadow-md">
               <CardHeader>
                 <CardTitle>Voting Activity</CardTitle>
                 <CardDescription>
-                  Hourly voting patterns today
+                  Hourly Voting Patterns Today
                   {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
                     <span className="text-green-600 text-xs block mt-1">
                       ✓ Showing real-time data 
@@ -900,7 +899,7 @@ Timestamp: ${timestamp}
                 <Shield className="h-5 w-5" />
                 Blockchain Verification System
               </CardTitle>
-              <CardDescription>Zero-knowledge proof verification and immutable vote recording</CardDescription>
+              <CardDescription>Zero-Knowledge Proof Verification And Immutable Vote Recording</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-center items-center w-full px-4">

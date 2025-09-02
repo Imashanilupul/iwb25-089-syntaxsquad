@@ -118,7 +118,7 @@ export function ProposalManagement() {
         })
       }
     } catch (error) {
-      console.error("Error loading data:", error)
+  console.debug("Error loading data:", error)
       toast({
         title: "Error",
         description: "Failed to load data. Please check your connection.",
@@ -432,7 +432,7 @@ Timestamp: ${timestamp}
           })
         } else {
           const ballerinaData = await ballerinaResp.json()
-          console.log("Database save successful:", ballerinaData)
+          console.debug("Database save successful:", ballerinaData)
           toast({
             title: "🎉 Proposal created successfully",
             description: "Saved to blockchain and database"
@@ -542,7 +542,7 @@ Timestamp: ${timestamp}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Voting Proposals</h2>
-          <p className="text-slate-600">Manage voting proposals and track results</p>
+          <p className="text-slate-600">Manage Voting Proposals And Track Results</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

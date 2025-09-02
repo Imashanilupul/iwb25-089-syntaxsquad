@@ -33,14 +33,14 @@ export interface RegistrationResponse {
 export const registerUser = async (registrationData: RegistrationData): Promise<RegistrationResponse> => {
   try {
     // Step 1: Register in smart contract (authorize wallet)
-    console.log('Step 1: Registering user in smart contract...');
+  console.debug('Step 1: Registering user in smart contract...');
     const contractResponse = await axios.post(`${SMART_CONTRACTS_API_BASE}/auth/register`, {
       userAddress: registrationData.walletAddress,
       userData: registrationData
     });
 
     // Step 2: Save user data to database
-    console.log('Step 2: Saving user data to database...');
+  console.debug('Step 2: Saving user data to database...');
     const userPayload = {
       user_name: `${registrationData.firstName} ${registrationData.lastName}`,
       email: registrationData.email,
@@ -52,7 +52,7 @@ export const registerUser = async (registrationData: RegistrationData): Promise<
 
     const databaseResponse = await axios.post(`${BACKEND_API_BASE}/api/users`, userPayload);
 
-    console.log('Registration completed successfully:', {
+  console.debug('Registration completed successfully:', {
       contract: contractResponse.data,
       database: databaseResponse.data
     });

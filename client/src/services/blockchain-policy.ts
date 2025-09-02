@@ -33,7 +33,7 @@ export interface PolicyStatusUpdateData {
 
 export const createPolicyOnBlockchain = async (policyData: BlockchainPolicyData): Promise<BlockchainPolicyResponse> => {
   try {
-    console.log("🔗 Sending policy to blockchain:", policyData);
+  console.debug("🔗 Sending policy to blockchain:", policyData);
     
     const response = await axios.post(`${SMART_CONTRACTS_API_BASE}/policy/create-policy`, policyData);
 
@@ -57,7 +57,7 @@ export const createPolicyOnBlockchain = async (policyData: BlockchainPolicyData)
 
 export const updatePolicyStatusOnBlockchain = async (statusData: PolicyStatusUpdateData): Promise<BlockchainPolicyResponse> => {
   try {
-    console.log("🔗 Updating policy status on blockchain:", statusData);
+  console.debug("🔗 Updating policy status on blockchain:", statusData);
     
     const response = await axios.post(`${SMART_CONTRACTS_API_BASE}/policy/update-policy-status`, statusData);
 
@@ -81,7 +81,7 @@ export const updatePolicyStatusOnBlockchain = async (statusData: PolicyStatusUpd
 
 export const getPolicyFromBlockchain = async (policyId: string): Promise<BlockchainPolicyResponse> => {
   try {
-    console.log("🔗 Getting policy from blockchain:", policyId);
+  console.debug("🔗 Getting policy from blockchain:", policyId);
     
     const response = await axios.get(`${SMART_CONTRACTS_API_BASE}/policy/${policyId}`);
 

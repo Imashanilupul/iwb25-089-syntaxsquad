@@ -1,33 +1,5 @@
-// import ballerina/io;
-// import ballerina/test;
+// policy_test.bal
+// This test file was archived on 2025-09-02 as part of repository cleanup.
+// Original contents moved to server/tests_archive/policy_test.bal
 
-// // Before Suite Function
-
-// @test:BeforeSuite
-// function beforeSuiteFunc() {
-//     io:println("I'm the before suite function!");
-// }
-
-// // Test function
-
-// @test:Config {}
-// function testFunction() {
-//     string name = "John";
-//     string welcomeMsg = hello(name);
-//     test:assertEquals(welcomeMsg, "Hello, John");
-// }
-
-// // Negative Test function
-
-// @test:Config {}
-// function negativeTestFunction() {
-//     string welcomeMsg = hello(());
-//     test:assertEquals(welcomeMsg, "Hello, World!");
-// }
-
-// // After Suite Function
-
-// @test:AfterSuite
-// function afterSuiteFunc() {
-//     io:println("I'm the after suite function!");
-// }
+// Keep this stub to avoid accidental test execution. Restore from archive to re-enable tests.

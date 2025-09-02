@@ -361,11 +361,11 @@ Timestamp: ${timestamp}
 
     // Send transaction
     const tx = await contract.createReport(titleCid, descriptionCid)
-    toast({ title: "Transaction sent", description: tx.hash })
+  toast({ title: "Transaction sent", description: tx.hash })
 
     // Wait for confirmation
     const receipt = await tx.wait()
-    toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
+  toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
 
     // Try to decode event to get reportId
     let blockchainReportId = null
@@ -382,12 +382,12 @@ Timestamp: ${timestamp}
           // ignore non-matching logs
         }
       }
-      if (!blockchainReportId) {
+    if (!blockchainReportId) {
         try {
           const count = await contract.reportCount()
-          blockchainReportId = count.toString()
+      blockchainReportId = count.toString()
         } catch (e) {
-          // ignore
+      // ignore
         }
       }
     } catch (e) {
@@ -422,8 +422,8 @@ Timestamp: ${timestamp}
         variant: "destructive"
       })
     } else {
-      const ballerinaData = await ballerinaResp.json()
-      console.log("✅ Database record created:", ballerinaData)
+  const ballerinaData = await ballerinaResp.json()
+  console.debug("✅ Database record created:", ballerinaData)
       toast({ title: "✅ Report created", description: "Successfully saved to blockchain and database" })
     }
 
@@ -524,7 +524,7 @@ Timestamp: ${timestamp}
         ? normalizeAddress(currentAccounts[0]) || normalizedAccount
         : normalizedAccount
 
-    console.log("Requesting personal_sign with address:", addressToUse)
+  console.debug("Requesting personal_sign with address:", addressToUse)
 
     // Try the common (message, address) order first
     try {
@@ -533,17 +533,17 @@ Timestamp: ${timestamp}
         params: [message, addressToUse],
       })
     } catch (err: any) {
-      console.log("First attempt failed:", err)
+  console.debug("First attempt failed:", err)
       // If provider complains about invalid params, try the reversed order
       if (err?.code === -32602 || /invalid params/i.test(String(err?.message || ""))) {
-        console.log("Trying reversed parameter order...")
+  console.debug("Trying reversed parameter order...")
         try {
           return await (window.ethereum as any).request({
             method: "personal_sign",
             params: [addressToUse, message],
           })
         } catch (err2: any) {
-          console.log("Second attempt also failed:", err2)
+          console.debug("Second attempt also failed:", err2)
           throw new Error(`Personal sign failed: ${err2.message || err2}`)
         }
       }
@@ -833,7 +833,7 @@ By signing this message, you confirm your signature on this petition.`
               })
             }
 
-            console.log(
+            console.debug(
               `Signing petition - DB ID: ${petitionId}, Blockchain ID: ${blockchainPetitionId}`
             )
 
@@ -848,7 +848,7 @@ By signing this message, you confirm your signature on this petition.`
               description: `Block: ${receipt.blockNumber}`,
             })
 
-            console.log("✅ Petition signed on blockchain:", receipt)
+            console.debug("✅ Petition signed on blockchain:", receipt)
             blockchainSigningSuccess = true
           }
         }
@@ -895,7 +895,7 @@ By signing this message, you confirm your signature on this petition.`
               "Failed to sign on blockchain. Your signature will only be recorded in the database.",
             variant: "destructive",
           })
-          console.log("⚠️ Continuing with database-only signing due to blockchain error")
+          console.debug("⚠️ Continuing with database-only signing due to blockchain error")
         }
       }
 
@@ -1150,9 +1150,9 @@ Timestamp: ${timestamp}
           }
         )
 
-        if (smartContractResponse.ok) {
+          if (smartContractResponse.ok) {
           contractData = await smartContractResponse.json()
-          console.log("✅ Smart contract petition created:", contractData)
+          console.debug("✅ Smart contract petition created:", contractData)
         } else {
           console.warn(
             "⚠️ Smart contract service responded with error:",
@@ -1278,7 +1278,7 @@ Timestamp: ${timestamp}
           }),
         })
       } catch (err) {
-        console.log(err)
+        console.error(err)
       }
 
       toast({ title: "Petition created", description: "Saved to blockchain and backend" })
@@ -1293,8 +1293,8 @@ Timestamp: ${timestamp}
       // Refresh petitions list
       fetchPetitions()
 
-      console.log("Smart contract data:", contractData)
-      console.log("Database data:", ballerinaData)
+  console.debug("Smart contract data:", contractData)
+  console.debug("Database data:", ballerinaData)
     } catch (error: any) {
       console.error("Failed create flow:", error)
       setLastError(error?.message || String(error))
@@ -1622,7 +1622,7 @@ Timestamp: ${timestamp}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Citizen Reporting & Petition System</h2>
         <p className="text-slate-600">
-          Anonymous reporting and public petitions for Sri Lankan governance
+          Anonymous Reporting And Public Petitions For Sri Lankan Governance
         </p>
       </div>
 
@@ -2093,7 +2093,7 @@ Timestamp: ${timestamp}
                   Submit Anonymous Report
                 </CardTitle>
                 <CardDescription>
-                  End-to-end encrypted submission with cryptographic anonymity
+                  End-To-End Encrypted Submission With Cryptographic Anonymity
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2213,7 +2213,7 @@ Timestamp: ${timestamp}
                   Create Smart Contract Petition
                 </CardTitle>
                 <CardDescription>
-                  Automated execution when signature threshold is met
+                  Automated Execution When Signature Threshold Is Met
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

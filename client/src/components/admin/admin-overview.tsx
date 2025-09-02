@@ -168,7 +168,7 @@ export function AdminOverview() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Transparency Dashboard</h2>
-        <p className="text-slate-600">Blockchain-powered governance insights and aggregated public data</p>
+        <p className="text-slate-600">Blockchain-Powered Governance Insights And Aggregated Public Data</p>
       </div>
 
       {/* Main Stats Grid */}
