@@ -19,14 +19,16 @@ configurable int port = ?;
 configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
+// Base URL for the Web3 service (mounted under /web3)
+configurable string web3BaseUrl = "http://localhost:3001/web3";
 
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
 
-# web3 service URL
-http:Client web3Service = check new ("http://localhost:3001", {
-    timeout: 3000,  // 5 minutes timeout
+# web3 service URL (configurable)
+http:Client web3Service = check new (web3BaseUrl, {
+    timeout: 300000,  // 5 minutes timeout
     retryConfig: {
         interval: 3,
         count: 2,
@@ -232,7 +234,7 @@ service /api on apiListener {
             isFullSync: isFullSync
         });
         
-        http:Response jobResponse = check web3Service->post("/jobs/blockchain-sync", jobRequest);
+    http:Response jobResponse = check web3Service->post("jobs/blockchain-sync", jobRequest);
         
         if jobResponse.statusCode != 200 {
             return error("Failed to create blockchain sync job");
@@ -263,7 +265,7 @@ service /api on apiListener {
     resource function get blockchain/sync/status/[string jobId]() returns json|error {
         log:printInfo(string `📊 Checking blockchain sync job status: ${jobId}`);
         
-        http:Response statusResponse = check web3Service->get(string `/jobs/${jobId}/status`);
+    http:Response statusResponse = check web3Service->get(string `jobs/${jobId}/status`);
         
         if statusResponse.statusCode == 404 {
             return error("Job not found");
@@ -281,7 +283,7 @@ service /api on apiListener {
     resource function get blockchain/sync/result/[string jobId]() returns json|error {
         log:printInfo(string `📋 Getting blockchain sync job result: ${jobId}`);
         
-        http:Response resultResponse = check web3Service->get(string `/jobs/${jobId}/result`);
+    http:Response resultResponse = check web3Service->get(string `jobs/${jobId}/result`);
         
         if resultResponse.statusCode == 404 {
             return error("Job not found");
@@ -2219,7 +2221,7 @@ service /api on apiListener {
     # + return - Authorization response
     resource function post auth/authorize(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
-        json response = check web3Service->post("/auth/authorize", payload);
+    json response = check web3Service->post("auth/authorize", payload);
         return response;
     }
 
@@ -2229,7 +2231,7 @@ service /api on apiListener {
     # + return - Revocation response
     resource function post auth/revoke(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
-        json response = check web3Service->post("/auth/revoke", payload);
+    json response = check web3Service->post("auth/revoke", payload);
         return response;
     }
 
@@ -2239,7 +2241,7 @@ service /api on apiListener {
     # + return - Authorization status response
     resource function get auth/isauthorized/[string address]() returns json|error {
         do {
-            json response = check web3Service->get("/auth/is-authorized/" + address);
+            json response = check web3Service->get("auth/is-authorized/" + address);
             map<anydata> respMap = check response.cloneWithType();
             boolean isVerified = respMap["isAuthorized"] is boolean ? <boolean>respMap["isAuthorized"] : false;
 
@@ -2294,7 +2296,7 @@ service /api on apiListener {
         
         do {
             // First check if wallet is authorized
-            json walletAuthResponse = check web3Service->get("/auth/is-authorized/" + walletAddress);
+            json walletAuthResponse = check web3Service->get("auth/is-authorized/" + walletAddress);
             map<anydata> authMap = check walletAuthResponse.cloneWithType();
             boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
             
@@ -2374,7 +2376,7 @@ service /api on apiListener {
         
         do {
             // Verify wallet is authorized first
-            json walletAuthResponse = check web3Service->get("/auth/is-authorized/" + walletAddress);
+            json walletAuthResponse = check web3Service->get("auth/is-authorized/" + walletAddress);
             map<anydata> authMap = check walletAuthResponse.cloneWithType();
             boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
             
@@ -2499,7 +2501,7 @@ service /api on apiListener {
                 "signerIndex": signerIndex
             };
             
-            json web3Response = check web3Service->post("/proposal/vote-yes", web3Payload);
+            json web3Response = check web3Service->post("proposal/vote-yes", web3Payload);
             log:printInfo("Smart contract YES vote response: " + web3Response.toJsonString());
             
             // Also update the database vote count with wallet address
@@ -2574,7 +2576,7 @@ service /api on apiListener {
                 "signerIndex": signerIndex
             };
             
-            json web3Response = check web3Service->post("/proposal/vote-no", web3Payload);
+            json web3Response = check web3Service->post("proposal/vote-no", web3Payload);
             log:printInfo("Smart contract NO vote response: " + web3Response.toJsonString());
             
             // Also update the database vote count with wallet address
@@ -2604,25 +2606,25 @@ service /petitions on newListener {
 
     resource function post create(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
-        json response = check web3Service->post("/create-petition", payload);
+    json response = check web3Service->post("create-petition", payload);
         check caller->respond(response);
     }
 
     resource function post sign(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
-        json response = check web3Service->post("/sign-petition", payload);
+    json response = check web3Service->post("sign-petition", payload);
         check caller->respond(response);
     }
 
     // Fix: Use path parameter syntax
     resource function get [string id](http:Caller caller, http:Request req) returns error? {
-        json response = check web3Service->get("/petition/" + id);
+    json response = check web3Service->get("petition/" + id);
         check caller->respond(response);
     }
 
     // Fix: Use path parameter syntax for multiple parameters
     resource function get [string id]/[string address](http:Caller caller, http:Request req) returns error? {
-        json response = check web3Service->get("/has-signed/" + id + "/" + address);
+    json response = check web3Service->get("has-signed/" + id + "/" + address);
         check caller->respond(response);
     }
 
@@ -2737,7 +2739,7 @@ function initializeDatabase() returns error? {
 // Helper: fetch aggregated blockchain data from web3 service using blocksBack
 function fetchAllBlockchainData(int blocksBack) returns json|error {
     // Use GET query param style used by the web3 service
-    string url = "/all/blockchain-data?blocksBack=" + blocksBack.toString();
+    string url = "all/blockchain-data?blocksBack=" + blocksBack.toString();
     // Call the web3 service and handle errors gracefully (timeouts, connection failures, etc.)
     http:Response|error resp = web3Service->get(url);
     if resp is error {

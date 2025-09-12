@@ -7,3 +7,7 @@ supabaseUrl = ""
 
 # service_role secret key (for server-side use with full permissions):
 supabaseServiceRoleKey = ""
+
+# Web3 Service (Node/Express) base URL
+# By default, the web3 service is mounted under /web3 on port 3001
+web3BaseUrl = "http://localhost:3001/web3"
