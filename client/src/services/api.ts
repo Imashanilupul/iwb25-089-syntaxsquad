@@ -4,8 +4,13 @@ class ApiService {
   private api: AxiosInstance
 
   constructor() {
+    // Build a robust base URL that always ends with "/api" exactly once
+    const raw = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || "http://localhost:8080"
+    const noTrailingSlash = raw.endsWith("/") ? raw.slice(0, -1) : raw
+    const baseURL = /\/api$/.test(noTrailingSlash) ? noTrailingSlash : `${noTrailingSlash}/api`
+
     this.api = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || "http://localhost:8080",
+      baseURL,
       timeout: 10000,
       headers: {
         "Content-Type": "application/json",
@@ -18,6 +23,24 @@ class ApiService {
         const token = localStorage.getItem("authToken")
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
+        }
+
+        // Normalize per-request URL paths so callers can pass either
+        // "/api/xyz" or "xyz" without creating double "/api/api".
+        if (typeof config.url === "string") {
+          // Remove any leading double slashes
+          if (config.url.startsWith("//")) {
+            config.url = config.url.replace(/^\/\/+/, "/")
+          }
+          // If the request path begins with "/api/", strip that prefix,
+          // because baseURL already ends with "/api".
+          if (config.url.startsWith("/api/")) {
+            config.url = config.url.slice(4) // keep leading slash for axios to join
+          }
+          // Ensure single leading slash so axios joins with baseURL cleanly
+          if (!config.url.startsWith("/")) {
+            config.url = "/" + config.url
+          }
         }
         return config
       },
