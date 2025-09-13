@@ -603,7 +603,7 @@ Timestamp: ${timestamp}
   const fetchPetitions = async () => {
     setIsLoadingPetitions(true)
     try {
-      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions`)
+      const response = await fetch(`${BALLERINA_BASE_URL}/petitions`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -638,7 +638,7 @@ Timestamp: ${timestamp}
   const fetchCategories = async () => {
     setIsLoadingCategories(true)
     try {
-      const response = await fetch(`${BALLERINA_BASE_URL}/api/categories`)
+      const response = await fetch(`${BALLERINA_BASE_URL}/categories`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -674,7 +674,7 @@ Timestamp: ${timestamp}
     for (const petition of petitionList) {
       try {
         const response = await fetch(
-          `${BALLERINA_BASE_URL}/api/petitions/${petition.id}/signed/${userId}`
+          `${BALLERINA_BASE_URL}/petitions/${petition.id}/signed/${userId}`
         )
         if (response.ok) {
           const data = await response.json()
@@ -900,7 +900,7 @@ By signing this message, you confirm your signature on this petition.`
       }
 
       // Submit signature to backend with user ID
-      const response = await fetch(`${BALLERINA_BASE_URL}/api/petitions/${petitionId}/sign`, {
+      const response = await fetch(`${BALLERINA_BASE_URL}/petitions/${petitionId}/sign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1167,7 +1167,7 @@ Timestamp: ${timestamp}
       }
 
       // Step 3: Save petition draft to Ballerina backend (required to obtain draftId)
-      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/petitions`, {
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/petitions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1266,7 +1266,7 @@ Timestamp: ${timestamp}
 
       // 5) Confirm draft with Ballerina backend
       try {
-        await fetch(`${BALLERINA_BASE_URL}/api/petitions/${draftId}/confirm`, {
+        await fetch(`${BALLERINA_BASE_URL}/petitions/${draftId}/confirm`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

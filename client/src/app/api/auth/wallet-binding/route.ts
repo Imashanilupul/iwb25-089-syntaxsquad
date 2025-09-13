@@ -141,7 +141,7 @@ async function createAsgardeoUser(userData: CreateUserRequest, accessToken: stri
  */
 async function authorizeWalletOnBlockchain(walletAddress: string, asgardeoUserId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/register-user`, {
+    const response = await axios.post(`${process.env.NEXT_PUBLIC_APP_URL}/auth/register-user`, {
       walletAddress,
       asgardeoUserId,
       additionalData: {

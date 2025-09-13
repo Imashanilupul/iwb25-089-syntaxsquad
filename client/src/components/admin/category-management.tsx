@@ -218,7 +218,7 @@ export function CategoryManagement() {
       })
 
       try {
-        const healthCheck = await fetch(`${BALLERINA_BASE_URL}/api/categories`, {
+        const healthCheck = await fetch(`${BALLERINA_BASE_URL}/categories`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         })

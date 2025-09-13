@@ -57,7 +57,7 @@ export function UserRegistration() {
     setIsRegistering(true);
 
     try {
-      const response = await axios.post(`${BALLERINA_BASE_URL}/api/auth/register-user`, {
+      const response = await axios.post(`${BALLERINA_BASE_URL}/auth/register-user`, {
         walletAddress: auth.address,
         asgardeoUserId: auth.asgardeoUser.sub,
         asgardeoUser: auth.asgardeoUser,

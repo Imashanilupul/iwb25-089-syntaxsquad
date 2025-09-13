@@ -357,13 +357,13 @@ export function RegistrationDialog() {
         
         switch (field) {
           case 'email':
-            endpoint = `/api/users/email/${encodeURIComponent(value)}`
+            endpoint = `/users/email/${encodeURIComponent(value)}`
             break
           case 'nicNumber':
-            endpoint = `/api/users/nic/${encodeURIComponent(value)}`
+            endpoint = `/users/nic/${encodeURIComponent(value)}`
             break
           case 'mobileNumber':
-            endpoint = `/api/users/mobile/${encodeURIComponent(value)}`
+            endpoint = `/users/mobile/${encodeURIComponent(value)}`
             break
           default:
             return
@@ -413,7 +413,7 @@ export function RegistrationDialog() {
 
     try {
       const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080'
-      const response = await fetch(`${BACKEND_API_BASE}/api/users/evm/${encodeURIComponent(evmAddress)}`)
+      const response = await fetch(`${BACKEND_API_BASE}/users/evm/${encodeURIComponent(evmAddress)}`)
       
       if (response.ok) {
         const data = await response.json()

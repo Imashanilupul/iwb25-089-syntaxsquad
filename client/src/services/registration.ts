@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_SMART_CONTRACTS_API || 'http://localhost:3001';
-const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BACKEND_API || 'http://localhost:8080';
+const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+const BACKEND_API_BASE = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
 
 export interface RegistrationData {
   firstName: string;
@@ -50,7 +50,7 @@ export const registerUser = async (registrationData: RegistrationData): Promise<
       province: registrationData.province
     };
 
-    const databaseResponse = await axios.post(`${BACKEND_API_BASE}/api/users`, userPayload);
+    const databaseResponse = await axios.post(`${BACKEND_API_BASE}/users`, userPayload);
 
   console.debug('Registration completed successfully:', {
       contract: contractResponse.data,
@@ -74,7 +74,7 @@ export const registerUser = async (registrationData: RegistrationData): Promise<
     }
 
     // If smart contract succeeded but database failed, mention it
-    if (error.config?.url?.includes('/api/users')) {
+    if (error.config?.url?.includes('/users')) {
       errorMessage = 'Smart contract registration succeeded, but database save failed: ' + errorMessage;
     }
     
