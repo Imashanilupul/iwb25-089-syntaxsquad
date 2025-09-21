@@ -3,7 +3,7 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, '../.env') });
 
 // Contract configuration
-const contractAddress = "0x010Fa40999Fa27a1Ac4599b3eCecC3A716A2439b";
+const contractAddress = "0x6f542a1c0F68CAFF5fcCE8D536D4B67f60a5B819";
 const abi = require("../artifacts/contracts/auth/auth.sol/AuthRegistry.json").abi;
 
 // Setup provider and wallet
@@ -14,7 +14,7 @@ const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Add the admin addresses you want here
 const ADMIN_ADDRESSES = [
-  "0x06C57c762f88f806D9d1E254309F456A4e8C4970", // Replace with actual admin address
+  "0xc5C7D0E0A4929bb0cBAB13273DE5F5Cca442C9Dc", // Replace with actual admin address
    // Replace with actual admin address
 ];
 

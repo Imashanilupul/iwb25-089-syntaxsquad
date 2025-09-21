@@ -194,7 +194,7 @@ export function EnhancedRegistration() {
 
         // Redirect to login after success
         setTimeout(() => {
-          window.location.href = '/api/auth/signin';
+          window.location.href = '/auth/signin';  // Redirect to signin page instead of API endpoint
         }, 3000);
       } else {
         throw new Error(response.data.error || 'Registration failed');
@@ -272,7 +272,7 @@ export function EnhancedRegistration() {
           </div>
           
           <Button 
-            onClick={() => window.location.href = '/api/auth/signin'}
+            onClick={() => window.location.href = '/auth/signin'}  // Redirect to signin page
             className="w-full"
           >
             Sign In to Your Account
@@ -540,7 +540,7 @@ export function EnhancedRegistration() {
 
         <div className="text-xs text-gray-600 text-center">
           Already have an account?{' '}
-          <a href="/api/auth/signin" className="text-blue-600 hover:underline">
+          <a href="/auth/signin" className="text-blue-600 hover:underline">  {/* Link to signin page */}
             Sign in here
           </a>
         </div>

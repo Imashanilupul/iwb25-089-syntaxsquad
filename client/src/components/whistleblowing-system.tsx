@@ -54,7 +54,7 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
   const { address, verified } = useAuth() // Get auth state
 
   // Environment variables
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
   const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
 
   const [reportForm, setReportForm] = useState({

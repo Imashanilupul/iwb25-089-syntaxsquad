@@ -31,7 +31,7 @@ import { useAuth } from "@/context/AuthContext"
 
 export function ProjectManagement() {
   // Environment variables
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
   const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || 'http://localhost:8080';
 
   const [projects, setProjects] = useState<Project[]>([])

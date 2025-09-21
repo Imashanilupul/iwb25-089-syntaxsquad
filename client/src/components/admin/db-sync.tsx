@@ -150,19 +150,19 @@ export function DbSync() {
     try {
       // Load current DB stats from each service
       const [petitionsRes, proposalsRes, reportsRes, policiesRes, projectsRes] = await Promise.all([
-        fetch(`${BALLERINA_BASE_URL}/api/petitions`)
+        fetch(`${BALLERINA_BASE_URL}/petitions`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch(`${BALLERINA_BASE_URL}/api/proposals`)
+        fetch(`${BALLERINA_BASE_URL}/proposals`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch(`${BALLERINA_BASE_URL}/api/reports`)
+        fetch(`${BALLERINA_BASE_URL}/reports`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch(`${BALLERINA_BASE_URL}/api/policies`)
+        fetch(`${BALLERINA_BASE_URL}/policies`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch(`${BALLERINA_BASE_URL}/api/projects`)
+        fetch(`${BALLERINA_BASE_URL}/projects`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
       ])
@@ -209,7 +209,7 @@ export function DbSync() {
       setSyncProgress(10)
 
       // Start the comprehensive sync job on Node backend
-      const syncJobResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync`, {
+      const syncJobResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -236,7 +236,7 @@ export function DbSync() {
       const pollJobStatus = async () => {
         try {
           const statusResponse = await fetch(
-            `${BALLERINA_BASE_URL}/api/blockchain/sync/status/${jobId}`
+            `${BALLERINA_BASE_URL}/blockchain/sync/status/${jobId}`
           )
           if (!statusResponse.ok) {
             throw new Error(`Failed to get job status: ${statusResponse.statusText}`)
@@ -252,7 +252,7 @@ export function DbSync() {
             setSyncProgress(95)
 
             const resultResponse = await fetch(
-              `${BALLERINA_BASE_URL}/api/blockchain/sync/result/${jobId}`
+              `${BALLERINA_BASE_URL}/blockchain/sync/result/${jobId}`
             )
             if (!resultResponse.ok) {
               throw new Error(`Failed to get job result: ${resultResponse.statusText}`)
