@@ -8,7 +8,7 @@ async function syncBlockchainAsync(blocksBack = 1000, isFullSync = false) {
   try {
     // Step 1: Start the sync job
   console.debug('📤 Creating sync job...');
-    const jobResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync`, {
+    const jobResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -42,7 +42,7 @@ async function syncBlockchainAsync(blocksBack = 1000, isFullSync = false) {
 
   console.debug(`🔄 Polling job status (attempt ${attempts}/${maxAttempts})...`);
       
-      const statusResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync/status/${jobId}`);
+      const statusResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync/status/${jobId}`);
       
       if (!statusResponse.ok) {
         throw new Error(`Failed to get job status: ${statusResponse.statusText}`);
@@ -72,7 +72,7 @@ async function syncBlockchainAsync(blocksBack = 1000, isFullSync = false) {
 
     // Step 3: Get job result
   console.debug('📋 Getting job result...');
-    const resultResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync/result/${jobId}`);
+    const resultResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync/result/${jobId}`);
     
     if (!resultResponse.ok) {
       throw new Error(`Failed to get job result: ${resultResponse.statusText}`);
@@ -143,7 +143,7 @@ function useBlockchainSync() {
       setCurrentStep('Starting sync job...');
       setProgress(10);
       
-      const jobResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync`, {
+      const jobResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blocksBack, isFullSync })
@@ -157,7 +157,7 @@ function useBlockchainSync() {
 
       // Poll status
       const pollStatus = async () => {
-        const statusResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync/status/${jobId}`);
+        const statusResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync/status/${jobId}`);
         const statusData = await statusResponse.json();
         const job = statusData.job;
 
@@ -169,7 +169,7 @@ function useBlockchainSync() {
           setCurrentStep('Getting results...');
           setProgress(95);
           
-          const resultResponse = await fetch(`${BALLERINA_BASE_URL}/api/blockchain/sync/result/${jobId}`);
+          const resultResponse = await fetch(`${BALLERINA_BASE_URL}/blockchain/sync/result/${jobId}`);
           const resultData = await resultResponse.json();
           
           setResult(resultData);

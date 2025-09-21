@@ -219,10 +219,27 @@ export function DbSync() {
       })
 
       if (!syncJobResponse.ok) {
-        throw new Error(`Failed to start sync job: ${syncJobResponse.statusText}`)
+        const errorData = await syncJobResponse.json().catch(() => ({}))
+        const errorMessage = errorData.message || `Failed to start sync job: ${syncJobResponse.statusText}`
+        
+        if (errorMessage.includes("Web3 service")) {
+          throw new Error("Blockchain service is currently unavailable. Please contact your administrator to ensure the Web3 service is running.")
+        }
+        
+        throw new Error(errorMessage)
       }
 
       const jobData = await syncJobResponse.json()
+      
+      // Check if the response indicates a service error (success: false)
+      if (jobData.success === false) {
+        const errorMessage = jobData.message || "Failed to start sync job"
+        if (errorMessage.includes("Web3 service")) {
+          throw new Error("Blockchain service is currently unavailable. Please contact your administrator to ensure the Web3 service is running.")
+        }
+        throw new Error(errorMessage)
+      }
+      
       const jobId = jobData.jobId
 
       if (!jobId) {
