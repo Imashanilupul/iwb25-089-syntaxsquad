@@ -402,7 +402,7 @@ Timestamp: ${timestamp}
       })
 
       try {
-        const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/proposals`, {
+        const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/proposals`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

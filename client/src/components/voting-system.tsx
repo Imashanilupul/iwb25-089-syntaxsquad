@@ -347,7 +347,7 @@ Timestamp: ${timestamp}
         // ALWAYS update the database regardless of smart contract API success/failure
         toast.info("📊 Updating database with vote...")
         try {
-          const databaseResponse = await fetch(`${BALLERINA_BASE_URL}/api/proposals/vote`, {
+          const databaseResponse = await fetch(`${BALLERINA_BASE_URL}/proposals/vote`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -396,7 +396,7 @@ Timestamp: ${timestamp}
         // Even if smart contract API fails, still try to update the database
         toast.info("🔄 Updating database despite API failure...")
         try {
-          const fallbackResponse = await fetch(`${BALLERINA_BASE_URL}/api/proposals/vote`, {
+          const fallbackResponse = await fetch(`${BALLERINA_BASE_URL}/proposals/vote`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

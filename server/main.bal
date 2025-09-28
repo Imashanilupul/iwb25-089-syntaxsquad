@@ -20,7 +20,7 @@ configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
 // Base URL for the Web3 service (mounted under /web3)
-configurable string web3BaseUrl = "/web3";
+configurable string web3BaseUrl =?;
 
 
 # HTTP listener for the API
@@ -229,27 +229,44 @@ service /api on apiListener {
         
         do {
             // Call Node.js job manager to start async job
-            http:Request jobRequest = new;
-            jobRequest.setJsonPayload({
+            json jobPayload = {
                 blocksBack: isFullSync ? 999999 : blocksBack,
                 isFullSync: isFullSync
-            });
+            };
             
-            http:Response|error jobResponseResult = web3Service->post("jobs/blockchain-sync", jobRequest);
+            log:printInfo("Sending request to Web3 service: " + web3BaseUrl + "/jobs/blockchain-sync");
+            log:printInfo("Web3 base URL: " + web3BaseUrl);
+            log:printInfo("Request payload: " + jobPayload.toString());
+            
+            // Create HTTP request with explicit headers
+            http:Request jobRequest = new;
+            jobRequest.setJsonPayload(jobPayload);
+            jobRequest.setHeader("Content-Type", "application/json");
+            
+            http:Response|error jobResponseResult = web3Service->post("/jobs/blockchain-sync", jobRequest);
             if jobResponseResult is error {
+                log:printError("Web3 service connection failed", 'error = jobResponseResult);
+                log:printError("Web3 base URL: " + web3BaseUrl);
                 fail error("Web3 service connection failed: " + jobResponseResult.message());
             }
             
             http:Response jobResponse = jobResponseResult;
             
+            log:printInfo("Web3 service response status: " + jobResponse.statusCode.toString());
+            
             if jobResponse.statusCode != 200 {
                 json|error responsePayload = jobResponse.getJsonPayload();
                 string errorMessage = "Failed to create blockchain sync job";
+                log:printError("Web3 service returned non-200 status: " + jobResponse.statusCode.toString());
+                
                 if responsePayload is json {
+                    log:printError("Response payload: " + responsePayload.toString());
                     json|error messageField = responsePayload.message;
                     if messageField is string {
                         errorMessage = errorMessage + ": " + messageField;
                     }
+                } else {
+                    log:printError("Failed to parse error response: " + responsePayload.message());
                 }
                 fail error(errorMessage);
             }
@@ -294,7 +311,7 @@ service /api on apiListener {
         log:printInfo(string `📊 Checking blockchain sync job status: ${jobId}`);
         
         do {
-            http:Response|error statusResponseResult = web3Service->get(string `jobs/${jobId}/status`);
+            http:Response|error statusResponseResult = web3Service->get(string `/jobs/${jobId}/status`);
             if statusResponseResult is error {
                 fail error("Web3 service connection failed: " + statusResponseResult.message());
             }
@@ -332,7 +349,7 @@ service /api on apiListener {
         log:printInfo(string `📋 Getting blockchain sync job result: ${jobId}`);
         
         do {
-            http:Response|error resultResponseResult = web3Service->get(string `jobs/${jobId}/result`);
+            http:Response|error resultResponseResult = web3Service->get(string `/jobs/${jobId}/result`);
             if resultResponseResult is error {
                 fail error("Web3 service connection failed: " + resultResponseResult.message());
             }

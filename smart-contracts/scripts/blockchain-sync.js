@@ -31,7 +31,6 @@ try {
   const hh = require('hardhat');
   ethers = hh.ethers;
   provider = ethers.provider || hh.network.provider;
-  console.log('Using Hardhat ethers provider');
 } catch (err) {
   // Fallback to plain ethers and construct a provider that targets Sepolia.
   const ethersLib = require('ethers');
@@ -105,6 +104,33 @@ function timeoutPromise(promise, timeout, name) {
   ]);
 }
 
+// Helper function to add delay between IPFS calls to avoid rate limiting
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Improved IPFS content fetching with retry logic
+async function fetchIPFSContentWithRetry(cid, retries = 2, baseDelay = 150) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delayMs = baseDelay * attempt; // Linear backoff for speed
+        await delay(delayMs);
+      }
+      
+      return await fetchIPFSContent(cid);
+    } catch (error) {
+      if (attempt === retries - 1) throw error; // Last attempt, throw the error
+      
+      if (error.message.includes('PINATA_RATE_LIMITED')) {
+        continue; // Quick retry for rate limits
+      }
+      
+      throw error; // For non-rate-limit errors, fail immediately
+    }
+  }
+}
+
 // Contract addresses on Sepolia
 const fs = require('fs');
 const path = require('path');
@@ -119,18 +145,9 @@ try {
   }
 } catch (e) {
   console.error('Error loading deployed-addresses.json:', e.message);
-  // fallback to hardcoded addresses if needed
-  // CONTRACT_ADDRESSES = {
-  //   AuthRegistry: "0xBCc9a1598d13488CbF10a6CD88e67249A3c459C9",
-  //   Petitions: "0x1577FD3B3E54cFA368F858d542920A0fefBaf807", 
-  //   Reports: "0xD8E110E021a9281b8ad7A6Cf93c2b14b3e3B2712",
-  //   Policies: "0x6a957A0D571b3Ed50AFc02Ac62CC061C6c533138",
-  //   Proposals: "0xff40F4C374c1038378c7044720B939a2a0219a2f",
-  //   Project: "0x1770c50E6Bc8bbFB662c7ec45924aE986473b970"
-  // };
+
 }
 
-// If a deployed-addresses.json exists, prefer it (useful after deployments)
 try {
   const fs = require('fs');
   const path = require('path');
@@ -190,7 +207,7 @@ async function fetchProposalsOptimized(blocksBack) {
   try {
     const connectedContract = await getContractInstance("Proposals", CONTRACT_ADDRESSES.Proposals);
     const proposalCount = await connectedContract.proposalCount();
-    console.log(`📊 Found ${proposalCount.toString()} proposals in blockchain`);
+
     
     const proposalsData = [];
     const batchSize = 5; // Process in smaller batches to prevent timeouts
@@ -216,6 +233,12 @@ async function fetchProposalsOptimized(blocksBack) {
       proposalsData.push(...results.filter(result => result !== null));
       
       console.log(`✅ Processed proposals batch ${i}-${endIndex}`);
+      
+      // Add delay between batches to avoid rate limits
+      if (i + batchSize <= Number(proposalCount.toString())) {
+        console.log('⏳ Waiting 2s before next batch to avoid rate limits...');
+        await delay(2000);
+      }
     }
     
     return proposalsData;
@@ -241,12 +264,22 @@ async function processProposal(connectedContract, i) {
   const createdAt = proposal.createdAt || proposal[9];
   const updatedAt = proposal.updatedAt || proposal[10];
   
-  // Fetch IPFS content with timeout protection
-  const [title, shortDescription, descriptionInDetails] = await Promise.all([
-    timeoutPromise(fetchIPFSContent(titleCid), 10000, `title-${i}`),
-    timeoutPromise(fetchIPFSContent(shortDescriptionCid), 10000, `short-desc-${i}`),
-    timeoutPromise(fetchIPFSContent(descriptionInDetailsCid), 10000, `desc-${i}`)
-  ]);
+  // Fetch IPFS content with retry logic and staggered requests
+  let title, shortDescription, descriptionInDetails;
+  
+  try {
+    // Stagger requests to avoid rate limits
+    title = await timeoutPromise(fetchIPFSContentWithRetry(titleCid), 15000, `title-${i}`);
+    await delay(300);
+    shortDescription = await timeoutPromise(fetchIPFSContentWithRetry(shortDescriptionCid), 15000, `short-desc-${i}`);
+    await delay(300);
+    descriptionInDetails = await timeoutPromise(fetchIPFSContentWithRetry(descriptionInDetailsCid), 15000, `desc-${i}`);
+  } catch (error) {
+    console.warn(`⚠️ IPFS fetch failed for proposal ${i}, using fallback content`);
+    title = `[Proposal ${i} Title - IPFS Unavailable]`;
+    shortDescription = `[Proposal ${i} Short Desc - IPFS Unavailable]`;
+    descriptionInDetails = `[Proposal ${i} Details - IPFS Unavailable]`;
+  }
   
   return {
     id: i,
@@ -266,12 +299,11 @@ async function processProposal(connectedContract, i) {
 }
 
 async function fetchPetitionsOptimized(blocksBack) {
-  console.log('📝 Starting optimized petitions fetch...');
   
   try {
     const connectedContract = await getContractInstance("Petitions", CONTRACT_ADDRESSES.Petitions);
     const petitionCount = await connectedContract.petitionCount();
-    console.log(`📊 Found ${petitionCount.toString()} petitions in blockchain`);
+
     
     const petitionsData = [];
     const batchSize = 5;
@@ -297,6 +329,12 @@ async function fetchPetitionsOptimized(blocksBack) {
       petitionsData.push(...results.filter(result => result !== null));
       
       console.log(`✅ Processed petitions batch ${i}-${endIndex}`);
+      
+      // Add delay between batches to avoid rate limits
+      if (i + batchSize <= Number(petitionCount.toString())) {
+        console.log('⏳ Waiting 2s before next batch to avoid rate limits...');
+        await delay(2000);
+      }
     }
     
     return petitionsData;
@@ -308,11 +346,18 @@ async function fetchPetitionsOptimized(blocksBack) {
 
 async function processPetition(connectedContract, i) {
   const petition = await connectedContract.getPetition(i);
-  // Fetch IPFS content with timeout protection
-  const [title, description] = await Promise.all([
-    timeoutPromise(fetchIPFSContent(petition[0]), 10000, `petition-title-${i}`),
-    timeoutPromise(fetchIPFSContent(petition[1]), 10000, `petition-desc-${i}`)
-  ]);
+  // Fetch IPFS content with retry logic and staggered requests
+  let title, description;
+  
+  try {
+    title = await timeoutPromise(fetchIPFSContentWithRetry(petition[0]), 15000, `petition-title-${i}`);
+    await delay(500);
+    description = await timeoutPromise(fetchIPFSContentWithRetry(petition[1]), 15000, `petition-desc-${i}`);
+  } catch (error) {
+    console.warn(`⚠️ IPFS fetch failed for petition ${i}, using fallback content`);
+    title = `[Petition ${i} Title - IPFS Unavailable]`;
+    description = `[Petition ${i} Description - IPFS Unavailable]`;
+  }
   return {
     id: i,
     title: title,
@@ -328,15 +373,18 @@ async function processPetition(connectedContract, i) {
 }
 
 async function fetchReportsOptimized(blocksBack) {
-  console.log('📊 Starting optimized reports fetch...');
   
   try {
     const connectedContract = await getContractInstance("Reports", CONTRACT_ADDRESSES.Reports);
+    
     const reportCount = await connectedContract.reportCount();
-    console.log(`📊 Found ${reportCount.toString()} reports in blockchain`);
+    
+    if (Number(reportCount.toString()) === 0) {
+      return [];
+    }
     
     const reportsData = [];
-    const batchSize = 5;
+    const batchSize = 3; // Reduced from 5 to 3 to be more conservative with rate limits
     
     for (let i = 1; i <= Number(reportCount.toString()); i += batchSize) {
       const batch = [];
@@ -358,44 +406,82 @@ async function fetchReportsOptimized(blocksBack) {
       const results = await Promise.all(batch);
       reportsData.push(...results.filter(result => result !== null));
       
-      console.log(`✅ Processed reports batch ${i}-${endIndex}`);
+      console.log(`✅ Processed reports batch ${i}-${endIndex}, batch size: ${results.filter(r => r !== null).length}`);
+      
+      // Add delay between batches to avoid overwhelming Pinata API
+      if (i + batchSize <= Number(reportCount.toString())) {
+        console.log('⏳ Waiting 2s before next batch to avoid rate limits...');
+        await delay(2000);
+      }
     }
     
+
     return reportsData;
   } catch (error) {
     console.error("❌ Error in fetchReportsOptimized:", error);
+    console.error("❌ Error stack:", error.stack);
     throw error;
   }
 }
 
 async function processReport(connectedContract, i) {
-  const report = await connectedContract.getReport(i);
-  
-  // Fetch IPFS content with timeout protection
-  const [title, description] = await Promise.all([
-    timeoutPromise(fetchIPFSContent(report[0]), 10000, `report-title-${i}`),
-    timeoutPromise(fetchIPFSContent(report[1]), 10000, `report-desc-${i}`)
-  ]);
-  
-  return {
-    id: i,
-    title: title,
-    description: description,
-    priority: 'MEDIUM',
-    upvotes: Number(report[3].toString()),
-    downvotes: Number(report[4].toString()),
-    creator_address: report[5],
-    resolved_status: report[6],
-    assigned_to: report[7],
-    creation_time: Number(report[8].toString()),
-    resolution_time: Number(report[9].toString()),
-    creator: 1,
-    created_time: new Date().toISOString()
-  };
+  try {
+    const report = await connectedContract.getReport(i);
+    
+    // Fetch IPFS content with retry logic and staggered requests to avoid rate limits
+    let title, description;
+    
+    try {
+      // Parallel IPFS fetching for speed - let the IPFS module handle rate limiting
+      const [titleResult, descriptionResult] = await Promise.all([
+        timeoutPromise(fetchIPFSContentWithRetry(report[0]), 10000, `report-title-${i}`),
+        timeoutPromise(fetchIPFSContentWithRetry(report[1]), 10000, `report-desc-${i}`)
+      ]);
+      title = titleResult;
+      description = descriptionResult;
+    } catch (error) {
+      console.warn(`⚠️ IPFS fetch failed for report ${i}, using fallback content`);
+      title = `[Report ${i} Title - IPFS Unavailable]`;
+      description = `[Report ${i} Description - IPFS Unavailable]`;
+    }
+    
+    return {
+      id: i,
+      title: title,
+      description: description,
+      priority: 'MEDIUM',
+      upvotes: report[2] ? Number(report[2].toString()) : 0, // Fixed: upvotes is at index 2
+      downvotes: 0, // Default since report[3] is an address, not downvotes
+      creator_address: report[3] || '0x0000000000000000000000000000000000000000', // This is the creator address
+      resolved_status: false,
+      assigned_to: '0x0000000000000000000000000000000000000000',
+      creation_time: Date.now(),
+      resolution_time: 0,
+      creator: 1,
+      created_time: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error(`❌ Critical error processing report ${i}:`, error.message);
+    // Return a basic report structure even if blockchain call fails
+    return {
+      id: i,
+      title: `[Report ${i} - Blockchain Read Failed]`,
+      description: `[Report ${i} - Could not read from blockchain: ${error.message}]`,
+      priority: 'MEDIUM',
+      upvotes: 0,
+      downvotes: 0,
+      creator_address: '0x0000000000000000000000000000000000000000',
+      resolved_status: false,
+      assigned_to: '0x0000000000000000000000000000000000000000',
+      creation_time: 0,
+      resolution_time: 0,
+      creator: 1,
+      created_time: new Date().toISOString()
+    };
+  }
 }
 
 async function fetchPoliciesOptimized(blocksBack) {
-  console.log('📜 Starting optimized policies fetch...');
   
   try {
     const connectedContract = await getContractInstance('Policies', CONTRACT_ADDRESSES.Policies);
@@ -426,7 +512,6 @@ async function fetchPoliciesOptimized(blocksBack) {
 }
 
 async function fetchProjectsOptimized(blocksBack) {
-  console.log('🏗️ Starting optimized projects fetch...');
   
   try {
     const connectedContract = await getContractInstance('Project', CONTRACT_ADDRESSES.Project);
@@ -458,7 +543,7 @@ async function fetchProjectsOptimized(blocksBack) {
 
 // Get blockchain data for proposals within block range (with timeout protection)
 router.get("/proposals/blockchain-data", async (req, res) => {
-  console.log('Proposals blockchain data request received');
+
   
   try {
     // Set response headers early
@@ -516,7 +601,7 @@ router.get("/proposals/blockchain-data", async (req, res) => {
 
 // Get blockchain data for petitions within block range (with timeout protection)
 router.get("/petitions/blockchain-data", async (req, res) => {
-  console.log('Petitions blockchain data request received');
+
   
   try {
     res.writeHead(200, {
@@ -572,7 +657,7 @@ router.get("/petitions/blockchain-data", async (req, res) => {
 
 // Get blockchain data for reports within block range (with timeout protection)
 router.get("/reports/blockchain-data", async (req, res) => {
-  console.log('Reports blockchain data request received');
+
   
   try {
     res.writeHead(200, {
@@ -710,7 +795,25 @@ async function fetchIPFSContent(cid) {
 
     return content || `[IPFS: ${cid}]`;
   } catch (error) {
-    console.error(`❌ Error fetching IPFS content for CID ${cid}:`, error.message);
+    // Handle rate limiting specifically
+    if (error.message.includes('PINATA_RATE_LIMITED')) {
+      console.warn(`⚠️ Rate limited - using placeholder for CID ${cid}`);
+      return `[Rate Limited: ${cid}]`;
+    }
+    
+    // Handle other HTTP errors
+    if (error.message.includes('IPFS_HTTP_ERROR')) {
+      console.warn(`⚠️ HTTP error - using placeholder for CID ${cid}`);
+      return `[HTTP Error: ${cid}]`;
+    }
+    
+    // Check for status code 429 directly
+    if (error.message.includes('Request failed with status code 429')) {
+      console.warn(`⚠️ Pinata rate limit detected - using placeholder for CID ${cid}`);
+      return `[Rate Limited: ${cid}]`;
+    }
+    
+    console.warn(`⚠️ IPFS fetch failed for CID ${cid} - using placeholder:`, error.message);
     return `[IPFS Error: ${cid}]`;
   }
 }
@@ -1882,7 +1985,7 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
           console.log(`🗑️ Removed report ${bcId} (id: ${dbReport.id})`);
         } catch (error) {
           errors.push({ type: 'delete', id: bcId, error: error.message });
-        }
+        }CONTRACT_ADDRESSES.Reports
         continue;
       }
       
@@ -1900,6 +2003,7 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
     }
     
     // Phase 2: Create new records
+   
     for (const bcReport of blockchainReports) {
       const bcId = bcReport.id;
       if (!bcId || dbMap.has(bcId)) continue;
@@ -1933,6 +2037,7 @@ async function syncReportsWithData(fromBlock, toBlock, blockchainReports) {
 // Main sync endpoint that implements the full two-phase sync procedure
 router.post('/sync/execute', async (req, res) => {
   console.log('🚀 Starting comprehensive blockchain synchronization...');
+  console.log('🔗 Contract addresses:', JSON.stringify(CONTRACT_ADDRESSES, null, 2));
   
   try {
     const { blocksBack = 1000, isFullSync = false } = req.body;
@@ -1945,13 +2050,17 @@ router.post('/sync/execute', async (req, res) => {
     console.log(`📊 Syncing blockchain data from block ${fromBlock} to ${toBlock}`);
     
     // Fetch all blockchain data once
+    console.log('🚀 Starting parallel fetch of all blockchain data...');
+    
     const [proposals, petitions, reports, policies, projects] = await Promise.all([
-      fetchProposalsOptimized(blocksBack),
-      fetchPetitionsOptimized(blocksBack),  
-      fetchReportsOptimized(blocksBack),
-      fetchPoliciesOptimized(blocksBack),
-      fetchProjectsOptimized(blocksBack)
+      fetchProposalsOptimized(blocksBack).catch(e => { console.error('❌ fetchProposalsOptimized failed:', e.message); return []; }),
+      fetchPetitionsOptimized(blocksBack).catch(e => { console.error('❌ fetchPetitionsOptimized failed:', e.message); return []; }),  
+      fetchReportsOptimized(blocksBack).catch(e => { console.error('❌ fetchReportsOptimized failed:', e.message); return []; }),
+      fetchPoliciesOptimized(blocksBack).catch(e => { console.error('❌ fetchPoliciesOptimized failed:', e.message); return []; }),
+      fetchProjectsOptimized(blocksBack).catch(e => { console.error('❌ fetchProjectsOptimized failed:', e.message); return []; })
     ]);
+    
+    console.log('🚀 Parallel fetch completed');
 
     console.log('📋 Blockchain data fetched:', {
       proposals: proposals.length,
@@ -2060,6 +2169,8 @@ router.post('/sync/execute', async (req, res) => {
     });
   }
 });
+
+
 
 module.exports = router;
 

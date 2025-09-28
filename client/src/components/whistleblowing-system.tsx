@@ -395,7 +395,7 @@ Timestamp: ${timestamp}
     }
 
     // Step 4: Create database record with blockchain metadata
-    const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/reports`, {
+    const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/reports`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

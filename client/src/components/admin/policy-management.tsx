@@ -440,7 +440,7 @@ Timestamp: ${timestamp}
       })
 
       // Save to Ballerina backend first to get draft ID
-      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/api/policies`, {
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/policies`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -540,7 +540,7 @@ Timestamp: ${timestamp}
 
       // Confirm with backend
       try {
-        await fetch(`${BALLERINA_BASE_URL}/api/policies/${draftId}/confirm`, {
+        await fetch(`${BALLERINA_BASE_URL}/policies/${draftId}/confirm`, {
           method: "POST", 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
