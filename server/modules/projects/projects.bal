@@ -383,6 +383,16 @@ public class ProjectsService {
                     payloadMap["status"] = statusStr;
                 }
             }
+            
+            json|error removed = updateData.removed;
+            if removed is json {
+                boolean|error removedBool = removed.ensureType(boolean);
+                if removedBool is boolean {
+                    payloadMap["removed"] = removedBool;
+                } else {
+                    return error("Removed field must be a boolean value");
+                }
+            }
 
             // Validate that spent doesn't exceed allocated if both are provided
             if payloadMap.hasKey("allocated_budget") && payloadMap.hasKey("spent_budget") {

@@ -21,7 +21,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Edit, Vote, Calendar, Users, Loader2, Wallet, AlertCircle } from "lucide-react"
+import { Plus, Edit, Vote, Calendar, Users, Loader2, Wallet, AlertCircle, Trash2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { proposalService, type Proposal, type ProposalFormData } from "@/services/proposal"
 import { categoryService, type Category } from "@/services/category"
@@ -66,6 +66,9 @@ export function ProposalManagement() {
   const [pageSize, setPageSize] = useState(20)
   const [totalItems, setTotalItems] = useState(0)
 
+  // For tracking which proposal is being deleted
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
   // Pagination handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
@@ -98,8 +101,10 @@ export function ProposalManagement() {
       ])
 
       if (proposalsResponse.success) {
-        setProposals(proposalsResponse.data)
-        setTotalItems(proposalsResponse.data.length)
+        // Filter out removed proposals
+        const activeProposals = proposalsResponse.data.filter((proposal) => !proposal.removed)
+        setProposals(activeProposals)
+        setTotalItems(activeProposals.length)
       } else {
         toast({
           title: "Error",
@@ -254,7 +259,36 @@ export function ProposalManagement() {
 
         toast({ title: '✅ Proposal status updated on blockchain' })
 
-        // Reload from DB to reflect on-chain change
+        // Update database after successful blockchain transaction
+        try {
+          const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/proposals/${editingId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              activeStatus: formData.activeStatus
+            })
+          })
+          
+          if (!dbUpdateResp.ok) {
+            console.error('Database update failed:', await dbUpdateResp.text())
+            toast({
+              title: '⚠️ Blockchain updated but database sync failed',
+              description: 'The proposal status was updated on blockchain but database sync failed',
+              variant: 'destructive'
+            })
+          } else {
+            toast({ title: '✅ Proposal status updated in blockchain and database' })
+          }
+        } catch (dbError: any) {
+          console.error('Database update error:', dbError)
+          toast({
+            title: '⚠️ Blockchain updated but database sync failed',
+            description: 'The proposal status was updated on blockchain but database sync failed',
+            variant: 'destructive'
+          })
+        }
+
+        // Reset form and reload data
         setFormData({
           title: "",
           shortDescription: "",
@@ -504,8 +538,105 @@ Timestamp: ${timestamp}
     setIsDialogOpen(true)
   }
 
-  // Note: Delete functionality removed as it's not available in the cleaned API
-  // Only essential functions (create, edit status, vote, get) are supported
+  // Remove proposal from blockchain and database
+ 
+
+  // Remove proposal from blockchain and database
+  const handleRemoveProposal = async (proposalId: number) => {
+    // Check wallet connection
+    if (!isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!verified) {
+      toast({
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to remove proposals.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setDeletingId(proposalId)
+
+    try {
+      await validateWallet(address!)
+
+      // Get contract info for blockchain transaction
+      const infoRes = await fetch(`${API_BASE_URL}/proposal/contract-info`)
+      if (!infoRes.ok) throw new Error("Failed to fetch contract info")
+      const info = await infoRes.json()
+      const { contractAddress, contractAbi } = info
+      if (!contractAddress || !contractAbi) throw new Error("Contract info missing")
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet",
+      })
+
+      // Send blockchain transaction
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      const tx = await contract.removeProposal(proposalId)
+      toast({ title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...` })
+
+      const receipt = await tx.wait()
+      toast({ title: `✅ Proposal removed from blockchain in block ${receipt.blockNumber}` })
+
+      // Update database after successful blockchain transaction
+      try {
+        const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/proposals/${proposalId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            removed: true,
+          }),
+        })
+
+        if (!dbUpdateResp.ok) {
+          console.error("Database update failed:", await dbUpdateResp.text())
+          toast({
+            title: "⚠️ Blockchain updated but database sync failed",
+            description: "The proposal was removed from blockchain but database sync failed",
+            variant: "destructive",
+          })
+        } else {
+          toast({ title: "✅ Proposal removed from blockchain and database" })
+        }
+      } catch (dbError: any) {
+        console.error("Database update error:", dbError)
+        toast({
+          title: "⚠️ Blockchain updated but database sync failed",
+          description: "The proposal was removed from blockchain but database sync failed",
+          variant: "destructive",
+        })
+      }
+
+      // Remove from UI and reload data
+      setProposals((prev) => prev.filter((p) => p.id !== proposalId))
+      setTotalItems((prev) => prev - 1)
+      await loadData()
+    } catch (error: any) {
+      console.error("Proposal removal failed:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage?.includes("User rejected") || (error as any)?.code === 4001) {
+        toast({ title: "Transaction cancelled by user.", variant: "destructive" })
+      } else if (errorMessage?.includes("insufficient funds")) {
+        toast({ title: "Insufficient funds to complete the transaction.", variant: "destructive" })
+      } else {
+        toast({ title: `❌ Failed to remove proposal: ${errorMessage}`, variant: "destructive" })
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const getStatusColor = (active: boolean, expiredDate: string) => {
     if (!active) return "bg-gray-100 text-gray-800"
@@ -880,10 +1011,30 @@ Timestamp: ${timestamp}
                     <TableCell>{new Date(proposal.expired_date).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(proposal)}>
-                          <Edit className="h-3 w-3" />
+                        {proposal.active_status ? (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(proposal)}>
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-gray-500 px-3 py-1">
+                            Inactive
+                          </span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveProposal(proposal.id)}
+                          disabled={
+                            deletingId === proposal.id || loading || !isConnected || !verified
+                          }
+                          title={deletingId === proposal.id ? "Removing..." : "Remove proposal"}
+                        >
+                          {deletingId === proposal.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
                         </Button>
-                        {/* Delete functionality removed - not available in cleaned API */}
                       </div>
                     </TableCell>
                   </TableRow>

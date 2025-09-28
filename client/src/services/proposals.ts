@@ -11,6 +11,7 @@ export interface Proposal {
   no_votes: number
   category_id?: number
   created_by?: number
+  removed?: boolean
   created_at: string
   updated_at: string
 }

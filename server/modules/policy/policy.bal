@@ -346,6 +346,16 @@ public class PoliciesService {
                     payloadMap["effective_date"] = dateStr;
                 }
             }
+            
+            json|error removed = updateData.removed;
+            if removed is json {
+                boolean|error removedBool = removed.ensureType(boolean);
+                if removedBool is boolean {
+                    payloadMap["removed"] = removedBool;
+                } else {
+                    return error("Removed field must be a boolean value");
+                }
+            }
 
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");

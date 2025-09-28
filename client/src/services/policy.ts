@@ -18,6 +18,7 @@ export interface Policy {
   view_full_policy: string
   ministry: string
   status: string
+  removed?: boolean
   created_time: string
   updated_at?: string
   effective_date?: string

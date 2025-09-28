@@ -86,6 +86,31 @@ router.post('/prepare-policy', async (req, res) => {
   }
 });
 
+// Contract info endpoint for status changes
+router.get('/contract-info', async (req, res) => {
+  try {
+    const addresses = loadDeployedAddresses();
+    const deployedContractAddress = addresses && addresses.Policies ? addresses.Policies : contractAddress;
+    const contractAbi = loadContractAbi();
+
+    if (!deployedContractAddress) {
+      return res.status(500).json({ success: false, error: 'No deployed contract address found' });
+    }
+    if (!contractAbi) {
+      return res.status(500).json({ success: false, error: 'No contract ABI found' });
+    }
+
+    return res.json({
+      success: true,
+      contractAddress: deployedContractAddress,
+      contractAbi,
+    });
+  } catch (err) {
+    console.error('❌ Error getting contract info:', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
 // Change this route from /create to /create-policy
 router.post("/create-policy", async (req, res) => {
   const { name, description, viewFullPolicy, ministry, effectiveDate, signerIndex } = req.body;

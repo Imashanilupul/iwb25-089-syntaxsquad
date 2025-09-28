@@ -68,6 +68,9 @@ export function ProjectManagement() {
   const [editingSpentBudget, setEditingSpentBudget] = useState<{ [key: number]: string }>({})
   const [updatingSpentBudget, setUpdatingSpentBudget] = useState<{ [key: number]: boolean }>({})
 
+  // For tracking which project is being deleted
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
   // Pagination handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
@@ -121,8 +124,10 @@ export function ProjectManagement() {
       ])
 
       if (projectsResponse.success) {
-        setProjects(projectsResponse.data)
-        setTotalItems(projectsResponse.data.length)
+        // Filter out removed projects
+        const activeProjects = projectsResponse.data.filter((project) => !project.removed)
+        setProjects(activeProjects)
+        setTotalItems(activeProjects.length)
       } else {
         toast({
           title: "Error",
@@ -731,33 +736,100 @@ Timestamp: ${timestamp}
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this project?")) {
+  // Remove project from blockchain and database
+  const handleRemoveProject = async (projectId: number) => {
+    // Check wallet connection
+    if (!isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first",
+        variant: "destructive",
+      })
       return
     }
 
+    if (!verified) {
+      toast({
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to remove projects.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setDeletingId(projectId)
+
     try {
-      const response = await projectService.deleteProject(id)
-      if (response.success) {
-        toast({
-          title: "Success",
-          description: "Project deleted successfully",
+      await validateWallet(address!)
+
+      // Get contract info for blockchain transaction
+      const infoRes = await fetch(`${API_BASE_URL}/project/contract-info`)
+      if (!infoRes.ok) throw new Error("Failed to fetch contract info")
+      const info = await infoRes.json()
+      const { contractAddress, contractAbi } = info
+      if (!contractAddress || !contractAbi) throw new Error("Contract info missing")
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet",
+      })
+
+      // Send blockchain transaction
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      const tx = await contract.removeProject(projectId)
+      toast({ title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...` })
+
+      const receipt = await tx.wait()
+      toast({ title: `✅ Project removed from blockchain in block ${receipt.blockNumber}` })
+
+      // Update database after successful blockchain transaction
+      try {
+        const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/projects/${projectId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            removed: true,
+          }),
         })
-        await loadData() // Reload data
-      } else {
+
+        if (!dbUpdateResp.ok) {
+          console.error("Database update failed:", await dbUpdateResp.text())
+          toast({
+            title: "⚠️ Blockchain updated but database sync failed",
+            description: "The project was removed from blockchain but database sync failed",
+            variant: "destructive",
+          })
+        } else {
+          toast({ title: "✅ Project removed from blockchain and database" })
+        }
+      } catch (dbError: any) {
+        console.error("Database update error:", dbError)
         toast({
-          title: "Error",
-          description: response.message || "Failed to delete project",
+          title: "⚠️ Blockchain updated but database sync failed",
+          description: "The project was removed from blockchain but database sync failed",
           variant: "destructive",
         })
       }
-    } catch (error) {
-      console.error("Error deleting project:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete project. Please try again.",
-        variant: "destructive",
-      })
+
+      // Remove from UI and reload data
+      setProjects((prev) => prev.filter((p) => p.project_id !== projectId))
+      setTotalItems((prev) => prev - 1)
+      await loadData()
+    } catch (error: any) {
+      console.error("Project removal failed:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage?.includes("User rejected") || (error as any)?.code === 4001) {
+        toast({ title: "Transaction cancelled by user.", variant: "destructive" })
+      } else if (errorMessage?.includes("insufficient funds")) {
+        toast({ title: "Insufficient funds to complete the transaction.", variant: "destructive" })
+      } else {
+        toast({ title: `❌ Failed to remove project: ${errorMessage}`, variant: "destructive" })
+      }
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -1309,8 +1381,20 @@ Timestamp: ${timestamp}
                   <TableCell>{project.province}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(project.project_id)}>
-                        <Trash2 className="h-3 w-3" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRemoveProject(project.project_id)}
+                        disabled={
+                          deletingId === project.project_id || loading || !isConnected || !verified
+                        }
+                        title={deletingId === project.project_id ? "Removing..." : "Remove project"}
+                      >
+                        {deletingId === project.project_id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
                       </Button>
                     </div>
                   </TableCell>

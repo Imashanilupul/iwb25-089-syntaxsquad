@@ -111,6 +111,7 @@ function createProjectsTable(postgresql:Client dbClient) returns error? {
             ministry VARCHAR(255) NOT NULL,
             view_details TEXT,
             status VARCHAR(50) DEFAULT 'PLANNED',
+            removed BOOLEAN DEFAULT false,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -156,6 +157,7 @@ function createProposalsTable(postgresql:Client dbClient) returns error? {
             no_votes INTEGER DEFAULT 0 CHECK (no_votes >= 0),
             category_id INTEGER REFERENCES categories(category_id) ON DELETE SET NULL,
             created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            removed BOOLEAN DEFAULT false,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -177,6 +179,7 @@ function createPoliciesTable(postgresql:Client dbClient) returns error? {
             ministry VARCHAR(255) NOT NULL,
             status VARCHAR(50) DEFAULT 'DRAFT',
             effective_date TIMESTAMP,
+            removed BOOLEAN DEFAULT false,
             created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -221,6 +224,7 @@ function createReportsTable(postgresql:Client dbClient) returns error? {
             evidence_hash VARCHAR(255) NOT NULL,
             wallet_address VARCHAR(255),
             resolved_status BOOLEAN DEFAULT false,
+            removed BOOLEAN DEFAULT false,
             user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             likes INTEGER DEFAULT 0,
             dislikes INTEGER DEFAULT 0,

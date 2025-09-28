@@ -252,33 +252,217 @@ router.post("/assign-report", async (req, res) => {
 });
 
 router.post("/resolve-report", async (req, res) => {
-  const { reportId, signerIndex } = req.body;
+  const { reportId, signerIndex, adminAddress, requiresWalletSigning } = req.body;
+  
   try {
-    const tx = await reports.connect(signers[signerIndex]).resolveReport(reportId);
-    await tx.wait();
+    // If admin wallet signing is required, return contract info for client-side signing
+    if (requiresWalletSigning && adminAddress) {
+      const contractAbi = loadContractAbi();
+      const deployedContractAddress = loadDeployedAddresses() || contractAddress;
+      
+      if (!deployedContractAddress || !contractAbi) {
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Contract information not available for wallet signing' 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        requiresClientSigning: true,
+        contractAddress: deployedContractAddress,
+        contractAbi: contractAbi,
+        message: "Please sign the transaction with your admin wallet"
+      });
+    }
+    
+    // Fallback to server-side signing (for backward compatibility)
+    const signer = signers[signerIndex || 0];
+    if (!signer) {
+      return res.status(500).json({ success: false, error: 'No signer available' });
+    }
+    
+    const tx = await reports.connect(signer).resolveReport(reportId);
+    const receipt = await tx.wait();
+    
+    if (receipt.status !== 1) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Transaction failed on blockchain', 
+        txHash: tx.hash 
+      });
+    }
+    
     // After on-chain confirmation, update the backend DB via Ballerina server
     try {
       const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
       const resp = await axios.post(`${ballerinaUrl}/api/reports/${reportId}/resolve`);
-      return res.json({ message: "Report resolved on-chain and DB updated", db: resp.data });
+      return res.json({ 
+        success: true, 
+        message: "Report resolved on-chain and DB updated", 
+        db: resp.data,
+        txReceipt: receipt
+      });
     } catch (dbErr) {
-      // If DB update fails, still return success for the on-chain tx but indicate DB error
       console.error('Failed to update DB after on-chain resolve:', dbErr.message || dbErr);
-      return res.status(500).json({ message: 'On-chain resolve succeeded but DB update failed', error: dbErr.message || String(dbErr) });
+      return res.status(500).json({ 
+        success: false,
+        message: 'On-chain resolve succeeded but DB update failed', 
+        error: dbErr.message || String(dbErr),
+        txReceipt: receipt
+      });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('resolve-report error:', err);
+    res.status(500).json({ success: false, error: err.message || String(err) });
   }
 });
 
 router.post("/reopen-report", async (req, res) => {
-  const { reportId, signerIndex } = req.body;
+  const { reportId, signerIndex, adminAddress, requiresWalletSigning } = req.body;
+  
   try {
-    const tx = await reports.connect(signers[signerIndex]).reopenReport(reportId);
-    await tx.wait();
-    res.json({ message: "Report reopened!" });
+    // If admin wallet signing is required, return contract info for client-side signing
+    if (requiresWalletSigning && adminAddress) {
+      const contractAbi = loadContractAbi();
+      const deployedContractAddress = loadDeployedAddresses() || contractAddress;
+      
+      if (!deployedContractAddress || !contractAbi) {
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Contract information not available for wallet signing' 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        requiresClientSigning: true,
+        contractAddress: deployedContractAddress,
+        contractAbi: contractAbi,
+        message: "Please sign the transaction with your admin wallet"
+      });
+    }
+    
+    // Fallback to server-side signing (for backward compatibility)
+    const signer = signers[signerIndex || 0];
+    if (!signer) {
+      return res.status(500).json({ success: false, error: 'No signer available' });
+    }
+    
+    const tx = await reports.connect(signer).reopenReport(reportId);
+    const receipt = await tx.wait();
+    
+    if (receipt.status !== 1) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Transaction failed on blockchain', 
+        txHash: tx.hash 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: "Report reopened successfully!",
+      txReceipt: receipt
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('reopen-report error:', err);
+    res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// Contract info endpoint for report status changes and removals
+router.get('/contract-info', async (req, res) => {
+  try {
+    const addresses = loadDeployedAddresses();
+    const deployedContractAddress = addresses && addresses.Reports ? addresses.Reports : contractAddress;
+    const contractAbi = loadContractAbi();
+
+    if (!deployedContractAddress) {
+      return res.status(500).json({ success: false, error: 'No deployed contract address found' });
+    }
+    if (!contractAbi) {
+      return res.status(500).json({ success: false, error: 'No contract ABI found' });
+    }
+
+    return res.json({
+      success: true,
+      contractAddress: deployedContractAddress,
+      contractAbi,
+    });
+  } catch (error) {
+    console.error('contract-info error:', error);
+    return res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// Remove report endpoint (blockchain + database)
+router.post('/remove-report', async (req, res) => {
+  const { reportId, signerIndex, adminAddress, requiresWalletSigning } = req.body;
+  
+  try {
+    // If admin wallet signing is required, return contract info for client-side signing
+    if (requiresWalletSigning && adminAddress) {
+      const contractAbi = loadContractAbi();
+      const deployedContractAddress = loadDeployedAddresses() || contractAddress;
+      
+      if (!deployedContractAddress || !contractAbi) {
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Contract information not available for wallet signing' 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        requiresClientSigning: true,
+        contractAddress: deployedContractAddress,
+        contractAbi: contractAbi,
+        message: "Please sign the transaction with your admin wallet"
+      });
+    }
+    
+    // Fallback to server-side signing (for tests or legacy usage)
+    const signer = signers[signerIndex || 0];
+    if (!signer) {
+      return res.status(500).json({ success: false, error: 'No signer available' });
+    }
+    
+    const tx = await reports.connect(signer).removeReport(reportId);
+    const receipt = await tx.wait();
+    
+    if (receipt.status !== 1) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Transaction failed on blockchain', 
+        txHash: tx.hash 
+      });
+    }
+    
+    // After on-chain confirmation, update the backend DB via Ballerina server
+    try {
+      const ballerinaUrl = process.env.BALLERINA_API_BASE || 'http://localhost:8080';
+      const resp = await axios.put(`${ballerinaUrl}/reports/${reportId}`, {
+        removed: true
+      });
+      return res.json({ 
+        success: true, 
+        message: "Report removed from blockchain and database", 
+        db: resp.data,
+        txReceipt: receipt
+      });
+    } catch (dbErr) {
+      console.error('Failed to update DB after on-chain remove:', dbErr.message || dbErr);
+      return res.status(500).json({ 
+        success: false,
+        message: 'On-chain remove succeeded but DB update failed', 
+        error: dbErr.message || String(dbErr),
+        txReceipt: receipt
+      });
+    }
+  } catch (err) {
+    console.error('remove-report error:', err);
+    res.status(500).json({ success: false, error: err.message || String(err) });
   }
 });
 

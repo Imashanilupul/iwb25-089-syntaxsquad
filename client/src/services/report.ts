@@ -9,6 +9,7 @@ export interface Report {
   assigned_to?: string
   user_id?: number
   resolved_status: boolean
+  removed?: boolean
   created_time: string
   last_updated_time?: string
   resolved_time?: string
@@ -156,7 +157,7 @@ export const reportService = {
     try {
       // Call the smart-contracts web3 service which will perform the on-chain tx
       // and then call the backend to update the DB after confirmation.
-      const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_SMART_CONTRACTS_API || 'http://localhost:3001';
+      const SMART_CONTRACTS_API_BASE = process.env.NEXT_PUBLIC_APP_URL;
       const resp = await fetch(`${SMART_CONTRACTS_API_BASE}/report/resolve-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

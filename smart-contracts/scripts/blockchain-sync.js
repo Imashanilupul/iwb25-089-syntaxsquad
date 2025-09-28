@@ -450,10 +450,10 @@ async function processReport(connectedContract, i) {
       title: title,
       description: description,
       priority: 'MEDIUM',
-      upvotes: report[2] ? Number(report[2].toString()) : 0, // Fixed: upvotes is at index 2
-      downvotes: 0, // Default since report[3] is an address, not downvotes
-      creator_address: report[3] || '0x0000000000000000000000000000000000000000', // This is the creator address
-      resolved_status: false,
+      upvotes: report[2] ? Number(report[2].toString()) : 0, // upvotes at index 2
+      downvotes: report[3] ? Number(report[3].toString()) : 0, // downvotes at index 3
+      creator_address: report[4] || '0x0000000000000000000000000000000000000000', // creator address at index 4
+      resolved_status: report[5] || false, // resolved status at index 5
       assigned_to: '0x0000000000000000000000000000000000000000',
       creation_time: Date.now(),
       resolution_time: 0,
@@ -482,23 +482,33 @@ async function processReport(connectedContract, i) {
 }
 
 async function fetchPoliciesOptimized(blocksBack) {
+  console.log('📜 Starting optimized policies fetch...');
   
   try {
     const connectedContract = await getContractInstance('Policies', CONTRACT_ADDRESSES.Policies);
     if (typeof connectedContract.policyCount === 'function') {
-            const policyCount = await connectedContract.policyCount(); // Fetch the total number of policies
-      const policiesData = [];
+      const policyCount = await connectedContract.policyCount();
+      console.log(`📜 Found ${policyCount} policies on blockchain`);
       
-      for (let i = 1; i <= Number(policyCount.toString()); i++) {
-        try {
-          const p = await timeoutPromise(
-            connectedContract.getPolicy(i),
-            15000,
-            `policy-${i}`
-          );
-          policiesData.push({ id: i, raw: p });
-        } catch (e) {
-          console.warn(`Policy ${i} read error:`, e.message);
+      const policiesData = [];
+      const batchSize = 5;
+      
+      for (let i = 1; i <= Number(policyCount.toString()); i += batchSize) {
+        const batch = [];
+        const endIndex = Math.min(i + batchSize - 1, Number(policyCount.toString()));
+        
+        for (let j = i; j <= endIndex; j++) {
+          batch.push(processPolicy(connectedContract, j));
+        }
+        
+        const results = await Promise.all(batch);
+        policiesData.push(...results.filter(result => result !== null));
+        
+        console.log(`✅ Processed policies batch ${i}-${endIndex}`);
+        
+        // Add delay between batches to avoid rate limits
+        if (i + batchSize <= Number(policyCount.toString())) {
+          await delay(1000);
         }
       }
       
@@ -506,8 +516,60 @@ async function fetchPoliciesOptimized(blocksBack) {
     }
     return [];
   } catch (error) {
-    console.warn('Policies read skipped or failed:', error.message);
-    return [];
+    console.error('❌ Error in fetchPoliciesOptimized:', error);
+    throw error;
+  }
+}
+
+async function processPolicy(connectedContract, i) {
+  try {
+    const policy = await connectedContract.getPolicy(i);
+    
+    // Extract fields from the policy structure
+    const name = policy.name || policy[0] || '';
+    const descriptionCid = policy.description || policy[1] || '';
+    const viewFullPolicy = policy.viewFullPolicy || policy[2] || '';
+    const ministry = policy.ministry || policy[3] || '';
+    const status = policy.status || policy[4] || '';
+    const creator = policy.creator || policy[5] || '';
+    const createdAt = policy.createdAt || policy[6] || 0;
+    const effectiveDate = policy.effectiveDate || policy[7] || 0;
+    const lastUpdated = policy.lastUpdated || policy[8] || 0;
+    const supportCount = policy.supportCount || policy[9] || 0;
+    const removed = policy.removed !== undefined ? policy.removed : (policy[10] !== undefined ? policy[10] : false);
+    const isActive = policy.isActive !== undefined ? policy.isActive : (policy[11] !== undefined ? policy[11] : false);
+    
+    // Fetch IPFS content for description if it's a CID
+    let description = descriptionCid;
+    try {
+      if (typeof descriptionCid === 'string' && (descriptionCid.startsWith('Qm') || descriptionCid.startsWith('bafy'))) {
+        description = await timeoutPromise(fetchIPFSContentWithRetry(descriptionCid), 15000, `policy-desc-${i}`);
+        await delay(300);
+      }
+    } catch (error) {
+      console.warn(`⚠️ IPFS fetch failed for policy ${i} description, using fallback content`);
+      description = `[Policy ${i} Description - IPFS Unavailable]`;
+    }
+    
+    return {
+      id: i,
+      name: name,
+      description: description,
+      view_full_policy: viewFullPolicy,
+      ministry: ministry,
+      status: status,
+      creator: creator,
+      createdAt: new Date(Number(createdAt.toString()) * 1000).toISOString(),
+      effectiveDate: new Date(Number(effectiveDate.toString()) * 1000).toISOString(),
+      lastUpdated: new Date(Number(lastUpdated.toString()) * 1000).toISOString(),
+      supportCount: Number(supportCount.toString()),
+      removed: Boolean(removed),
+      isActive: Boolean(isActive),
+      raw: policy // Keep raw data for debugging
+    };
+  } catch (error) {
+    console.error(`❌ Error processing policy ${i}:`, error.message);
+    return null;
   }
 }
 
@@ -986,7 +1048,7 @@ async function createReport(data) {
 // Policies
 async function getAllPolicies() {
   return await queryDatabase('policies', {
-    select: 'id,name,description,ministry,status,creator,created_at,effective_date,updated_at,supportCount,isActive,removed',
+    select: 'id,name,description,view_full_policy,ministry,status,creator,created_at,effective_date,updated_at,supportCount,isActive,removed',
     order: 'id'
   });
 }
@@ -996,6 +1058,7 @@ async function createPolicy(data) {
     id: data.id || null,
     name: data.name || '',
     description: data.description || '',
+    view_full_policy: data.view_full_policy || data.viewFullPolicy || '',
     ministry: data.ministry || '',
     status: data.status || '',
     creator: data.creator || null,
@@ -1172,37 +1235,28 @@ async function comparePolicyFields(dbPolicy, bcPolicy) {
     return false;
   }
 
-  // Support raw arrays emitted by some contract readers
-  const raw = bcPolicy && bcPolicy.raw ? bcPolicy.raw : [];
+  // Extract processed blockchain data (now that we process policies properly)
+  const bcName = bcPolicy.name || '';
+  const bcDescription = bcPolicy.description || '';
+  const bcView = bcPolicy.view_full_policy || '';
+  const bcMinistry = bcPolicy.ministry || '';
+  const bcStatus = bcPolicy.status || '';
+  const bcSupportCount = bcPolicy.supportCount || 0;
+  const bcIsActive = bcPolicy.isActive || false;
+  const bcRemoved = bcPolicy.removed || false;
 
-  const bcName = raw[0] !== undefined && raw[0] !== null ? raw[0] : (bcPolicy.name || '');
-  let bcDescriptionRaw = raw[1] !== undefined && raw[1] !== null ? raw[1] : (bcPolicy.description || '');
-  let bcViewRaw = raw[2] !== undefined && raw[2] !== null ? raw[2] : (bcPolicy.view_full_policy || bcPolicy.view || '');
-
-  // Resolve IPFS CIDs when present
-  let bcDescription = bcDescriptionRaw;
-  let bcView = bcViewRaw;
-  try {
-    if (typeof bcDescriptionRaw === 'string' && isPossiblyCid(bcDescriptionRaw)) {
-      bcDescription = await fetchIPFSContent(String(bcDescriptionRaw));
-    }
-  } catch (e) {
-    console.warn('Warning: failed to resolve policy description CID', e.message);
+  // Debug logging for removed field
+  if (dbPolicy && (dbPolicy.id || dbPolicy.name)) {
+    console.log(`🔍 Policy ${dbPolicy.id || dbPolicy.name} removed comparison:`, {
+      dbRemoved: Boolean(dbPolicy.removed || false),
+      bcRemoved: Boolean(bcRemoved),
+      bcPolicyData: {
+        name: bcPolicy.name,
+        removed: bcPolicy.removed,
+        status: bcPolicy.status
+      }
+    });
   }
-
-  try {
-    if (typeof bcViewRaw === 'string' && isPossiblyCid(bcViewRaw)) {
-      bcView = await fetchIPFSContent(String(bcViewRaw));
-    }
-  } catch (e) {
-    console.warn('Warning: failed to resolve policy view CID', e.message);
-  }
-
-  const bcMinistry = raw[3] !== undefined && raw[3] !== null ? raw[3] : (bcPolicy.ministry || '');
-  const bcStatus = raw[4] !== undefined && raw[4] !== null ? raw[4] : (bcPolicy.status || '');
-  const bcSupportCount = raw[9] !== undefined ? Number(raw[9]) : (bcPolicy.supportCount || 0);
-  const bcIsActive = raw[11] !== undefined ? Boolean(raw[11]) : (bcPolicy.isActive || false);
-  const bcRemoved = raw[10] !== undefined ? Boolean(raw[10]) : (bcPolicy.removed || false);
 
   // Compare fields and add to updateData when changed
   if ((dbPolicy.name || '') !== (bcName || '')) {
@@ -1240,9 +1294,10 @@ async function comparePolicyFields(dbPolicy, bcPolicy) {
     hasChanges = true;
   }
 
-  if ((dbPolicy.removed || false) !== bcRemoved) {
-    updateData.removed = bcRemoved;
+  if (Boolean(dbPolicy.removed || false) !== Boolean(bcRemoved)) {
+    updateData.removed = Boolean(bcRemoved);
     hasChanges = true;
+    console.log(`🔄 Policy ${dbPolicy.id || dbPolicy.name} removed status change: ${Boolean(dbPolicy.removed || false)} → ${Boolean(bcRemoved)}`);
   }
 
   // Dates mapping if provided in bcPolicy
@@ -1486,6 +1541,11 @@ function compareReportFields(dbReport, bcReport) {
   const updateData = {};
   let hasChanges = false;
   
+  // Debug logging
+  console.log(`🔍 Comparing report ${bcReport.id}:`);
+  console.log(`  DB resolved_status: ${dbReport.resolved_status} (type: ${typeof dbReport.resolved_status})`);
+  console.log(`  BC resolved_status: ${bcReport.resolved_status} (type: ${typeof bcReport.resolved_status})`);
+  
   const bcTitle = bcReport.title?.content || bcReport.title || '';
   if (dbReport.title !== bcTitle) {
     updateData.title = bcTitle;
@@ -1513,9 +1573,19 @@ function compareReportFields(dbReport, bcReport) {
     hasChanges = true;
   }
   
-  if (dbReport.resolved_status !== bcReport.resolved_status) {
-    updateData.resolved_status = bcReport.resolved_status;
+  // Ensure both values are properly compared as booleans
+  const dbResolved = Boolean(dbReport.resolved_status);
+  const bcResolved = Boolean(bcReport.resolved_status);
+  
+  if (dbResolved !== bcResolved) {
+    updateData.resolved_status = bcResolved;
     hasChanges = true;
+    console.log(`  🔄 Resolved status change detected: ${dbResolved} → ${bcResolved}`);
+  }
+  
+  console.log(`  Has changes: ${hasChanges}`);
+  if (hasChanges) {
+    console.log(`  Update data:`, updateData);
   }
   
   return { hasChanges, updateData };
@@ -1564,11 +1634,18 @@ async function syncPoliciesWithData(fromBlock, toBlock, blockchainPolicies) {
       try {
         const needsUpdate = await comparePolicyFields(dbPolicy, bcPolicy);
         if (needsUpdate.hasChanges) {
+          console.log(`🔍 Policy ${dbPolicy.id} changes detected:`, needsUpdate.updateData);
           await updateRecord('policies', dbPolicy.id, needsUpdate.updateData);
           updatedCount++;
-          console.log(`🔄 Updated policy ${dbPolicy.id}`);
+          console.log(`🔄 Updated policy ${dbPolicy.id}: ${Object.keys(needsUpdate.updateData).join(', ')}`);
+          
+          // Log removed status changes specifically
+          if (needsUpdate.updateData.removed !== undefined) {
+            console.log(`🗑️ Policy ${dbPolicy.id} removed status updated to: ${needsUpdate.updateData.removed}`);
+          }
         }
       } catch (error) {
+        console.error(`❌ Error updating policy ${dbPolicy.id}:`, error);
         errors.push({ type: 'update', id: dbPolicy.id, error: error.message });
       }
     }

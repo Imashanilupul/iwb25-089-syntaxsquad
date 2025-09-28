@@ -92,6 +92,20 @@ router.post("/prepare-project", async (req, res) => {
   }
 });
 
+// Contract info endpoint for frontend blockchain interactions
+router.get('/contract-info', async (req, res) => {
+  try {
+    if (!project) {
+      return res.status(500).json({ error: 'Project contract not initialized' })
+    }
+    const contractAbi = project.interface.formatJson()
+    res.json({ contractAddress, contractAbi: JSON.parse(contractAbi) })
+  } catch (err) {
+    console.error('Failed to get contract info', err)
+    res.status(500).json({ error: err.message || 'Failed to get contract info' })
+  }
+})
+
 // Create project
 router.post("/create-project", async (req, res) => {
   const { 

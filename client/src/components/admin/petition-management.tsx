@@ -7,21 +7,56 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Progress } from "@/components/ui/progress"
-import { Search, Calendar, Loader2, X, MessageSquare, Users, TrendingUp } from "lucide-react"
-import { petitionService, type Petition as PetitionType, type PetitionStatistics } from "@/services/petition"
+import {
+  Search,
+  Calendar,
+  Loader2,
+  X,
+  MessageSquare,
+  Users,
+  TrendingUp,
+  AlertCircle,
+  Trash2,
+} from "lucide-react"
+import {
+  petitionService,
+  type Petition as PetitionType,
+  type PetitionStatistics,
+} from "@/services/petition"
 import { useRef } from "react"
 import { petitionActivityService } from "@/services/petition-activity"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/context/AuthContext"
+import { useAppKitAccount } from "@reown/appkit/react"
 
 export function PetitionManagement() {
+  // Environment variables
+  const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"
+  const BALLERINA_BASE_URL = process.env.NEXT_PUBLIC_BALLERINA_BASE_URL || "http://localhost:8080"
+
   const [petitions, setPetitions] = useState<PetitionType[]>([])
   const [loading, setLoading] = useState(true)
   const [statistics, setStatistics] = useState<PetitionStatistics["data"] | null>(null)
   const { toast } = useToast()
+  const { address, isConnected } = useAppKitAccount()
+  const { verified } = useAuth()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -32,40 +67,155 @@ export function PetitionManagement() {
 
   // For tracking which petition is being deleted
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  // Remove petition from database and update UI
-  const handleRemovePetition = async (petitionId: number) => {
-    if (!window.confirm("Are you sure you want to delete this petition? This action cannot be undone.")) return;
-    setDeletingId(petitionId);
-    try {
-      setLoading(true);
-      await petitionService.deletePetition(petitionId);
-      setPetitions((prev) => prev.filter((p) => p.id !== petitionId));
-      setTotalItems((prev) => prev - 1);
-      setSignatureCounts((prev) => {
-        const updated = { ...prev };
-        delete updated[petitionId];
-        return updated;
-      });
-      await loadStatistics();
-      toast({
-        title: "Success",
-        description: "Petition has been removed successfully.",
-        variant: "default",
-      });
-    } catch (error) {
-      console.error("Failed to remove petition:", error);
-      toast({
-        title: "Error",
-        description: "Failed to remove petition. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setDeletingId(null);
-    }
-  };
 
-  // Pagination state  
+  // Wallet validation helper
+  const validateWallet = async (walletAddress: string) => {
+    if (!window.ethereum) {
+      throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
+    }
+
+    let accounts
+    try {
+      accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+    } catch (accountError: any) {
+      console.error("Failed to get accounts:", accountError)
+      throw new Error("Failed to get wallet accounts. Please try again.")
+    }
+
+    if (accounts.length === 0) {
+      try {
+        toast({
+          title: "Account Access Required",
+          description: "Please approve wallet connection in MetaMask",
+        })
+        accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      } catch (requestError: any) {
+        if (requestError.code === -32002) {
+          throw new Error(
+            "MetaMask is already processing a connection request. Please check your MetaMask extension and try again."
+          )
+        } else if (requestError.code === 4001) {
+          throw new Error("User rejected wallet connection request")
+        }
+        throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+      }
+    }
+
+    const currentAccount = accounts[0]?.toLowerCase()
+    if (!currentAccount) {
+      throw new Error("No wallet account found. Please connect your wallet first.")
+    }
+
+    if (currentAccount !== walletAddress.toLowerCase()) {
+      throw new Error(
+        `Account mismatch. Please switch to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} in MetaMask`
+      )
+    }
+  }
+
+  // Remove petition from blockchain and database
+  const handleRemovePetition = async (petitionId: number) => {
+    // Check wallet connection
+    if (!isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!verified) {
+      toast({
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to remove petitions.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setDeletingId(petitionId)
+
+    try {
+      await validateWallet(address!)
+
+      // Get contract info for blockchain transaction
+      const infoRes = await fetch(`${API_BASE_URL}/petition/contract-info`)
+      if (!infoRes.ok) throw new Error("Failed to fetch contract info")
+      const info = await infoRes.json()
+      const { contractAddress, contractAbi } = info
+      if (!contractAddress || !contractAbi) throw new Error("Contract info missing")
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet",
+      })
+
+      // Send blockchain transaction
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      const tx = await contract.removePetition(petitionId)
+      toast({ title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...` })
+
+      const receipt = await tx.wait()
+      toast({ title: `✅ Petition removed from blockchain in block ${receipt.blockNumber}` })
+
+      // Update database after successful blockchain transaction
+      try {
+        const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/petitions/${petitionId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            removed: true,
+          }),
+        })
+
+        if (!dbUpdateResp.ok) {
+          console.error("Database update failed:", await dbUpdateResp.text())
+          toast({
+            title: "⚠️ Blockchain updated but database sync failed",
+            description: "The petition was removed from blockchain but database sync failed",
+            variant: "destructive",
+          })
+        } else {
+          toast({ title: "✅ Petition removed from blockchain and database" })
+        }
+      } catch (dbError: any) {
+        console.error("Database update error:", dbError)
+        toast({
+          title: "⚠️ Blockchain updated but database sync failed",
+          description: "The petition was removed from blockchain but database sync failed",
+          variant: "destructive",
+        })
+      }
+
+      // Remove from UI and reload data
+      setPetitions((prev) => prev.filter((p) => p.id !== petitionId))
+      setTotalItems((prev) => prev - 1)
+      setSignatureCounts((prev) => {
+        const updated = { ...prev }
+        delete updated[petitionId]
+        return updated
+      })
+      await loadStatistics()
+    } catch (error: any) {
+      console.error("Petition removal failed:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage?.includes("User rejected") || (error as any)?.code === 4001) {
+        toast({ title: "Transaction cancelled by user.", variant: "destructive" })
+      } else if (errorMessage?.includes("insufficient funds")) {
+        toast({ title: "Insufficient funds to complete the transaction.", variant: "destructive" })
+      } else {
+        toast({ title: `❌ Failed to remove petition: ${errorMessage}`, variant: "destructive" })
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [totalItems, setTotalItems] = useState(0)
@@ -111,8 +261,10 @@ export function PetitionManagement() {
     try {
       setLoading(true)
       const response = await petitionService.getAllPetitions()
-      setPetitions(response.data)
-      setTotalItems(response.data.length)
+      // Filter out removed petitions
+      const activePetitions = response.data.filter((petition) => !petition.removed)
+      setPetitions(activePetitions)
+      setTotalItems(activePetitions.length)
     } catch (error) {
       console.error("Failed to load petitions:", error)
       toast({
@@ -140,13 +292,13 @@ export function PetitionManagement() {
       // Load signature counts for all current petitions
       const currentPetitions = petitions
       if (currentPetitions.length === 0) return
-      
+
       for (const petition of currentPetitions) {
         try {
           const response = await petitionActivityService.getActivitiesByPetitionId(petition.id)
           // Sum up signature counts from activities
           const totalSignatures = response.data
-            .filter(activity => activity.activity_type === 'SIGNATURE')
+            .filter((activity) => activity.activity_type === "SIGNATURE")
             .reduce((sum, activity) => sum + activity.signature_count, 0)
           counts[petition.id] = totalSignatures
         } catch (error) {
@@ -163,7 +315,7 @@ export function PetitionManagement() {
   const handleSearch = async () => {
     try {
       setLoading(true)
-      
+
       // Use advanced search with filters - this will handle all cases including empty filters
       const response = await petitionService.searchPetitionsAdvanced({
         keyword: searchTerm || undefined,
@@ -171,22 +323,24 @@ export function PetitionManagement() {
         sortBy,
         sortOrder,
       })
-      
-      // Set the filtered petitions as the main display data
-      setPetitions(response.data)
-      setTotalItems(response.data.length)
-      
+
+      // Filter out removed petitions and set as main display data
+      const activePetitions = response.data.filter((petition) => !petition.removed)
+      setPetitions(activePetitions)
+      setTotalItems(activePetitions.length)
+
       // Update search results indicator
       const activeFilters = []
       if (searchTerm) activeFilters.push(`keyword: "${searchTerm}"`)
       if (filterStatus !== "all") activeFilters.push(`status: ${filterStatus}`)
-      
+
       if (activeFilters.length > 0) {
-        setSearchResults(`Found ${response.data.length} petitions (filtered by ${activeFilters.join(', ')})`)
+        setSearchResults(
+          `Found ${response.data.length} petitions (filtered by ${activeFilters.join(", ")})`
+        )
       } else {
         setSearchResults(`Showing all ${response.data.length} petitions`)
       }
-      
     } catch (error) {
       console.error("Search failed:", error)
       toast({
@@ -212,29 +366,31 @@ export function PetitionManagement() {
 
   const getStatusColor = (status: string | undefined | null) => {
     if (!status || typeof status !== "string") {
-      return "bg-gray-100 text-gray-800";
+      return "bg-gray-100 text-gray-800"
     }
     switch (status.toUpperCase()) {
       case "ACTIVE":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800"
       case "COMPLETED":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800"
       case "EXPIRED":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800"
       case "CANCELLED":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800"
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800"
     }
   }
 
   const formatStatus = (status: string | undefined | null) => {
     if (!status || typeof status !== "string") {
-      return "Unknown";
+      return "Unknown"
     }
-    return status.replace(/_/g, " ").split(" ").map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(" ");
+    return status
+      .replace(/_/g, " ")
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ")
   }
 
   const formatNumber = (num: number) => {
@@ -273,13 +429,15 @@ export function PetitionManagement() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">National Petition Management</h2>
-        <p className="text-slate-600">Manage Citizen Petitions Across All Provinces And Districts</p>
+        <p className="text-slate-600">
+          Manage Citizen Petitions Across All Provinces And Districts
+        </p>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-64">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+      <div className="flex flex-wrap gap-4">
+        <div className="relative min-w-64 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-slate-400" />
           <Input
             placeholder="Search petitions by title or description..."
             value={searchTerm}
@@ -289,7 +447,8 @@ export function PetitionManagement() {
           {searchTerm && (
             <button
               onClick={() => setSearchTerm("")}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 transform text-slate-400 hover:text-slate-600"
+              aria-label="Clear search"
             >
               <X className="h-4 w-4" />
             </button>
@@ -308,7 +467,10 @@ export function PetitionManagement() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={sortBy} onValueChange={(value: "title" | "created_at" | "signature_count") => setSortBy(value)}>
+        <Select
+          value={sortBy}
+          onValueChange={(value: "title" | "created_at" | "signature_count") => setSortBy(value)}
+        >
           <SelectTrigger className="w-32">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
@@ -336,20 +498,20 @@ export function PetitionManagement() {
 
       {/* Results indicator */}
       {searchResults && (
-        <div className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
-          {searchResults}
-        </div>
+        <div className="rounded bg-slate-50 p-2 text-sm text-slate-600">{searchResults}</div>
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Petitions</CardTitle>
             <MessageSquare className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statistics?.total_petitions || petitions.length}</div>
+            <div className="text-2xl font-bold">
+              {statistics?.total_petitions || petitions.length}
+            </div>
             <p className="text-xs text-slate-500">All time</p>
           </CardContent>
         </Card>
@@ -361,8 +523,8 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.status_breakdown?.ACTIVE || 
-               petitions.filter((p) => (p.status?.toUpperCase() === "ACTIVE")).length}
+              {statistics?.status_breakdown?.ACTIVE ||
+                petitions.filter((p) => p.status?.toUpperCase() === "ACTIVE").length}
             </div>
             <p className="text-xs text-slate-500">Currently collecting signatures</p>
           </CardContent>
@@ -375,8 +537,10 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatNumber(statistics?.total_signatures || 
-                Object.values(signatureCounts).reduce((sum, count) => sum + count, 0))}
+              {formatNumber(
+                statistics?.total_signatures ||
+                  Object.values(signatureCounts).reduce((sum, count) => sum + count, 0)
+              )}
             </div>
             <p className="text-xs text-slate-500">Citizen participation</p>
           </CardContent>
@@ -389,8 +553,13 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.completion_rate_percentage?.toFixed(0) || 
-               Math.round((petitions.filter((p) => p.status === "COMPLETED").length / Math.max(petitions.length, 1)) * 100)}%
+              {statistics?.completion_rate_percentage?.toFixed(0) ||
+                Math.round(
+                  (petitions.filter((p) => p.status === "COMPLETED").length /
+                    Math.max(petitions.length, 1)) *
+                    100
+                )}
+              %
             </div>
             <p className="text-xs text-slate-500">Completed petitions</p>
           </CardContent>
@@ -401,7 +570,9 @@ export function PetitionManagement() {
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle>National Petitions ({petitions.length})</CardTitle>
-          <CardDescription>Citizen petitions from across all provinces and districts</CardDescription>
+          <CardDescription>
+            Citizen petitions from across all provinces and districts
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -417,61 +588,70 @@ export function PetitionManagement() {
                   <TableHead>Status</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-  {getPaginatedPetitions().map((petition) => {
-    const currentSignatures = getSignatureCount(petition.id)
-    const requiredSignatures = petition.required_signature_count
-    const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
-    
-    // Determine display status - show "completed" if progress is 100%
-    const displayStatus = progress >= 100 ? "COMPLETED" : petition.status
+                {getPaginatedPetitions().map((petition) => {
+                  const currentSignatures = getSignatureCount(petition.id)
+                  const requiredSignatures = petition.required_signature_count
+                  const progress = Math.min((currentSignatures / requiredSignatures) * 100, 100)
 
-    return (
-      <TableRow key={petition.id}>
-        <TableCell className="font-medium max-w-xs">
-          <div>
-            <p className="font-semibold">{petition.title}</p>
-            <p className="text-sm text-slate-500 truncate">{petition.description}</p>
-          </div>
-        </TableCell>
-        <TableCell>
-          <Badge className={getStatusColor(displayStatus)} variant="secondary">
-            {formatStatus(displayStatus)}
-          </Badge>
-        </TableCell>
-        <TableCell>
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span>{formatNumber(currentSignatures)}</span>
-              <span>{formatNumber(requiredSignatures)}</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-            <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
-          </div>
-        </TableCell>
-        <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
+                  // Determine display status - show "completed" if progress is 100%
+                  const displayStatus = progress >= 100 ? "COMPLETED" : petition.status
 
-        {/* Remove Button */}
-        <TableCell>
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={() => handleRemovePetition(petition.id)}
-              disabled={deletingId === petition.id || loading}
-            >
-              {deletingId === petition.id ? "Removing..." : "Remove"}
-            </Button>
-        </TableCell>
-      </TableRow>
-    )
-  })}
-</TableBody>
+                  return (
+                    <TableRow key={petition.id}>
+                      <TableCell className="max-w-xs font-medium">
+                        <div>
+                          <p className="font-semibold">{petition.title}</p>
+                          <p className="truncate text-sm text-slate-500">{petition.description}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(displayStatus)} variant="secondary">
+                          {formatStatus(displayStatus)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span>{formatNumber(currentSignatures)}</span>
+                            <span>{formatNumber(requiredSignatures)}</span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                          <p className="text-xs text-slate-500">{progress.toFixed(1)}% complete</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{new Date(petition.created_at).toLocaleDateString()}</TableCell>
 
+                      {/* Remove Button */}
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemovePetition(petition.id)}
+                            disabled={
+                              deletingId === petition.id || loading || !isConnected || !verified
+                            }
+                            title={deletingId === petition.id ? "Removing..." : "Remove petition"}
+                          >
+                            {deletingId === petition.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
             </Table>
           )}
-          
+
           {/* Pagination */}
           {petitions.length > 0 && (
             <DataTablePagination

@@ -11,6 +11,7 @@ export interface Petition {
   deadline?: string
   created_at: string
   updated_at: string
+  removed?: boolean
 }
 
 export interface CreatePetitionData {

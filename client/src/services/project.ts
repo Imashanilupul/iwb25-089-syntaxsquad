@@ -11,6 +11,7 @@ export interface Project {
   ministry: string
   view_details?: string
   status: string
+  removed?: boolean
   created_at?: string
   updated_at?: string
   categories?: {

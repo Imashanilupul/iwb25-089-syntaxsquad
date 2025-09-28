@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
-import { Plus, Edit, Trash2, FileText, MessageSquare, Eye, Search, Loader2, X, Wallet, AlertCircle } from "lucide-react"
+import { Plus, Edit, Vote, Calendar, Users, Loader2, Wallet, AlertCircle, Search, X, Trash2, MessageSquare, ExternalLink, Settings, FileText, Eye } from "lucide-react"
 import { policyService, type Policy as PolicyType, type CreatePolicyData, type PolicyStatistics, type PaginationMeta } from "@/services/policy"
 import { policyCommentService } from "@/services/policy-comment"
 import { useToast } from "@/hooks/use-toast"
@@ -52,7 +52,7 @@ export function PolicyManagement() {
     status: "DRAFT",
   })
 
-  const [editingId, setEditingId] = useState<number | null>(null)
+
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterMinistry, setFilterMinistry] = useState("all")
@@ -70,6 +70,15 @@ export function PolicyManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [pagination, setPagination] = useState<PaginationMeta | null>(null)
+
+  // Status change dialog state
+  const [statusChangeDialog, setStatusChangeDialog] = useState(false)
+  const [changingPolicyId, setChangingPolicyId] = useState<number | null>(null)
+  const [newStatus, setNewStatus] = useState<string>("")  
+  const [isChangingStatus, setIsChangingStatus] = useState(false)
+
+  // For tracking which policy is being deleted
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const policyStatuses = ["DRAFT", "UNDER_REVIEW", "PUBLIC_CONSULTATION", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED"]
 
@@ -130,9 +139,11 @@ export function PolicyManagement() {
     try {
       setLoading(true)
       const response = await policyService.getAllPolicies(page, limit)
-      setPolicies(response.data)
+      // Filter out removed policies
+      const activePolicies = response.data.filter((policy) => !policy.removed)
+      setPolicies(activePolicies)
       if (response.pagination) {
-        setPagination(response.pagination)
+        setPagination({...response.pagination, total: activePolicies.length})
       }
     } catch (error) {
         console.error("Failed to load policies:", error)
@@ -194,8 +205,9 @@ export function PolicyManagement() {
         sortOrder,
       })
       
-      // Set the filtered policies as the main display data
-      setPolicies(response.data)
+      // Filter out removed policies and set as main display data
+      const activePolicies = response.data.filter((policy) => !policy.removed)
+      setPolicies(activePolicies)
       
       // Update search results indicator
       const activeFilters = []
@@ -308,7 +320,7 @@ export function PolicyManagement() {
     e.preventDefault()
 
     // Prevent multiple simultaneous requests for policy creation
-    if (!editingId && isCreatingPolicy) {
+    if (isCreatingPolicy) {
       toast({
         title: "⏳ Policy creation is already in progress",
         description: "Please wait for the current process to complete"
@@ -317,7 +329,7 @@ export function PolicyManagement() {
     }
 
     // Check wallet connection for new policy creation
-    if (!editingId && !isConnected) {
+    if (!isConnected) {
       toast({
         title: "🔗 Please connect your wallet first using the Connect button",
         variant: "destructive"
@@ -325,7 +337,7 @@ export function PolicyManagement() {
       return
     }
 
-    if (!editingId && isConnected && !verified) {
+    if (isConnected && !verified) {
       toast({
         title: "❌ Verification Required",
         description: "Please verify your wallet to create new policies.",
@@ -335,7 +347,7 @@ export function PolicyManagement() {
     }
 
     // Validate wallet address format for new policies
-    if (!editingId && address && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    if (address && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       toast({
         title: "❌ Invalid wallet address format",
         description: "Please reconnect your wallet.",
@@ -353,45 +365,7 @@ export function PolicyManagement() {
       return
     }
 
-    if (editingId) {
-      // Handle policy update (existing logic)
-      try {
-        const policyData: CreatePolicyData = {
-          name: formData.name,
-          description: formData.description,
-          view_full_policy: formData.view_full_policy,
-          ministry: formData.ministry,
-          status: formData.status,
-        }
-
-        await policyService.updatePolicy(editingId, policyData)
-        toast({
-          title: "✅ Success",
-          description: "Policy updated successfully."
-        })
-
-        // Reset form and reload data
-        setFormData({
-          name: "",
-          description: "",
-          view_full_policy: "",
-          ministry: "",
-          status: "DRAFT",
-        })
-        setEditingId(null)
-        setIsDialogOpen(false)
-        loadPolicies(currentPage, pageSize)
-        loadStatistics()
-        loadMinistries()
-      } catch (error) {
-        console.error("Update failed:", error)
-        toast({
-          title: "❌ Failed to update policy",
-          variant: "destructive"
-        })
-      }
-      return
-    }
+    // Only new policy creation is handled here - status changes have separate handler
 
     // Handle new policy creation with blockchain integration
     setIsCreatingPolicy(true)
@@ -566,7 +540,6 @@ Timestamp: ${timestamp}
         ministry: "",
         status: "DRAFT",
       })
-      setEditingId(null)
       setIsDialogOpen(false)
       loadPolicies(currentPage, pageSize)
       loadStatistics()
@@ -584,40 +557,213 @@ Timestamp: ${timestamp}
     }
   }
 
-  const handleEdit = (policy: PolicyType) => {
-    setFormData({
-      name: policy.name,
-      description: policy.description,
-      view_full_policy: policy.view_full_policy,
-      ministry: policy.ministry,
-      status: policy.status,
-    })
-    setEditingId(policy.id)
-    setIsDialogOpen(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this policy?")) {
+  // Remove policy from blockchain and database
+  const handleRemovePolicy = async (policyId: number) => {
+    // Check wallet connection
+    if (!isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first",
+        variant: "destructive",
+      })
       return
     }
 
-    try {
-      await policyService.deletePolicy(id)
+    if (!verified) {
       toast({
-        title: "Success",
-        description: "Policy deleted successfully.",
-      })
-      loadPolicies(currentPage, pageSize)
-      loadStatistics()
-    } catch (error) {
-      console.error("Delete failed:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete policy.",
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to remove policies.",
         variant: "destructive",
       })
+      return
+    }
+
+    setDeletingId(policyId)
+
+    try {
+      await validateWallet(address!)
+
+      // Get contract info for blockchain transaction
+      const infoRes = await fetch(`${API_BASE_URL}/policy/contract-info`)
+      if (!infoRes.ok) throw new Error("Failed to fetch contract info")
+      const info = await infoRes.json()
+      const { contractAddress, contractAbi } = info
+      if (!contractAddress || !contractAbi) throw new Error("Contract info missing")
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet",
+      })
+
+      // Send blockchain transaction
+      const ethers = await import("ethers")
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      const tx = await contract.removePolicy(policyId)
+      toast({ title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...` })
+
+      const receipt = await tx.wait()
+      toast({ title: `✅ Policy removed from blockchain in block ${receipt.blockNumber}` })
+
+      // Update database after successful blockchain transaction
+      try {
+        const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/policies/${policyId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            removed: true,
+          }),
+        })
+
+        if (!dbUpdateResp.ok) {
+          console.error("Database update failed:", await dbUpdateResp.text())
+          toast({
+            title: "⚠️ Blockchain updated but database sync failed",
+            description: "The policy was removed from blockchain but database sync failed",
+            variant: "destructive",
+          })
+        } else {
+          toast({ title: "✅ Policy removed from blockchain and database" })
+        }
+      } catch (dbError: any) {
+        console.error("Database update error:", dbError)
+        toast({
+          title: "⚠️ Blockchain updated but database sync failed",
+          description: "The policy was removed from blockchain but database sync failed",
+          variant: "destructive",
+        })
+      }
+
+      // Remove from UI and reload data
+      setPolicies((prev) => prev.filter((p) => p.id !== policyId))
+      await loadPolicies()
+      await loadStatistics()
+    } catch (error: any) {
+      console.error("Policy removal failed:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage?.includes("User rejected") || (error as any)?.code === 4001) {
+        toast({ title: "Transaction cancelled by user.", variant: "destructive" })
+      } else if (errorMessage?.includes("insufficient funds")) {
+        toast({ title: "Insufficient funds to complete the transaction.", variant: "destructive" })
+      } else {
+        toast({ title: `❌ Failed to remove policy: ${errorMessage}`, variant: "destructive" })
+      }
+    } finally {
+      setDeletingId(null)
     }
   }
+
+  const handleStatusChange = async (policyId: number, currentStatus: string) => {
+    if (!isConnected) {
+      toast({
+        title: "🔗 Please connect your wallet first",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!verified) {
+      toast({
+        title: "❌ Verification Required",
+        description: "Please verify your wallet to change policy status.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setChangingPolicyId(policyId)
+    setNewStatus(currentStatus)
+    setStatusChangeDialog(true)
+  }
+
+  const executeStatusChange = async () => {
+    if (!changingPolicyId || !newStatus) return
+
+    setIsChangingStatus(true)
+    
+    try {
+      await validateWallet(address!)
+
+      // Get contract info for blockchain transaction
+      const infoRes = await fetch(`${API_BASE_URL}/policy/contract-info`)
+      if (!infoRes.ok) throw new Error('Failed to fetch contract info')
+      const info = await infoRes.json()
+      const { contractAddress, contractAbi } = info
+      if (!contractAddress || !contractAbi) throw new Error('Contract info missing')
+
+      toast({
+        title: "🔐 Please confirm the transaction in your wallet"
+      })
+
+      // Send blockchain transaction
+      const ethers = await import('ethers')
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+
+      // Calculate effective date (7 days from now for status changes)
+      const effectiveDate = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+
+      const tx = await contract.updatePolicyStatus(changingPolicyId, newStatus, effectiveDate)
+      toast({ title: `📤 Transaction sent: ${tx.hash.slice(0, 10)}...` })
+      
+      const receipt = await tx.wait()
+      toast({ title: `✅ Status updated on blockchain in block ${receipt.blockNumber}` })
+
+      // Update database after successful blockchain transaction
+      try {
+        const dbUpdateResp = await fetch(`${BALLERINA_BASE_URL}/policies/${changingPolicyId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: newStatus
+          })
+        })
+        
+        if (!dbUpdateResp.ok) {
+          console.error('Database update failed:', await dbUpdateResp.text())
+          toast({
+            title: '⚠️ Blockchain updated but database sync failed',
+            description: 'The policy status was updated on blockchain but database sync failed',
+            variant: 'destructive'
+          })
+        } else {
+          toast({ title: '✅ Policy status updated in blockchain and database' })
+        }
+      } catch (dbError: any) {
+        console.error('Database update error:', dbError)
+        toast({
+          title: '⚠️ Blockchain updated but database sync failed',
+          description: 'The policy status was updated on blockchain but database sync failed',
+          variant: 'destructive'
+        })
+      }
+
+      // Reset and reload
+      setStatusChangeDialog(false)
+      setChangingPolicyId(null)
+      setNewStatus("")
+      loadPolicies(currentPage, pageSize)
+      loadStatistics()
+
+    } catch (error: any) {
+      console.error('Status change failed:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      if (errorMessage?.includes('User rejected') || (error as any)?.code === 4001) {
+        toast({ title: 'Transaction cancelled by user.', variant: 'destructive' })
+      } else if (errorMessage?.includes('insufficient funds')) {
+        toast({ title: 'Insufficient funds to complete the transaction.', variant: 'destructive' })
+      } else {
+        toast({ title: `❌ Failed to change status: ${errorMessage}`, variant: 'destructive' })
+      }
+    } finally {
+      setIsChangingStatus(false)
+    }
+  }
+
+
 
   const getStatusColor = (status: string) => {
     switch (status.toUpperCase()) {
@@ -684,7 +830,6 @@ Timestamp: ${timestamp}
                     ministry: "",
                     status: "DRAFT",
                   })
-                  setEditingId(null)
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -693,9 +838,9 @@ Timestamp: ${timestamp}
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editingId ? "Edit Policy" : "Add New Policy"}</DialogTitle>
+                <DialogTitle>Add New Policy</DialogTitle>
                 <DialogDescription>
-                  {editingId ? "Update the policy details" : "Create a new government policy"}
+                  Create a new government policy
                 </DialogDescription>
               </DialogHeader>
 
@@ -816,17 +961,15 @@ Timestamp: ${timestamp}
                   <Button 
                     type="submit" 
                     className="flex-1"
-                    disabled={isCreatingPolicy || (!editingId && (!isConnected || !verified))}
+                    disabled={isCreatingPolicy || (!isConnected || !verified)}
                   >
                     {isCreatingPolicy ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Creating Policy...
                       </>
-                    ) : editingId ? (
-                      "Update Policy"
                     ) : (
-                      "Add Policy"
+                      "Create Policy on Blockchain"
                     )}
                   </Button>
                   <Button 
@@ -858,6 +1001,7 @@ Timestamp: ${timestamp}
             <button
               onClick={() => setSearchTerm("")}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label="Clear search"
             >
               <X className="h-4 w-4" />
             </button>
@@ -1025,11 +1169,29 @@ Timestamp: ${timestamp}
                         <Button variant="outline" size="sm" onClick={() => window.open(policy.view_full_policy, '_blank')}>
                           <Eye className="h-3 w-3" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(policy)}>
-                          <Edit className="h-3 w-3" />
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleStatusChange(policy.id, policy.status)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Settings className="h-3 w-3 mr-1" />
+                          Status
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(policy.id)}>
-                          <Trash2 className="h-3 w-3" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemovePolicy(policy.id)}
+                          disabled={
+                            deletingId === policy.id || loading || !isConnected || !verified
+                          }
+                          title={deletingId === policy.id ? "Removing..." : "Remove policy"}
+                        >
+                          {deletingId === policy.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
                         </Button>
                       </div>
                     </TableCell>
@@ -1052,6 +1214,74 @@ Timestamp: ${timestamp}
           )}
         </CardContent>
       </Card>
+
+      {/* Status Change Dialog */}
+      <Dialog open={statusChangeDialog} onOpenChange={setStatusChangeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Policy Status</DialogTitle>
+            <DialogDescription>
+              Update the policy status on blockchain and database
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newStatus">New Status</Label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select new status" />
+                </SelectTrigger>
+                <SelectContent className="z-[10003]" position="popper" sideOffset={4}>
+                  {policyStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {formatStatus(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {!isConnected && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">Please connect your wallet to change policy status.</p>
+              </div>
+            )}
+            
+            {isConnected && !verified && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">Please verify your wallet to change policy status.</p>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button 
+                onClick={executeStatusChange}
+                disabled={!newStatus || !isConnected || !verified || isChangingStatus}
+                className="flex-1"
+              >
+                {isChangingStatus ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Status on Blockchain"
+                )}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setStatusChangeDialog(false)}
+                disabled={isChangingStatus}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
     </div>
   )
 }

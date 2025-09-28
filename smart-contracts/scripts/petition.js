@@ -89,6 +89,31 @@ router.post('/prepare-petition', async (req, res) => {
   }
 });
 
+// Contract info endpoint for petition status changes and removals
+router.get('/contract-info', async (req, res) => {
+  try {
+    const addresses = loadDeployedAddresses();
+    const deployedContractAddress = addresses && addresses.Petitions ? addresses.Petitions : contractAddress;
+    const contractAbi = loadContractAbi();
+
+    if (!deployedContractAddress) {
+      return res.status(500).json({ success: false, error: 'No deployed contract address found' });
+    }
+    if (!contractAbi) {
+      return res.status(500).json({ success: false, error: 'No contract ABI found' });
+    }
+
+    return res.json({
+      success: true,
+      contractAddress: deployedContractAddress,
+      contractAbi,
+    });
+  } catch (err) {
+    console.error('❌ Error getting contract info:', err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
 router.post("/create-petition", async (req, res) => {
   const { title, description, requiredSignatures, signerIndex } = req.body;
   try {
