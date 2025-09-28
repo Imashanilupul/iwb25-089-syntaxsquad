@@ -1,9 +1,11 @@
 from fastapi import APIRouter
 from models.chat_models import ChatRequest, ChatResponse
 from db import get_chroma_client
-from embeddings import get_embedding
 import google.generativeai as genai
 import config
+
+# Hugging Face SentenceTransformer for free embeddings
+from sentence_transformers import SentenceTransformer
 
 router = APIRouter()
 client = get_chroma_client()
@@ -12,18 +14,24 @@ collection = client.get_or_create_collection(config.CHROMA_COLLECTION)
 genai.configure(api_key=config.GEMINI_API_KEY)
 
 
+embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+
+
+def get_free_embedding(text: str):
+    """Generate embeddings using free SentenceTransformers"""
+    return embedding_model.encode(text).tolist()
+
 
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest):
-    # Embed the question
-    query_embedding = get_embedding(req.question)
+    query_embedding = get_free_embedding(req.question)
 
     # Retrieve relevant documents from Chroma
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=req.top_k
     )
-    docs = results['documents'][0]  # List of retrieved docs
+    docs = results['documents'][0] if results['documents'] else []
 
     # Prepare prompt for Gemini LLM
     context_text = "\n".join(docs)
@@ -33,38 +41,9 @@ def chat_endpoint(req: ChatRequest):
 
 Your Role and Behavior:
 - You are a helpful, knowledgeable, and friendly assistant that communicates naturally like a chatbot
-- You should respond conversationally while being informative and professional
-
-For greetings and general conversation:
-- Respond warmly and naturally
-- Introduce yourself as the assistant for Sri Lanka's transparent governance platform
-- Ask how you can help with governance-related questions
-- Be conversational and engaging
-
-For specific questions:
-- Use the provided context information as your primary source
-- Give comprehensive, accurate answers based on available information
-- If context doesn't contain enough information, acknowledge this honestly
-- Always be helpful and guide users toward relevant information
-
-Key Principles:
-- Be Natural: Communicate like a friendly, knowledgeable person
-- Be Clear: Use simple language accessible to all citizens
-- Be Accurate: Only provide information supported by the context
-- Be Helpful: Always try to assist users with their needs
-- Stay Neutral: Maintain political neutrality while supporting democratic values
-- Be Culturally Aware: Consider Sri Lankan context and sensitivities
-- Encourage Participation: Promote civic engagement and transparency
-
-Special Focus Areas:
-- Governance processes and procedures
-- Blockchain transparency features
-- Civic rights and responsibilities
-- Democratic participation opportunities
-- Policy explanations and clarifications
-- Legal and regulatory information
-
-Remember: You're helping build a more transparent and accessible democracy. Every conversation should reflect values of openness, helpfulness, and civic engagement. Just give short and sweet answers do not go long answers"""
+- Keep answers short, clear, and professional
+- If context lacks enough information, say so honestly
+"""
 
     # Construct the full prompt
     full_prompt = f"""{system_prompt}
@@ -73,14 +52,11 @@ Context Information: {context_text}
 
 User Question: {req.question}
 
-Respond naturally as a helpful governance platform assistant would, using the context information to provide accurate and comprehensive answers. Do not add any styles to text. just raw text needed."""
+Respond naturally as a helpful governance platform assistant would, using the context information to provide accurate and concise answers. Do not add any styles to text. Just raw text needed."""
 
     # Generate answer using Gemini LLM
     try:
-        # Instantiate the model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        # Generate content
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(
             full_prompt,
             generation_config=genai.types.GenerationConfig(
@@ -88,10 +64,7 @@ Respond naturally as a helpful governance platform assistant would, using the co
                 max_output_tokens=500
             )
         )
-        
         return ChatResponse(answer=response.text)
-        
     except Exception as e:
-        # Handle errors gracefully
         error_message = f"Sorry, I encountered an error while processing your request: {str(e)}"
         return ChatResponse(answer=error_message)
