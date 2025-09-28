@@ -1,8 +1,8 @@
 import google.generativeai as genai
-import config
+from config import GEMINI_API_KEY
 
 # Configure Gemini
-genai.configure(api_key=config.GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
 def get_embedding(text: str):
     model = "models/embedding-001"
