@@ -6,7 +6,7 @@ const path = require('path');
 // Contract addresses for different networks
 const CONTRACT_ADDRESSES = {
   // From deployed-addresses.json
-  sepolia: "0xDdBE9c97C837F837c165ba972Efc371B2a09fdea", // Will be updated after deployment
+  sepolia: "0x146EA55562C53E6A2f1Ab9511091Dd26511947dE", // Will be updated after deployment
   // Add other networks as needed
 };
 

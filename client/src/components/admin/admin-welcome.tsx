@@ -167,8 +167,8 @@ export function AdminWelcome() {
             <div className="flex justify-center items-center gap-4 mb-6">
               <div className="relative">
                 <Image
-                  src="/images/sri-lanka-emblem.png"
-                  alt="Sri Lanka National Emblem"
+                  src="/placeholder-logo.png"
+                  alt="Platform Logo"
                   width={80}
                   height={80}
                   className="object-contain"
