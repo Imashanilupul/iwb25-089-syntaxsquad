@@ -121,12 +121,20 @@ export default function AdminPortal() {
       <div className="container mx-auto p-4 sm:p-6">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <img src="/images/sri-lanka-emblem.png" alt="Sri Lanka Emblem" className="h-12 w-12 object-contain" />
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Portal</h1>
-              <p className="text-sm sm:text-base text-slate-600">Sri Lanka Transparent Governance Platform</p>
+
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <img
+                src="/placeholder-logo.png"
+                alt="Sri Lanka National Emblem"
+                className="h-12 w-12 object-contain"
+              />
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900">Admin Portal</h1>
+                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
+              </div>
+
             </div>
           </div>
 
