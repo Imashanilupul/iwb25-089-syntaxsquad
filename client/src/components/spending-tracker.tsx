@@ -267,214 +267,230 @@ export function SpendingTracker() {
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card className="border-0 shadow-md">
-  <CardHeader>
-    <CardTitle>Budget Allocation by Category</CardTitle>
-    <CardDescription>Current fiscal year distribution</CardDescription>
-  </CardHeader>
-  <CardContent>
-    <ChartContainer
-      config={{
-        allocated: { label: "Allocated", color: "#0088FE" },
-        spent: { label: "Spent", color: "#00C49F" },
-        remaining: { label: "Remaining", color: "#FFBB28" },
-      }}
-      className="h-64"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={budgetData} margin={{bottom:80}}>
-          <XAxis 
-            dataKey="category" 
-            angle={-30} 
-            textAnchor="end" 
-            interval={0}  // ensures all labels show
-          />
-          <YAxis
-            tickFormatter={(value: number) => {
-              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
-              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-              return String(value)
-            }}
-          />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <Bar dataKey="allocated" fill="#0088FE" />
-          <Bar dataKey="spent" fill="#00C49F" />
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartContainer>
-  </CardContent>
-</Card>
+ {/* Charts */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  {/* Budget Allocation */}
+  <Card className="border-0 shadow-md">
+    <CardHeader>
+      <CardTitle>Budget Allocation by Category</CardTitle>
+      <CardDescription>Current fiscal year distribution</CardDescription>
+    </CardHeader>
+    <CardContent>
+      <ChartContainer
+        config={{
+          allocated: { label: "Allocated", color: "#0088FE" },
+          spent: { label: "Spent", color: "#00C49F" },
+          remaining: { label: "Remaining", color: "#FFBB28" },
+        }}
+        className="h-[40vh] min-h-[280px] w-full"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={budgetData} margin={{ bottom: 80, left: 10, right: 10 }}>
+            <XAxis
+              dataKey="category"
+              angle={window.innerWidth < 640 ? -45 : -30} // more rotation on mobile
+              textAnchor="end"
+              interval={0}
+              fontSize={window.innerWidth < 640 ? 10 : 12} // smaller font on mobile
+            />
+            <YAxis
+              tickFormatter={(value: number) => {
+                if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+                if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+                if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+                return String(value)
+              }}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="allocated" fill="#0088FE" />
+            <Bar dataKey="spent" fill="#00C49F" />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+    </CardContent>
+  </Card>
 
+  {/* Monthly Spending */}
+  <Card className="border-0 shadow-md">
+    <CardHeader>
+      <CardTitle>Monthly Spending Trend</CardTitle>
+      <CardDescription>Expenditure pattern over time</CardDescription>
+    </CardHeader>
+    <CardContent>
+      <ChartContainer
+        config={{ amount: { label: "Amount", color: "#8884D8" } }}
+        className="h-[40vh] min-h-[280px] w-full"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={spendingTrend} margin={{ left: 10, right: 10 }}>
+            <XAxis dataKey="month" fontSize={window.innerWidth < 640 ? 10 : 12} />
+            <YAxis
+              tickFormatter={(value: number) => {
+                if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+                if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+                if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+                return String(value)
+              }}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Line
+              type="monotone"
+              dataKey="amount"
+              stroke="#8884D8"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+    </CardContent>
+  </Card>
+</div>
 
-
-<Card className="border-0 shadow-md">
-  <CardHeader>
-    <CardTitle>Monthly Spending Trend</CardTitle>
-    <CardDescription>Expenditure pattern over time</CardDescription>
-  </CardHeader>
-  <CardContent>
-    <ChartContainer
-      config={{ amount: { label: "Amount", color: "#8884D8" } }}
-      className="h-64"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={spendingTrend}>
-          <XAxis dataKey="month" />
-          <YAxis
-            tickFormatter={(value: number) => {
-              if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
-              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-              if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-              return String(value)
-            }}
-          />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <Line
-            type="monotone"
-            dataKey="amount"
-            stroke="#8884D8"
-            strokeWidth={2}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </ChartContainer>
-  </CardContent>
-</Card>
-
-      </div>
 
       {/* Project List with Search & Filter */}
-      <Card className="border-0 shadow-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building className="h-5 w-5" />
-            Active Projects
-          </CardTitle>
+<Card className="border-0 shadow-md">
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2 flex-wrap">
+      <Building className="h-5 w-5" />
+      Active Projects
+    </CardTitle>
 
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardDescription className="text-sm text-muted-foreground">
-              Real-time project tracking with blockchain verification
-            </CardDescription>
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-2">
+      <CardDescription className="text-sm text-muted-foreground">
+        Real-time project tracking with blockchain verification
+      </CardDescription>
 
-            <div className="flex gap-2 ml-auto items-center">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search projects..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
+      {/* Search + Filter */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto w-full sm:w-auto">
+        <div className="relative flex-1 sm:flex-initial">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search projects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 w-full sm:w-64"
+          />
+        </div>
 
-              <Select
-                value={selectedCategory}
-                onValueChange={setSelectedCategory}
+        <Select
+          value={selectedCategory}
+          onValueChange={setSelectedCategory}
+        >
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.map((category) => (
+              <SelectItem
+                key={category.category_id}
+                value={category.category_name.toLowerCase()}
               >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem 
-                      key={category.category_id} 
-                      value={category.category_name.toLowerCase()}
-                    >
-                      {category.category_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {category.category_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  </CardHeader>
+
+  <CardContent>
+    <div className="space-y-4">
+      {filteredProjects.length > 0 ? (
+        filteredProjects.map((project) => (
+          <div
+            key={project.project_id}
+            className="border rounded-lg p-4 space-y-3"
+          >
+            {/* Title + Status */}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div className="space-y-1">
+                <h3 className="font-semibold text-slate-900">
+                  {project.project_name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {project.province}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Building className="h-3 w-3" />
+                    {project.ministry}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Badge variant="secondary">
+                      {project.categories?.category_name ||
+                        project.category_id ||
+                        "Uncategorized"}
+                    </Badge>
+                  </span>
+                </div>
+              </div>
+              <Badge className={getStatusColor(project.status)}>
+                {project.status}
+              </Badge>
+            </div>
+
+            {/* Budget / Spent / Progress */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-slate-600">Budget</p>
+                <p className="font-semibold">
+                  {formatCurrency(project.allocated_budget)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600">Spent</p>
+                <p className="font-semibold">
+                  {formatCurrency(project.spent_budget)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600">Progress</p>
+                <div className="flex items-center gap-2">
+                  <Progress
+                    value={project.progress || 0}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-medium">
+                    {project.progress || 0}%
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Budget utilization
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t">
+              <div className="text-xs text-slate-500">
+                • Updated{" "}
+                {project.updatedAt
+                  ? new Date(project.updatedAt).toLocaleDateString()
+                  : "Unknown"}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openProjectDetails(project)}
+              >
+                View Details
+              </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => (
-                <div
-                  key={project.project_id}
-                  className="border rounded-lg p-4 space-y-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold text-slate-900">
-                        {project.project_name}
-                      </h3>
-                      <div className="flex items-center gap-4 text-sm text-slate-600">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {project.province}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Building className="h-3 w-3" />
-                          {project.ministry}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Badge variant="secondary">
-                            {project.categories?.category_name || project.category_id || "Uncategorized"}
-                          </Badge>
-                        </span>
-                      </div>
-                    </div>
-                    <Badge className={getStatusColor(project.status)}>
-                      {project.status}
-                    </Badge>
-                  </div>
+        ))
+      ) : (
+        <p className="text-sm text-slate-500">
+          No matching projects found.
+        </p>
+      )}
+    </div>
+  </CardContent>
+</Card>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-slate-600">Budget</p>
-                      <p className="font-semibold">
-                        {formatCurrency(project.allocated_budget)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Spent</p>
-                      <p className="font-semibold">
-                        {formatCurrency(project.spent_budget)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Progress</p>
-                      <div className="flex items-center gap-2">
-                        <Progress value={project.progress || 0} className="flex-1" />
-                        <span className="text-sm font-medium">
-                          {project.progress || 0}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Budget utilization
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <div className="text-xs text-slate-500">
-                      <span className="ml-2">
-                        • Updated {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : "Unknown"}
-                      </span>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openProjectDetails(project)}
-                    >
-                      View Details
-                    </Button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-slate-500">No matching projects found.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Project Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={closeProjectDetails}>
