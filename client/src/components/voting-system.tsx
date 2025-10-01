@@ -247,7 +247,7 @@ Timestamp: ${timestamp}
 
       // Contract configuration - use the deployed Proposals address
       // NOTE: keep this in sync with smart-contracts/deployed-addresses.json or use an API endpoint for production
-      const contractAddress = "0xDdBE9c97C837F837c165ba972Efc371B2a09fdea"
+      const contractAddress = "0x146EA55562C53E6A2f1Ab9511091Dd26511947dE"
 
       // Contract ABI for voting functions
       const contractAbi = [
@@ -264,7 +264,6 @@ Timestamp: ${timestamp}
       try {
         const onChainProposal = await contract.getProposal(proposalId)
         const activeOnChain = onChainProposal[6]
-        const expiredOnChain = Number(onChainProposal[7] || 0)
 
         // Get current blockchain time
         const latestBlock = await provider.getBlock('latest')
@@ -274,13 +273,37 @@ Timestamp: ${timestamp}
           throw new Error('Smart contract error: Proposal is not active')
         }
 
-        if (expiredOnChain && blockTimestamp >= expiredOnChain) {
-          throw new Error('Smart contract error: Proposal has expired')
-        }
+
       } catch (readErr: any) {
         // If read failed because of invalid proposal id or other reason, surface a clear message
         const msg = readErr && readErr.message ? readErr.message : String(readErr)
-        throw new Error(msg.includes('Proposal does not exist') ? `Smart contract error: ${msg}` : msg)
+        console.error("Smart contract read error for proposal", proposalId, ":", readErr)
+        
+        // Check for various formats of "proposal not found" errors (case-insensitive)
+        const msgLower = msg.toLowerCase()
+        const reasonLower = readErr.reason ? readErr.reason.toLowerCase() : ''
+        
+        const isProposalNotFound = msgLower.includes('proposal does not exist') || 
+                                  msgLower.includes('proposal not found') ||
+                                  msgLower.includes('invalid proposal') ||
+                                  msgLower.includes('nonexistent proposal') ||
+                                  reasonLower.includes('proposal does not exist') ||
+                                  reasonLower.includes('proposal not found') ||
+                                  reasonLower.includes('invalid proposal') ||
+                                  (readErr.code === 'CALL_EXCEPTION' && reasonLower.includes('proposal')) ||
+                                  msgLower.includes('execution reverted') && reasonLower.includes('proposal')
+        
+        if (isProposalNotFound) {
+          throw new Error(`Smart contract error: Proposal ${proposalId} does not exist on the blockchain. Please verify the proposal ID is correct.`)
+        }
+        
+        // For other smart contract errors, provide clearer messaging
+        if (readErr.code === 'CALL_EXCEPTION') {
+          throw new Error(`Smart contract call failed: ${readErr.reason || msg}`)
+        }
+        
+        // For other errors, provide the original message with context
+        throw new Error(`Smart contract read error: ${msg}`)
       }
 
       toast.info(`🔐 Please confirm the ${voteType.toUpperCase()} vote transaction in your wallet`)

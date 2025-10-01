@@ -473,8 +473,8 @@ export default function CivicPlatform() {
           </div>
           <div className="mt-8 border-t pt-4 text-center text-sm text-slate-600">
             <p>
-              &copy; 2024 Government of Sri Lanka. All rights reserved. | Built with blockchain
-              technology for transparency.
+              &copy; 2025 All rights reserved. | Built with blockchain 
+              technology for transparency by SyntaxSquad.
             </p>
           </div>
         </div>
