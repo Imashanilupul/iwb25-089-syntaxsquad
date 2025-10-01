@@ -307,7 +307,7 @@ export default function AdminPortal() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <img
-                src="/images/sri-lanka-emblem.png"
+                src="/placeholder-logo.png"
                 alt="Sri Lanka National Emblem"
                 className="h-12 w-12 object-contain"
               />
