@@ -69,7 +69,7 @@ supabaseServiceRoleKey = ""
 ```env
 # API Configuration
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:3002
 
 # Note: If localhost:3000/api/auth/callback is not registered in Asgardeo,

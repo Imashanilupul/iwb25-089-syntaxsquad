@@ -25,22 +25,23 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Mount routers
-app.use("/petition", petitionRouter);
-app.use("/auth", authRouter);
-app.use("/report", reportsRouter);
-app.use("/policy", policyRouter);
-app.use("/proposal", proposalsRouter);
-app.use("/project", projectRouter);
-// Mount job manager router for async job management
-app.use('/', jobManagerRouter);
-// Mount blockchain sync router at root so endpoints like
-// /proposals/blockchain-data and /all/blockchain-data are available.
-app.use('/', blockchainSyncRouter);
+// Mount ALL routes only under /web3
+const api = express.Router();
+api.use("/petition", petitionRouter);
+api.use("/auth", authRouter);
+api.use("/report", reportsRouter);
+api.use("/policy", policyRouter);
+api.use("/proposal", proposalsRouter);
+api.use("/project", projectRouter);
+// Job manager and blockchain sync under the /web3 base as well
+api.use('/', jobManagerRouter);
+api.use('/', blockchainSyncRouter);
+// Attach the API router at /web3
+app.use('/web3', api);
 
 
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Web3 Service running at http://localhost:${PORT}`);
+  console.log(`Web3 Service running at http://localhost:${PORT}/web3`);
 });

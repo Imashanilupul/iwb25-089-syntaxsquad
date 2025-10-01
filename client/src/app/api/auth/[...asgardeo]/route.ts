@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       `response_type=code&` +
       `client_id=${process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID}&` +
       `scope=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_SCOPES || 'openid profile')}&` +
-      `redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/admin`)}&` +
+      `redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`)}&` +
       `state=${state}`;
     
     const response = NextResponse.redirect(asgardeoLoginUrl);
@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
     const isAdminLogout = referer.includes('/admin');
     
     const redirectUrl = isAdminLogout 
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=true`
-      : `${process.env.NEXT_PUBLIC_APP_URL}/auth-test`;
+      ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/adminLogin?logout=true`
+      : `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth-test`;
     
     const response = NextResponse.redirect(redirectUrl);
     response.cookies.delete('asgardeo_session');
