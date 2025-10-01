@@ -167,8 +167,8 @@ export function AdminWelcome() {
             <div className="flex justify-center items-center gap-4 mb-6">
               <div className="relative">
                 <Image
-                  src="/placeholder-logo.png"
-                  alt="Platform Logo"
+                  src="/images/sri-lanka-emblem.png"
+                  alt="Sri Lanka National Emblem"
                   width={80}
                   height={80}
                   className="object-contain"
@@ -360,7 +360,7 @@ export function AdminWelcome() {
                           Click the button below to proceed with Asgardeo authentication and access the admin portal.
                         </p>
                         <Button 
-                          onClick={() => window.location.href = '/auth/signin'} 
+                          onClick={() => window.location.href = '/api/auth/signin'} 
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
