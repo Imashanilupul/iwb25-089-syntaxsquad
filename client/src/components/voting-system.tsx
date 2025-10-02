@@ -278,30 +278,30 @@ Timestamp: ${timestamp}
         // If read failed because of invalid proposal id or other reason, surface a clear message
         const msg = readErr && readErr.message ? readErr.message : String(readErr)
         console.error("Smart contract read error for proposal", proposalId, ":", readErr)
-        
+
         // Check for various formats of "proposal not found" errors (case-insensitive)
         const msgLower = msg.toLowerCase()
         const reasonLower = readErr.reason ? readErr.reason.toLowerCase() : ''
-        
-        const isProposalNotFound = msgLower.includes('proposal does not exist') || 
-                                  msgLower.includes('proposal not found') ||
-                                  msgLower.includes('invalid proposal') ||
-                                  msgLower.includes('nonexistent proposal') ||
-                                  reasonLower.includes('proposal does not exist') ||
-                                  reasonLower.includes('proposal not found') ||
-                                  reasonLower.includes('invalid proposal') ||
-                                  (readErr.code === 'CALL_EXCEPTION' && reasonLower.includes('proposal')) ||
-                                  msgLower.includes('execution reverted') && reasonLower.includes('proposal')
-        
+
+        const isProposalNotFound = msgLower.includes('proposal does not exist') ||
+          msgLower.includes('proposal not found') ||
+          msgLower.includes('invalid proposal') ||
+          msgLower.includes('nonexistent proposal') ||
+          reasonLower.includes('proposal does not exist') ||
+          reasonLower.includes('proposal not found') ||
+          reasonLower.includes('invalid proposal') ||
+          (readErr.code === 'CALL_EXCEPTION' && reasonLower.includes('proposal')) ||
+          msgLower.includes('execution reverted') && reasonLower.includes('proposal')
+
         if (isProposalNotFound) {
           throw new Error(`Smart contract error: Proposal ${proposalId} does not exist on the blockchain. Please verify the proposal ID is correct.`)
         }
-        
+
         // For other smart contract errors, provide clearer messaging
         if (readErr.code === 'CALL_EXCEPTION') {
           throw new Error(`Smart contract call failed: ${readErr.reason || msg}`)
         }
-        
+
         // For other errors, provide the original message with context
         throw new Error(`Smart contract read error: ${msg}`)
       }
@@ -633,16 +633,16 @@ Timestamp: ${timestamp}
 
       <Tabs defaultValue="proposals" className="space-y-6">
         <TabsList className="flex gap-2 overflow-x-auto w-full scrollbar-hide justify-start">
-  <TabsTrigger value="proposals" className="flex-shrink-0">
-    Active Proposals
-  </TabsTrigger>
-  <TabsTrigger value="analytics" className="flex-shrink-0">
-    Voting Analytics
-  </TabsTrigger>
-  <TabsTrigger value="verification" className="flex-shrink-0">
-    Blockchain Verification
-  </TabsTrigger>
-</TabsList>
+          <TabsTrigger value="proposals" className="flex-shrink-0">
+            Active Proposals
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex-shrink-0">
+            Voting Analytics
+          </TabsTrigger>
+          <TabsTrigger value="verification" className="flex-shrink-0">
+            Blockchain Verification
+          </TabsTrigger>
+        </TabsList>
 
 
         <TabsContent value="proposals" className="space-y-6">
@@ -845,11 +845,12 @@ Timestamp: ${timestamp}
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Voter Demographics */}
             <Card className="border-0 shadow-md">
               <CardHeader>
-                <CardTitle>Voter Demographics</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-base sm:text-lg">Voter Demographics</CardTitle>
+                <CardDescription className="text-sm sm:text-base">
                   Age Distribution Of Active Voters
                   {voterDemographics.reduce((sum, item) => sum + item.value, 0) === stats.totalVoters ? (
                     <span className="text-green-600 text-xs block mt-1">
@@ -857,7 +858,7 @@ Timestamp: ${timestamp}
                     </span>
                   ) : voterDemographics.reduce((sum, item) => sum + item.value, 0) < stats.totalVoters ? (
                     <span className="text-blue-600 text-xs block mt-1">
-                      * Showing estimated demographics - actual voter data will display when users with linked Blockchain's vote
+                      * Showing estimated demographics – actual voter data will display when users with linked Blockchain’s vote
                     </span>
                   ) : (
                     <span className="text-amber-600 text-xs block mt-1">
@@ -871,7 +872,7 @@ Timestamp: ${timestamp}
                   config={{
                     value: { label: "Voters", color: "#0088FE" },
                   }}
-                  className="h-64"
+                  className="h-64 sm:h-72"
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -879,9 +880,11 @@ Timestamp: ${timestamp}
                         data={voterDemographics}
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}
+                        outerRadius="70%"
                         dataKey="value"
-                        label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        label={({ name, percent }: any) =>
+                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
                       >
                         {voterDemographics.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -893,42 +896,62 @@ Timestamp: ${timestamp}
                 </ChartContainer>
               </CardContent>
             </Card>
+
+            {/* Voting Activity */}
             <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Voting Activity</CardTitle>
-                <CardDescription>
-                  Hourly Voting Patterns Today
-                  {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
-                    <span className="text-green-600 text-xs block mt-1">
-                      ✓ Showing real-time data
-                    </span>
-                  ) : (
-                    <span className="text-blue-600 text-xs block mt-1">
-                      * No votes recorded today - sample data shown for demonstration
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    votes: { label: "Votes", color: "#8884D8" },
-                  }}
-                  className="h-64"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={votingActivity}>
-                      <XAxis dataKey="hour" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="votes" fill="#8884D8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+  <CardHeader>
+    <CardTitle className="text-base sm:text-lg md:text-xl">
+      Voting Activity
+    </CardTitle>
+    <CardDescription className="text-sm sm:text-base">
+      Hourly Voting Patterns Today
+      {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
+        <span className="text-green-600 text-xs sm:text-sm block mt-1">
+          ✓ Showing real-time data
+        </span>
+      ) : (
+        <span className="text-blue-600 text-xs sm:text-sm block mt-1">
+          * No votes recorded today – sample data shown for demonstration
+        </span>
+      )}
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent>
+    <ChartContainer
+      config={{
+        votes: { label: "Votes", color: "#8884D8" },
+      }}
+      className="h-56 sm:h-64 md:h-80"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={votingActivity}
+          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+        >
+          <XAxis
+            dataKey="hour"
+            tick={{ fontSize: 10, angle: -30 }}
+            interval={0}
+            height={40}
+          />
+          <YAxis tick={{ fontSize: 10 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar
+            dataKey="votes"
+            fill="#8884D8"
+            radius={[4, 4, 0, 0]}
+            barSize={20}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
+
           </div>
         </TabsContent>
+
 
         <TabsContent value="verification" className="space-y-6">
           <Card className="border-0 shadow-md">
