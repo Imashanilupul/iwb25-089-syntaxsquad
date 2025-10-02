@@ -119,14 +119,13 @@ export default function AdminPortal() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="container mx-auto p-4 sm:p-6">
-
         {/* Header */}
-
         <div className="mb-8">
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-4xl font-bold text-slate-900 mb-2">Admin Portal</h1>
               <p className="text-lg text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
+
             </div>
 
             {/* Modern Right Corner User Info */}

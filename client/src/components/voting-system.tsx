@@ -74,12 +74,12 @@ export function VotingSystem() {
 
         // Calculate local stats from proposals
         const totalProposals = Array.isArray(proposalsRes.data) ? proposalsRes.data.length : 0
-        const activeProposalsCount = Array.isArray(proposalsRes.data) 
-          ? proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length 
+        const activeProposalsCount = Array.isArray(proposalsRes.data)
+          ? proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length
           : 0
 
         // Calculate total votes and participation
-        const totalVotes = Array.isArray(proposalsRes.data) 
+        const totalVotes = Array.isArray(proposalsRes.data)
           ? proposalsRes.data.reduce((sum, p) => sum + p.yes_votes + p.no_votes, 0)
           : 0
 
@@ -88,7 +88,7 @@ export function VotingSystem() {
         // Get database statistics
         let dbTotalProposals = totalProposals
         let dbTotalVotes = totalVotes
-        
+
         if (proposalStatsRes.success && proposalStatsRes.data) {
           const statsData = proposalStatsRes.data as any
           dbTotalProposals = statsData.total_proposals || totalProposals
@@ -123,10 +123,10 @@ export function VotingSystem() {
         proposalsService.getAllProposals(),
         proposalsService.getProposalStatistics()
       ])
-      
+
       if (proposalsRes.success && Array.isArray(proposalsRes.data)) {
         setProposals(proposalsRes.data)
-        
+
         // Update stats
         const totalProposals = proposalsRes.data.length
         const activeProposalsCount = proposalsRes.data.filter(p => p.active_status && !proposalsService.isExpired(p)).length
@@ -136,7 +136,7 @@ export function VotingSystem() {
         // Get database statistics
         let dbTotalProposals = totalProposals
         let dbTotalVotes = totalVotes
-        
+
         if (proposalStatsRes.success && proposalStatsRes.data) {
           const statsData = proposalStatsRes.data as any
           dbTotalProposals = statsData.total_proposals || totalProposals
@@ -181,7 +181,7 @@ export function VotingSystem() {
   const handleVote = async (proposalId: number, voteType: "yes" | "no") => {
     try {
       setVotingLoading(proposalId)
-      
+
       // Check if MetaMask is available
       if (!window.ethereum) {
         throw new Error("MetaMask is not installed. Please install MetaMask to vote.")
@@ -278,30 +278,30 @@ Timestamp: ${timestamp}
         // If read failed because of invalid proposal id or other reason, surface a clear message
         const msg = readErr && readErr.message ? readErr.message : String(readErr)
         console.error("Smart contract read error for proposal", proposalId, ":", readErr)
-        
+
         // Check for various formats of "proposal not found" errors (case-insensitive)
         const msgLower = msg.toLowerCase()
         const reasonLower = readErr.reason ? readErr.reason.toLowerCase() : ''
-        
-        const isProposalNotFound = msgLower.includes('proposal does not exist') || 
-                                  msgLower.includes('proposal not found') ||
-                                  msgLower.includes('invalid proposal') ||
-                                  msgLower.includes('nonexistent proposal') ||
-                                  reasonLower.includes('proposal does not exist') ||
-                                  reasonLower.includes('proposal not found') ||
-                                  reasonLower.includes('invalid proposal') ||
-                                  (readErr.code === 'CALL_EXCEPTION' && reasonLower.includes('proposal')) ||
-                                  msgLower.includes('execution reverted') && reasonLower.includes('proposal')
-        
+
+        const isProposalNotFound = msgLower.includes('proposal does not exist') ||
+          msgLower.includes('proposal not found') ||
+          msgLower.includes('invalid proposal') ||
+          msgLower.includes('nonexistent proposal') ||
+          reasonLower.includes('proposal does not exist') ||
+          reasonLower.includes('proposal not found') ||
+          reasonLower.includes('invalid proposal') ||
+          (readErr.code === 'CALL_EXCEPTION' && reasonLower.includes('proposal')) ||
+          msgLower.includes('execution reverted') && reasonLower.includes('proposal')
+
         if (isProposalNotFound) {
           throw new Error(`Smart contract error: Proposal ${proposalId} does not exist on the blockchain. Please verify the proposal ID is correct.`)
         }
-        
+
         // For other smart contract errors, provide clearer messaging
         if (readErr.code === 'CALL_EXCEPTION') {
           throw new Error(`Smart contract call failed: ${readErr.reason || msg}`)
         }
-        
+
         // For other errors, provide the original message with context
         throw new Error(`Smart contract read error: ${msg}`)
       }
@@ -344,8 +344,8 @@ Timestamp: ${timestamp}
       toast.info("📊 Confirming vote via smart contract API...")
 
       try {
-        const apiEndpoint = voteType === "yes" 
-          ? `${BALLERINA_BASE_URL}/api/proposal/vote-yes` 
+        const apiEndpoint = voteType === "yes"
+          ? `${BALLERINA_BASE_URL}/api/proposal/vote-yes`
           : `${BALLERINA_BASE_URL}/api/proposal/vote-no`
 
         const apiResponse = await fetch(apiEndpoint, {
@@ -383,11 +383,11 @@ Timestamp: ${timestamp}
           if (databaseResponse.ok) {
             const databaseData = await databaseResponse.json()
             console.debug("Database vote update confirmed:", databaseData)
-            
+
             // Show detailed vote info if available
             if (databaseData.success && databaseData.data) {
               const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = databaseData.data;
-              
+
               if (vote_change) {
                 toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Database updated: Yes: ${yes_votes}, No: ${no_votes}`)
               } else if (previous_vote === 'none') {
@@ -415,7 +415,7 @@ Timestamp: ${timestamp}
 
       } catch (apiError: any) {
         console.error("Smart contract API call failed:", apiError)
-        
+
         // Even if smart contract API fails, still try to update the database
         toast.info("🔄 Updating database despite API failure...")
         try {
@@ -432,10 +432,10 @@ Timestamp: ${timestamp}
           if (fallbackResponse.ok) {
             const fallbackData = await fallbackResponse.json()
             console.debug("Fallback database vote confirmed:", fallbackData)
-            
+
             if (fallbackData.success && fallbackData.data) {
               const { previous_vote, new_vote, vote_change, yes_votes, no_votes } = fallbackData.data;
-              
+
               if (vote_change) {
                 toast.success(`✅ Vote changed from ${previous_vote} to ${new_vote}! Database updated: Yes: ${yes_votes}, No: ${no_votes}`)
               } else if (previous_vote === 'none') {
@@ -446,7 +446,7 @@ Timestamp: ${timestamp}
             } else {
               toast.success(`✅ Vote recorded in database (blockchain failed but database updated)`)
             }
-            
+
             // Refresh data after successful database update
             await refreshData()
           } else {
@@ -474,17 +474,17 @@ Timestamp: ${timestamp}
         "Smart contract error:",
         "Authorization Error:"
       ]
-      
+
       // Only log to console if it's not a user-facing error
       // This prevents expected user errors from cluttering the console
-      const isUserFacingError = userFacingErrors.some(userError => 
+      const isUserFacingError = userFacingErrors.some(userError =>
         errorMessage.includes(userError)
       )
-      
+
       if (!isUserFacingError) {
         console.error("Error voting:", err)
       }
-      
+
       toast.error(`❌ Failed to record vote: ${err}`)
     } finally {
       setVotingLoading(null)
@@ -506,7 +506,7 @@ Timestamp: ${timestamp}
         if (response.success && Array.isArray(response.data)) {
           // Check if all values are 0 (no real data available)
           const totalVoters = response.data.reduce((sum, item) => sum + item.value, 0)
-          
+
           if (totalVoters === 0 && stats.totalVoters > 0) {
             // We have votes but no demographics data - create realistic demographics based on total votes
             console.debug("Votes exist but no demographics available, creating realistic data based on vote count:", stats.totalVoters)
@@ -599,7 +599,7 @@ Timestamp: ${timestamp}
     }
 
     loadVotingActivity()
-    
+
     // Refresh voting activity every 5 minutes
     const interval = setInterval(loadVotingActivity, 5 * 60 * 1000)
     return () => clearInterval(interval)
@@ -632,11 +632,18 @@ Timestamp: ${timestamp}
       </div>
 
       <Tabs defaultValue="proposals" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="proposals">Active Proposals</TabsTrigger>
-          <TabsTrigger value="analytics">Voting Analytics</TabsTrigger>
-          <TabsTrigger value="verification">Blockchain Verification</TabsTrigger>
+        <TabsList className="flex gap-2 overflow-x-auto w-full scrollbar-hide justify-start">
+          <TabsTrigger value="proposals" className="flex-shrink-0">
+            Active Proposals
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex-shrink-0">
+            Voting Analytics
+          </TabsTrigger>
+          <TabsTrigger value="verification" className="flex-shrink-0">
+            Blockchain Verification
+          </TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="proposals" className="space-y-6">
           {/* Loading State */}
@@ -653,9 +660,9 @@ Timestamp: ${timestamp}
               <CardContent className="flex items-center gap-2 pt-6">
                 <AlertCircle className="h-5 w-5 text-red-600" />
                 <span className="text-red-800">{error}</span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => window.location.reload()}
                   className="ml-auto"
                 >
@@ -668,44 +675,44 @@ Timestamp: ${timestamp}
           {/* Voting Stats */}
           {!loading && !error && (
             <div className="flex justify-center w-full">
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl w-full px-4">
-    {/* Active Proposals */}
-    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
-        <Vote className="h-5 w-5 text-blue-600" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.totalProposals}</div>
-        <p className="text-xs text-slate-500">Currently open for voting</p>
-      </CardContent>
-    </Card>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl w-full px-4">
+                {/* Active Proposals */}
+                <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
+                    <Vote className="h-5 w-5 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalProposals}</div>
+                    <p className="text-xs text-slate-500">Currently open for voting</p>
+                  </CardContent>
+                </Card>
 
-    {/* Total Votes */}
-    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Total Votes</CardTitle>
-        <Users className="h-5 w-5 text-green-600" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.totalVoters.toLocaleString()}</div>
-        <p className="text-xs text-slate-500">Votes cast across all proposals</p>
-      </CardContent>
-    </Card>
+                {/* Total Votes */}
+                <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Votes</CardTitle>
+                    <Users className="h-5 w-5 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalVoters.toLocaleString()}</div>
+                    <p className="text-xs text-slate-500">Votes cast across all proposals</p>
+                  </CardContent>
+                </Card>
 
-    {/* Avg Participation */}
-    <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Avg Participation</CardTitle>
-        <TrendingUp className="h-5 w-5 text-purple-600" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{stats.participationRate}%</div>
-        <p className="text-xs text-slate-500">Average votes per proposal</p>
-      </CardContent>
-    </Card>
-  </div>
-</div>
+                {/* Avg Participation */}
+                <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Avg Participation</CardTitle>
+                    <TrendingUp className="h-5 w-5 text-purple-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.participationRate}%</div>
+                    <p className="text-xs text-slate-500">Average votes per proposal</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
 
 
           )}
@@ -782,37 +789,44 @@ Timestamp: ${timestamp}
                         </div>
 
                         {/* Blockchain Verification */}
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <Verified className="h-3 w-3 text-green-600" />
-                            <span className="font-mono">0x{proposal.id.toString().padStart(8, '0')}...</span>
-                            <Badge variant="outline" className="text-xs">Verified</Badge>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t">
+                          {/* Left Side - Verification Info */}
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500">
+                            <Verified className="h-4 w-4 text-green-600" />
+                            <span className="font-mono truncate max-w-[120px] sm:max-w-none">
+                              0x{proposal.id.toString().padStart(8, '0')}...
+                            </span>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">Verified</Badge>
                           </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
+
+                          {/* Right Side - Actions */}
+                          <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => setSelectedProposal(proposal.id)}
+                              className="w-full sm:w-auto"
                             >
                               View Details
                             </Button>
+
                             {status === "Active" && (
-                              <div className="flex gap-1">
-                                <Button 
-                                  size="sm" 
+                              <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   disabled={isVoting}
                                   onClick={() => handleVote(proposal.id, "yes")}
-                                  className="text-green-700 border-green-200 hover:bg-green-50"
+                                  className="flex-1 sm:flex-none text-green-700 border-green-200 hover:bg-green-50"
                                 >
                                   {isVoting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Yes"}
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   disabled={isVoting}
                                   onClick={() => handleVote(proposal.id, "no")}
-                                  className="text-red-700 border-red-200 hover:bg-red-50"
+                                  className="flex-1 sm:flex-none text-red-700 border-red-200 hover:bg-red-50"
                                 >
                                   {isVoting ? <Loader2 className="h-3 w-3 animate-spin" /> : "No"}
                                 </Button>
@@ -820,6 +834,7 @@ Timestamp: ${timestamp}
                             )}
                           </div>
                         </div>
+
                       </CardContent>
                     </Card>
                   )
@@ -830,11 +845,12 @@ Timestamp: ${timestamp}
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Voter Demographics */}
             <Card className="border-0 shadow-md">
               <CardHeader>
-                <CardTitle>Voter Demographics</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-base sm:text-lg">Voter Demographics</CardTitle>
+                <CardDescription className="text-sm sm:text-base">
                   Age Distribution Of Active Voters
                   {voterDemographics.reduce((sum, item) => sum + item.value, 0) === stats.totalVoters ? (
                     <span className="text-green-600 text-xs block mt-1">
@@ -842,7 +858,7 @@ Timestamp: ${timestamp}
                     </span>
                   ) : voterDemographics.reduce((sum, item) => sum + item.value, 0) < stats.totalVoters ? (
                     <span className="text-blue-600 text-xs block mt-1">
-                      * Showing estimated demographics - actual voter data will display when users with linked Blockchain's vote
+                      * Showing estimated demographics – actual voter data will display when users with linked Blockchain’s vote
                     </span>
                   ) : (
                     <span className="text-amber-600 text-xs block mt-1">
@@ -856,7 +872,7 @@ Timestamp: ${timestamp}
                   config={{
                     value: { label: "Voters", color: "#0088FE" },
                   }}
-                  className="h-64"
+                  className="h-64 sm:h-72"
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -864,9 +880,11 @@ Timestamp: ${timestamp}
                         data={voterDemographics}
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}
+                        outerRadius="70%"
                         dataKey="value"
-                        label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        label={({ name, percent }: any) =>
+                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
                       >
                         {voterDemographics.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -878,42 +896,62 @@ Timestamp: ${timestamp}
                 </ChartContainer>
               </CardContent>
             </Card>
+
+            {/* Voting Activity */}
             <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle>Voting Activity</CardTitle>
-                <CardDescription>
-                  Hourly Voting Patterns Today
-                  {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
-                    <span className="text-green-600 text-xs block mt-1">
-                      ✓ Showing real-time data 
-                    </span>
-                  ) : (
-                    <span className="text-blue-600 text-xs block mt-1">
-                      * No votes recorded today - sample data shown for demonstration
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    votes: { label: "Votes", color: "#8884D8" },
-                  }}
-                  className="h-64"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={votingActivity}>
-                      <XAxis dataKey="hour" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="votes" fill="#8884D8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+  <CardHeader>
+    <CardTitle className="text-base sm:text-lg md:text-xl">
+      Voting Activity
+    </CardTitle>
+    <CardDescription className="text-sm sm:text-base">
+      Hourly Voting Patterns Today
+      {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
+        <span className="text-green-600 text-xs sm:text-sm block mt-1">
+          ✓ Showing real-time data
+        </span>
+      ) : (
+        <span className="text-blue-600 text-xs sm:text-sm block mt-1">
+          * No votes recorded today – sample data shown for demonstration
+        </span>
+      )}
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent>
+    <ChartContainer
+      config={{
+        votes: { label: "Votes", color: "#8884D8" },
+      }}
+      className="h-56 sm:h-64 md:h-80"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={votingActivity}
+          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+        >
+          <XAxis
+            dataKey="hour"
+            tick={{ fontSize: 10, angle: -30 }}
+            interval={0}
+            height={40}
+          />
+          <YAxis tick={{ fontSize: 10 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Bar
+            dataKey="votes"
+            fill="#8884D8"
+            radius={[4, 4, 0, 0]}
+            barSize={20}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  </CardContent>
+</Card>
+
           </div>
         </TabsContent>
+
 
         <TabsContent value="verification" className="space-y-6">
           <Card className="border-0 shadow-md">
@@ -949,7 +987,7 @@ Timestamp: ${timestamp}
                 </div>
               </div>
 
-             
+
             </CardContent>
           </Card>
         </TabsContent>
