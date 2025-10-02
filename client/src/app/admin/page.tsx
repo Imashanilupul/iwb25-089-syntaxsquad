@@ -45,25 +45,60 @@ export default function AdminPortal() {
     if (isProcessingOAuth) return
     try {
       setIsProcessingOAuth(true)
+      console.log('🔄 Processing OAuth callback in admin page...')
+      
       const response = await fetch('/api/auth/token-exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, state, redirect_uri: `${window.location.origin}/admin` })
+        body: JSON.stringify({ 
+          code, 
+          state, 
+          redirect_uri: `${window.location.origin}/admin` 
+        })
       })
-      if (!response.ok) throw new Error('Token exchange failed')
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Token exchange failed:', response.status, errorText)
+        throw new Error(`Token exchange failed: ${response.status}`)
+      }
+      
       const result = await response.json()
+      
       if (result.success) {
+        // Clean up URL parameters
         const url = new URL(window.location.href)
         url.searchParams.delete('code')
         url.searchParams.delete('state')
         window.history.replaceState({}, document.title, url.toString())
+        
+        // Set completion flag
         localStorage.setItem('oauth_completed', Date.now().toString())
-        toast({ title: "Authentication Successful! 🎉", description: "Welcome to the admin portal." })
-      } else throw new Error(result.error || 'Authentication failed')
+        
+        console.log('✅ Authentication successful, refreshing auth state...')
+        toast({ 
+          title: "Authentication Successful! 🎉", 
+          description: "Welcome to the admin portal." 
+        })
+        
+        // Force a page refresh to pick up the new session
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+        
+      } else {
+        throw new Error(result.error || 'Authentication failed')
+      }
     } catch (error) {
-      console.error(error)
-      toast({ title: "Authentication Failed", description: "Please try logging in again.", variant: "destructive" })
-      router.push('/adminLogin')
+      console.error('OAuth callback error:', error)
+      toast({ 
+        title: "Authentication Failed", 
+        description: "Please try logging in again.", 
+        variant: "destructive" 
+      })
+      setTimeout(() => {
+        router.push('/adminLogin')
+      }, 2000)
     } finally {
       setIsProcessingOAuth(false)
     }
@@ -79,16 +114,50 @@ export default function AdminPortal() {
     const code = urlParams.get('code')
     const state = urlParams.get('state')
     const error = urlParams.get('error')
+    const authSuccess = urlParams.get('auth')
+    
+    console.log('🔍 Admin page URL params:', { code: !!code, state: !!state, error, authSuccess })
+    
     if (code && state) handleOAuthCallback(code, state)
-    if (error) { window.history.replaceState({}, document.title, window.location.pathname); router.push('/adminLogin') }
+    if (error) { 
+      console.error('❌ OAuth error in admin page:', error)
+      window.history.replaceState({}, document.title, window.location.pathname)
+      router.push('/adminLogin')
+    }
+    if (authSuccess === 'success') {
+      console.log('✅ Authentication success detected')
+      // Clean URL
+      const cleanUrl = new URL(window.location.href)
+      cleanUrl.searchParams.delete('auth')
+      cleanUrl.searchParams.delete('timestamp')
+      window.history.replaceState({}, document.title, cleanUrl.toString())
+    }
   }, [isHydrated])
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!isHydrated || isLoading) return
+    
+    console.log('🔍 Admin auth check:', { 
+      isFullyAuthenticated, 
+      asgardeoUser: !!asgardeoUser, 
+      verified, 
+      isConnected,
+      address: address?.slice(0, 10) + '...'
+    })
+    
     const oauthCompleted = localStorage.getItem('oauth_completed')
     const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
-    if (!isFullyAuthenticated && !isRecentlyAuthenticated) setTimeout(() => { if (!isFullyAuthenticated) router.push('/adminLogin') }, 3000)
+    
+    if (!isFullyAuthenticated && !isRecentlyAuthenticated) {
+      console.log('⚠️ User not fully authenticated, redirecting to login in 3 seconds...')
+      setTimeout(() => { 
+        if (!isFullyAuthenticated) {
+          console.log('🔄 Redirecting to admin login...')
+          router.push('/adminLogin')
+        }
+      }, 3000)
+    }
   }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
   if (!isHydrated || isLoading || isProcessingOAuth) {

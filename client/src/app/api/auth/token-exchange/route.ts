@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const tokenRequestBody = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri,
+      redirect_uri: redirect_uri || `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`,
       client_id: process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!,
       client_secret: process.env.ASGARDEO_CLIENT_SECRET!
     });
