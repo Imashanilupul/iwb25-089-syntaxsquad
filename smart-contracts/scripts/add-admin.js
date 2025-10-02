@@ -14,7 +14,7 @@ const authRegistry = new ethers.Contract(contractAddress, abi, ownerWallet);
 
 // Add the admin addresses you want here
 const ADMIN_ADDRESSES = [
-  "0x67e046683ec00e611c7F3C2a4e6497e6A6069874", // Replace with actual admin address
+  "0x36Afe89160F0F25D0485D812c2637A69f427dceb", // Replace with actual admin address
    // Replace with actual admin address
 ];
 
@@ -34,7 +34,7 @@ async function addAdmin() {
       // }
       
       // Add as admin
-      const tx = await authRegistry.authorizeUser(adminAddress);
+      const tx = await authRegistry.authorizeAdmin(adminAddress);
       console.log(`Transaction: ${tx.hash}`);
       
       const receipt = await tx.wait();

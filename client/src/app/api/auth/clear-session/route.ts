@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       asgardeoLogoutUrl: idToken ? 
         `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oidc/logout?` +
         `id_token_hint=${idToken}&` +
-        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?cleared=true`)}`
+        `post_logout_redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_BASE_URL}/adminLogin?cleared=true`)}`
         : null
     });
 

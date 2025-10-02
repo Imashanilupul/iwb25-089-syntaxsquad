@@ -157,15 +157,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
   console.debug('AuthContext: Checking blockchain authorization for wallet:', walletAddress);
       
-      // Call the /is-authorized endpoint to check if user is authorized on blockchain
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
-      const authRes = await axios.get(`${API_BASE_URL}/auth/is-authorized/${walletAddress}`);
+      // Call the Web3 service directly to check if user is authorized on blockchain
+      const WEB3_API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001/web3';
+      const authRes = await axios.get(`${WEB3_API_BASE_URL}/auth/is-authorized/${walletAddress}`);
       
       const isAuthorized = authRes.data.isAuthorized;
       
       const result = {
         walletVerified: isAuthorized,
         isRegisteredUser: isAuthorized, // For blockchain auth, registered = authorized
+        jwt: null,
+        userData: null
       };
       
   console.debug('AuthContext: Blockchain authorization result:', result);

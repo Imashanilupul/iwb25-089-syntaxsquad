@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     
     // Step 2: Build Asgardeo logout URL that shows logout confirmation page
     let asgardeoLogoutUrl = null;
-    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
+    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/logout-callback`;
     
     if (idToken) {
       // Use the specific Asgardeo logout API endpoint with ID token hint
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     
     // Get ID token from cookies
     let idToken = null;
-    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
+    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/logout-callback`;
     
     try {
       const sessionCookie = request.cookies.get('asgardeo_session');
