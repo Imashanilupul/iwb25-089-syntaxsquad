@@ -224,19 +224,29 @@ export default function CivicPlatform() {
 
         {/* Header */}
         <div className="relative mb-8 z-[9000]">
-          <div className="mb-4 text-left">
-            <h1 className="mb-2 text-4xl font-bold text-slate-900">
-              ශ්‍රී ලංකා පාරදෘශ්‍ය පාලන වේදිකාව
-            </h1>
-            <h2 className="mb-2 text-3xl font-bold text-slate-700">
-              Sri Lanka Transparent Governance Platform
-            </h2>
-            <p className="text-lg text-slate-600">
-              Blockchain-Powered Transparent Governance For The Democratic Socialist Republic of
-              Sri Lanka
-            </p>
-          </div>
-        </div>
+  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
+    {/* Logo */}
+    <img
+      src="/images/logo.png"
+      alt="Sri Lanka National Emblem"
+      className="h-16 w-16 sm:h-20 sm:w-20 object-contain"
+    />
+
+    {/* Title Section */}
+    <div>
+      <h1 className="mb-2 text-2xl sm:text-4xl font-bold text-slate-900 leading-snug">
+        ශ්‍රී ලංකා පාරදෘශ්‍ය පාලන වේදිකාව
+      </h1>
+      <h2 className="mb-2 text-xl sm:text-3xl font-bold text-slate-700 leading-snug">
+        Sri Lanka Transparent Governance Platform
+      </h2>
+      <p className="text-base sm:text-lg text-slate-600">
+        Blockchain-Powered Transparent Governance For The Democratic Socialist Republic of Sri Lanka
+      </p>
+    </div>
+  </div>
+</div>
+
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 lg:w-fit">
@@ -416,9 +426,16 @@ export default function CivicPlatform() {
       <footer className="mt-12 border-t bg-slate-50 py-8">
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            <div>
-              <h3 className="font-semibold text-slate-900">Government of Sri Lanka</h3>
-              <p className="text-sm text-slate-600">Transparent Governance Initiative</p>
+            <div className="flex items-center gap-3">
+              <img
+                src="/images/logo.png"
+                alt="Sri Lanka Emblem"
+                className="h-12 w-12 object-contain"
+              />
+              <div>
+                <h3 className="font-semibold text-slate-900">Government of Sri Lanka</h3>
+                <p className="text-sm text-slate-600">Transparent Governance Initiative</p>
+              </div>
             </div>
             <div>
               <h4 className="mb-2 font-semibold text-slate-900">Quick Links</h4>

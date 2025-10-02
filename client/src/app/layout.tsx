@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   description: "Created with v0",
   generator: "dark grecher",
   icons: {
-    icon: '/images/sri-lanka-emblem.png',
-    apple: '/images/sri-lanka-emblem.png',
+    icon: '/images/logo.png',
+    apple: '/images/logo.png',
     other: {
       rel: 'icon',
-      url: '/images/sri-lanka-emblem.png',
+      url: '/images/logo.png',
     },
   },
 };
