@@ -123,40 +123,46 @@ export default function AdminPortal() {
         {/* Header */}
 
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <img
-                src="/placeholder-logo.png"
-                alt="Sri Lanka National Emblem"
-                className="h-12 w-12 object-contain"
-              />
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Admin Portal</h1>
-                <p className="text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
-              </div>
-
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900 mb-2">Admin Portal</h1>
+              <p className="text-lg text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
             </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            {asgardeoUser && (
-              <div className="text-left sm:text-right">
-                <p className="text-sm text-slate-600">Welcome back,</p>
-                <p className="font-semibold text-slate-900">{asgardeoUser.given_name || 'Administrator'}</p>
+            {/* Modern Right Corner User Info */}
+            <div className="flex flex-col items-end gap-4">
+              {asgardeoUser && (
+                <div className="text-right">
+                  <p className="text-sm text-slate-500">Welcome back,</p>
+                  <p className="text-lg font-semibold text-slate-900">{asgardeoUser.given_name || 'Administrator'}</p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                {isConnected && address && (
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 shadow-sm backdrop-blur-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <Wallet className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-mono text-slate-700">{address.slice(0,6)}...{address.slice(-4)}</span>
+                    </div>
+                    <Badge variant={verified ? "default" : "secondary"} className={`text-xs ${verified ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600'}`}>
+                      {verified ? "✓ Verified" : "Unverified"}
+                    </Badge>
+                  </div>
+                )}
+
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleWalletDisconnect} 
+                  className="flex items-center gap-2 bg-gradient-to-r from-red-50 to-pink-50 border-red-200 text-red-700 hover:bg-gradient-to-r hover:from-red-100 hover:to-pink-100 hover:border-red-300 transition-all duration-200 rounded-xl px-4 py-2.5"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Logout
+                </Button>
               </div>
-            )}
-
-            {isConnected && address && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border shadow-sm">
-                <Wallet className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium text-slate-700">{address.slice(0,6)}...{address.slice(-4)}</span>
-                <Badge variant={verified ? "default" : "secondary"} className="text-xs">{verified ? "Verified" : "Unverified"}</Badge>
-              </div>
-            )}
-
-            <Button variant="default" size="sm" onClick={handleWalletDisconnect} className="flex items-center gap-2 bg-black text-white hover:bg-black/90 rounded-full">
-              <Wallet className="w-4 h-4" /> Logout
-            </Button>
+            </div>
           </div>
         </div>
 
@@ -171,7 +177,7 @@ export default function AdminPortal() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="flex flex-nowrap w-full overflow-x-auto gap-2 scrollbar-none py-2 px-1 lg:grid lg:grid-cols-9 lg:w-fit">
+          <TabsList className="flex flex-nowrap w-full gap-2 scrollbar-none py-2 px-1 lg:grid lg:grid-cols-9 lg:w-fit">
             {[
               { value: 'overview', label: 'Overview', icon: LayoutDashboard },
               { value: 'categories', label: 'Categories', icon: DollarSign },

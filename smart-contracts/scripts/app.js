@@ -5,7 +5,7 @@ const reportsRouter = require("./reports");
 const policyRouter = require("./policy");
 const proposalsRouter = require("./proposals");
 const projectRouter = require("./project");
-const blockchainSyncRouter = require("./blockchain-sync");
+const blockchainSyncRouter = require("./blockchain-sync-optimized");
 const { router: jobManagerRouter } = require("./job-manager");
 
 const app = express();

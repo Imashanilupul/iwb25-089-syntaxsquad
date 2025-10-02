@@ -166,13 +166,6 @@ export function AdminWelcome() {
           <div className="text-center mb-12">
             <div className="flex justify-center items-center gap-4 mb-6">
               <div className="relative">
-                <Image
-                  src="/placeholder-logo.png"
-                  alt="Platform Logo"
-                  width={80}
-                  height={80}
-                  className="object-contain"
-                />
               </div>
             </div>
             
