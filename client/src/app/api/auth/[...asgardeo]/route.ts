@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect('about:blank');
     response.cookies.delete('asgardeo_session');
     
-    // Construct the proper redirect URI - use /admin directly since it's configured in Asgardeo
-    const redirectUri = `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`;
+    // Construct the proper redirect URI - matches Asgardeo configuration
+    const redirectUri = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/callback`;
     
     // Redirect to Asgardeo for authentication
     const asgardeoLoginUrl = `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oauth2/authorize?` + 
