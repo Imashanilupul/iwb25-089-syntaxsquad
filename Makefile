@@ -11,3 +11,7 @@ s:
 b:
 	cd server && bal run
 
+f:
+	cd chatbot && venv\Scripts\activate
+	uvicorn main:app --port 8001
+
