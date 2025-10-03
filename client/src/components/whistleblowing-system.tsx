@@ -1627,7 +1627,9 @@ Timestamp: ${timestamp}
       </div>
 
       <Tabs defaultValue="reports" className="space-y-6">
-        <TabsList className="flex w-full overflow-x-auto no-scrollbar">
+        <TabsList
+          className="flex w-full overflow-x-auto overflow-y-hidden justify-start sm:justify-start"
+        >
           <TabsTrigger
             value="reports"
             className="flex-shrink-0 px-4 py-2 text-sm"
@@ -1647,6 +1649,7 @@ Timestamp: ${timestamp}
             Submit Report/Petition
           </TabsTrigger>
         </TabsList>
+
 
 
         <TabsContent value="reports" className="space-y-6">

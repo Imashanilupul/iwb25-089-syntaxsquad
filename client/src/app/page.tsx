@@ -217,7 +217,7 @@ export default function CivicPlatform() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50 relative">
       <div className="container mx-auto p-6">
         {/* Top-right fixed buttons */}
-        <div className="fixed top-6 right-6 z-[10000] flex gap-3">
+        <div className="flex gap-3 sm:fixed sm:top-6 sm:right-6 sm:z-[10000]">
           {showRegistration && <RegistrationDialog />}
           <ConnectButton />
         </div>
