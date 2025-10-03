@@ -191,99 +191,99 @@ export function WhistleblowingSystem({ walletAddress }: WhistleblowingSystemProp
 
   // Submit anonymous report function
   // Complete submitReport function - replace from line 107 to line 256
-// Submit anonymous report function - EXACT pattern as createPetition, no evidence hash
-// Submit anonymous report function - EXACT pattern as createPetition
-const submitReport = async () => {
-  // Prevent multiple simultaneous requests
-  if (isSubmittingReport) {
-    toast({
-      title: "Please wait",
-      description: "Report submission is already in progress",
-      variant: "destructive",
-    })
-    return
-  }
-
-  // Enhanced wallet address validation (using address from useAuth)
-  if (!address || address.trim() === "") {
-    toast({
-      title: "Wallet not connected",
-      description: "Please connect your wallet first using the Connect button",
-      variant: "destructive",
-    })
-    return
-  }
-
-  // Validate Ethereum address format
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    toast({
-      title: "Invalid wallet address",
-      description: "The wallet address format is invalid. Please reconnect your wallet.",
-      variant: "destructive",
-    })
-    return
-  }
-
-  if (!reportForm.title || !reportForm.description || !reportForm.category) {
-    toast({
-      title: "Missing information",
-      description: "Please fill in all required fields",
-      variant: "destructive",
-    })
-    return
-  }
-
-  setIsSubmittingReport(true)
-  try {
-    // Step 1: Check if MetaMask/wallet is available
-    if (!window.ethereum) {
-      throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
+  // Submit anonymous report function - EXACT pattern as createPetition, no evidence hash
+  // Submit anonymous report function - EXACT pattern as createPetition
+  const submitReport = async () => {
+    // Prevent multiple simultaneous requests
+    if (isSubmittingReport) {
+      toast({
+        title: "Please wait",
+        description: "Report submission is already in progress",
+        variant: "destructive",
+      })
+      return
     }
 
-    // Step 2: Ensure we're connected to the right account
-    let accounts
+    // Enhanced wallet address validation (using address from useAuth)
+    if (!address || address.trim() === "") {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first using the Connect button",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate Ethereum address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      toast({
+        title: "Invalid wallet address",
+        description: "The wallet address format is invalid. Please reconnect your wallet.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!reportForm.title || !reportForm.description || !reportForm.category) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmittingReport(true)
     try {
-      accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
-    } catch (accountError: any) {
-      console.error("Failed to get accounts:", accountError)
-      throw new Error("Failed to get wallet accounts. Please try again.")
-    }
-
-    if (accounts.length === 0) {
-      // Only request accounts if we don't have any
-      try {
-        toast({
-          title: "Account Access Required",
-          description: "Please approve wallet connection in MetaMask",
-        })
-        accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
-      } catch (requestError: any) {
-        if (requestError.code === -32002) {
-          throw new Error(
-            "MetaMask is already processing a connection request. Please check your MetaMask extension and try again."
-          )
-        } else if (requestError.code === 4001) {
-          throw new Error("User rejected wallet connection request")
-        }
-        throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+      // Step 1: Check if MetaMask/wallet is available
+      if (!window.ethereum) {
+        throw new Error("MetaMask is not installed. Please install MetaMask to continue.")
       }
-    }
 
-    // Double-check the current account matches our address
-    const currentAccount = accounts[0]?.toLowerCase()
-    if (!currentAccount) {
-      throw new Error("No wallet account found. Please connect your wallet first.")
-    }
+      // Step 2: Ensure we're connected to the right account
+      let accounts
+      try {
+        accounts = await (window.ethereum as any).request({ method: "eth_accounts" })
+      } catch (accountError: any) {
+        console.error("Failed to get accounts:", accountError)
+        throw new Error("Failed to get wallet accounts. Please try again.")
+      }
 
-    if (currentAccount !== address.toLowerCase()) {
-      throw new Error(
-        `Account mismatch. Please switch to ${address.slice(0, 6)}...${address.slice(-4)} in MetaMask`
-      )
-    }
+      if (accounts.length === 0) {
+        // Only request accounts if we don't have any
+        try {
+          toast({
+            title: "Account Access Required",
+            description: "Please approve wallet connection in MetaMask",
+          })
+          accounts = await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+        } catch (requestError: any) {
+          if (requestError.code === -32002) {
+            throw new Error(
+              "MetaMask is already processing a connection request. Please check your MetaMask extension and try again."
+            )
+          } else if (requestError.code === 4001) {
+            throw new Error("User rejected wallet connection request")
+          }
+          throw new Error(`Failed to connect wallet: ${requestError.message || requestError}`)
+        }
+      }
 
-    // Step 3: Create a clear message to sign
-    const timestamp = new Date().toISOString()
-    const message = `🛡️ SUBMIT ANONYMOUS REPORT CONFIRMATION
+      // Double-check the current account matches our address
+      const currentAccount = accounts[0]?.toLowerCase()
+      if (!currentAccount) {
+        throw new Error("No wallet account found. Please connect your wallet first.")
+      }
+
+      if (currentAccount !== address.toLowerCase()) {
+        throw new Error(
+          `Account mismatch. Please switch to ${address.slice(0, 6)}...${address.slice(-4)} in MetaMask`
+        )
+      }
+
+      // Step 3: Create a clear message to sign
+      const timestamp = new Date().toISOString()
+      const message = `🛡️ SUBMIT ANONYMOUS REPORT CONFIRMATION
 
 Title: ${reportForm.title}
 
@@ -296,186 +296,186 @@ Timestamp: ${timestamp}
 
 ⚠️ By signing this message, you confirm that you want to submit this anonymous report to the blockchain. This action cannot be undone.`
 
-    toast({
-      title: "Signature Required",
-      description: "Please check your wallet to sign the report submission request",
-    })
-
-    // Step 4: Request signature from user
-    let signature
-    try {
-      signature = await (window.ethereum as any).request({
-        method: "personal_sign",
-        params: [message, address],
+      toast({
+        title: "Signature Required",
+        description: "Please check your wallet to sign the report submission request",
       })
-    } catch (signError: any) {
-      if (signError.code === 4001) {
-        throw new Error("User rejected the signature request")
+
+      // Step 4: Request signature from user
+      let signature
+      try {
+        signature = await (window.ethereum as any).request({
+          method: "personal_sign",
+          params: [message, address],
+        })
+      } catch (signError: any) {
+        if (signError.code === 4001) {
+          throw new Error("User rejected the signature request")
+        }
+        throw new Error(`Signature failed: ${signError.message || signError}`)
       }
-      throw new Error(`Signature failed: ${signError.message || signError}`)
-    }
 
-    if (!signature) {
-      throw new Error("No signature received from wallet")
-    }
+      if (!signature) {
+        throw new Error("No signature received from wallet")
+      }
 
-    toast({
-      title: "✅ Signature confirmed",
-      description: "Creating report on blockchain...",
-    })
+      toast({
+        title: "✅ Signature confirmed",
+        description: "Creating report on blockchain...",
+      })
 
-    // Step 3: Prepare IPFS + contract info from the prepare service
-    const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: reportForm.title,
-        description: reportForm.description,
-      }),
-    })
+      // Step 3: Prepare IPFS + contract info from the prepare service
+      const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: reportForm.title,
+          description: reportForm.description,
+        }),
+      })
 
-    if (!prepRes.ok) {
-      const txt = await prepRes.text()
-      throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
-    }
+      if (!prepRes.ok) {
+        const txt = await prepRes.text()
+        throw new Error(`Prepare failed: ${prepRes.status} ${txt}`)
+      }
 
-    const prepJson = await prepRes.json()
-    const { titleCid, descriptionCid, contractAddress, contractAbi } = prepJson
-    if (!titleCid || !descriptionCid || !contractAddress || !contractAbi) {
-      throw new Error("Prepare endpoint did not return all required fields")
-    }
+      const prepJson = await prepRes.json()
+      const { titleCid, descriptionCid, contractAddress, contractAbi } = prepJson
+      if (!titleCid || !descriptionCid || !contractAddress || !contractAbi) {
+        throw new Error("Prepare endpoint did not return all required fields")
+      }
 
-    toast({
-      title: "Ready to submit",
-      description: "Please confirm the transaction in your wallet",
-    })
+      toast({
+        title: "Ready to submit",
+        description: "Please confirm the transaction in your wallet",
+      })
 
-    // Send transaction from user's wallet using ethers and Sepolia network
-    const ethers = await import("ethers")
-    // Use BrowserProvider for ESM v6 in browser
-    const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
-    // Request accounts (ensure connected)
-    await (window.ethereum as any).request({ method: "eth_requestAccounts" })
-    const signer = await provider.getSigner()
-    const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
+      // Send transaction from user's wallet using ethers and Sepolia network
+      const ethers = await import("ethers")
+      // Use BrowserProvider for ESM v6 in browser
+      const provider = new (ethers as any).BrowserProvider(window.ethereum as any)
+      // Request accounts (ensure connected)
+      await (window.ethereum as any).request({ method: "eth_requestAccounts" })
+      const signer = await provider.getSigner()
+      const contract = new (ethers as any).Contract(contractAddress, contractAbi, signer)
 
-    // Send transaction
-    const tx = await contract.createReport(titleCid, descriptionCid)
-  toast({ title: "Transaction sent", description: tx.hash })
+      // Send transaction
+      const tx = await contract.createReport(titleCid, descriptionCid)
+      toast({ title: "Transaction sent", description: tx.hash })
 
-    // Wait for confirmation
-    const receipt = await tx.wait()
-  toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
+      // Wait for confirmation
+      const receipt = await tx.wait()
+      toast({ title: "Transaction confirmed", description: `Block ${receipt.blockNumber}` })
 
-    // Try to decode event to get reportId
-    let blockchainReportId = null
-    try {
-      const iface = new (ethers as any).Interface(contractAbi)
-      for (const log of receipt.logs) {
-        try {
-          const parsed = iface.parseLog(log)
-          if (parsed && parsed.name && parsed.name.toLowerCase().includes("report")) {
-            blockchainReportId = parsed.args?.[0]?.toString() || null
-            break
+      // Try to decode event to get reportId
+      let blockchainReportId = null
+      try {
+        const iface = new (ethers as any).Interface(contractAbi)
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log)
+            if (parsed && parsed.name && parsed.name.toLowerCase().includes("report")) {
+              blockchainReportId = parsed.args?.[0]?.toString() || null
+              break
+            }
+          } catch (e) {
+            // ignore non-matching logs
           }
-        } catch (e) {
-          // ignore non-matching logs
         }
-      }
-    if (!blockchainReportId) {
-        try {
-          const count = await contract.reportCount()
-      blockchainReportId = count.toString()
-        } catch (e) {
-      // ignore
+        if (!blockchainReportId) {
+          try {
+            const count = await contract.reportCount()
+            blockchainReportId = count.toString()
+          } catch (e) {
+            // ignore
+          }
         }
+      } catch (e) {
+        console.warn("Could not parse event for report id", e)
       }
-    } catch (e) {
-      console.warn("Could not parse event for report id", e)
+
+      // Step 4: Create database record with blockchain metadata
+      const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_title: reportForm.title,
+          description: reportForm.description,
+          category: reportForm.category,
+          priority: getCategoryPriority(reportForm.category),
+          wallet_address: address,
+          tx_hash: tx.hash,
+          block_number: receipt.blockNumber,
+          blockchain_report_id: blockchainReportId,
+          title_cid: titleCid,
+          description_cid: descriptionCid,
+        }),
+      })
+
+      if (!ballerinaResp.ok) {
+        const txt = await ballerinaResp.text()
+        console.error("Failed to create database record after successful blockchain transaction:", txt)
+        // Don't throw error here since blockchain tx succeeded
+        toast({
+          title: "⚠️ Partial Success",
+          description: "Report created on blockchain but database record failed. Please contact support.",
+          variant: "destructive"
+        })
+      } else {
+        const ballerinaData = await ballerinaResp.json()
+        console.debug("✅ Database record created:", ballerinaData)
+        toast({ title: "✅ Report created", description: "Successfully saved to blockchain and database" })
+      }
+
+      // Reset form
+      setReportForm({
+        category: "",
+        title: "",
+        description: "",
+      })
+
+      // Refresh reports list and statistics
+      await refreshReportStatistics()
+    } catch (error: any) {
+      console.error("Failed create flow:", error)
+
+      // Handle specific errors (keep your existing error handling)
+      if (error.message && error.message.includes("User not authorized")) {
+        toast({
+          title: "❌ Not Authorized",
+          description: "Your wallet address is not authorized to submit reports. Please contact an administrator to get your address authorized in the system.",
+          variant: "destructive",
+        })
+      } else if (error.message && error.message.includes("You can only create one report per day")) {
+        toast({
+          title: "❌ Daily Limit Reached",
+          description: "You can only submit one report per day. Please try again tomorrow.",
+          variant: "destructive",
+        })
+      } else if (error.message && error.message.includes("execution reverted")) {
+        const revertReason = error.reason || error.message.match(/execution reverted: "?([^"]*)"?/)?.[1] || "Unknown contract error"
+        toast({
+          title: "❌ Blockchain Error",
+          description: `Transaction failed: ${revertReason}`,
+          variant: "destructive",
+        })
+      } else if (error.code === 4001) {
+        toast({
+          title: "Transaction Cancelled",
+          description: "You cancelled the report submission",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "❌ Submission Failed",
+          description: error?.message || "Failed to submit report. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setIsSubmittingReport(false)
     }
-
-    // Step 4: Create database record with blockchain metadata
-    const ballerinaResp = await fetch(`${BALLERINA_BASE_URL}/reports`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        report_title: reportForm.title,
-        description: reportForm.description,
-        category: reportForm.category,
-        priority: getCategoryPriority(reportForm.category),
-        wallet_address: address,
-        tx_hash: tx.hash,
-        block_number: receipt.blockNumber,
-        blockchain_report_id: blockchainReportId,
-        title_cid: titleCid,
-        description_cid: descriptionCid,
-      }),
-    })
-
-    if (!ballerinaResp.ok) {
-      const txt = await ballerinaResp.text()
-      console.error("Failed to create database record after successful blockchain transaction:", txt)
-      // Don't throw error here since blockchain tx succeeded
-      toast({ 
-        title: "⚠️ Partial Success", 
-        description: "Report created on blockchain but database record failed. Please contact support.",
-        variant: "destructive"
-      })
-    } else {
-  const ballerinaData = await ballerinaResp.json()
-  console.debug("✅ Database record created:", ballerinaData)
-      toast({ title: "✅ Report created", description: "Successfully saved to blockchain and database" })
-    }
-
-    // Reset form
-    setReportForm({
-      category: "",
-      title: "",
-      description: "",
-    })
-
-    // Refresh reports list and statistics
-    await refreshReportStatistics()
-  } catch (error: any) {
-    console.error("Failed create flow:", error)
-    
-    // Handle specific errors (keep your existing error handling)
-    if (error.message && error.message.includes("User not authorized")) {
-      toast({
-        title: "❌ Not Authorized",
-        description: "Your wallet address is not authorized to submit reports. Please contact an administrator to get your address authorized in the system.",
-        variant: "destructive",
-      })
-    } else if (error.message && error.message.includes("You can only create one report per day")) {
-      toast({
-        title: "❌ Daily Limit Reached",
-        description: "You can only submit one report per day. Please try again tomorrow.",
-        variant: "destructive",
-      })
-    } else if (error.message && error.message.includes("execution reverted")) {
-      const revertReason = error.reason || error.message.match(/execution reverted: "?([^"]*)"?/)?.[1] || "Unknown contract error"
-      toast({
-        title: "❌ Blockchain Error",
-        description: `Transaction failed: ${revertReason}`,
-        variant: "destructive",
-      })
-    } else if (error.code === 4001) {
-      toast({
-        title: "Transaction Cancelled",
-        description: "You cancelled the report submission",
-        variant: "destructive",
-      })
-    } else {
-      toast({
-        title: "❌ Submission Failed",
-        description: error?.message || "Failed to submit report. Please try again.",
-        variant: "destructive",
-      })
-    }
-  } finally {
-    setIsSubmittingReport(false)
   }
-}
   // (evidence file reading removed — evidence hash is derived from textual fields only)
 
   // Normalize an Ethereum address (ensure 0x prefix and proper format)
@@ -524,7 +524,7 @@ Timestamp: ${timestamp}
         ? normalizeAddress(currentAccounts[0]) || normalizedAccount
         : normalizedAccount
 
-  console.debug("Requesting personal_sign with address:", addressToUse)
+    console.debug("Requesting personal_sign with address:", addressToUse)
 
     // Try the common (message, address) order first
     try {
@@ -533,10 +533,10 @@ Timestamp: ${timestamp}
         params: [message, addressToUse],
       })
     } catch (err: any) {
-  console.debug("First attempt failed:", err)
+      console.debug("First attempt failed:", err)
       // If provider complains about invalid params, try the reversed order
       if (err?.code === -32602 || /invalid params/i.test(String(err?.message || ""))) {
-  console.debug("Trying reversed parameter order...")
+        console.debug("Trying reversed parameter order...")
         try {
           return await (window.ethereum as any).request({
             method: "personal_sign",
@@ -1150,7 +1150,7 @@ Timestamp: ${timestamp}
           }
         )
 
-          if (smartContractResponse.ok) {
+        if (smartContractResponse.ok) {
           contractData = await smartContractResponse.json()
           console.debug("✅ Smart contract petition created:", contractData)
         } else {
@@ -1293,8 +1293,8 @@ Timestamp: ${timestamp}
       // Refresh petitions list
       fetchPetitions()
 
-  console.debug("Smart contract data:", contractData)
-  console.debug("Database data:", ballerinaData)
+      console.debug("Smart contract data:", contractData)
+      console.debug("Database data:", ballerinaData)
     } catch (error: any) {
       console.error("Failed create flow:", error)
       setLastError(error?.message || String(error))
@@ -1627,11 +1627,30 @@ Timestamp: ${timestamp}
       </div>
 
       <Tabs defaultValue="reports" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="reports">Whistleblowing Reports</TabsTrigger>
-          <TabsTrigger value="petitions">Smart Contract Petitions</TabsTrigger>
-          <TabsTrigger value="submit">Submit Report/Petition</TabsTrigger>
+        <TabsList
+          className="flex w-full overflow-x-auto overflow-y-hidden justify-start sm:justify-start"
+        >
+          <TabsTrigger
+            value="reports"
+            className="flex-shrink-0 px-4 py-2 text-sm"
+          >
+            Whistleblowing Reports
+          </TabsTrigger>
+          <TabsTrigger
+            value="petitions"
+            className="flex-shrink-0 px-4 py-2 text-sm"
+          >
+            Smart Contract Petitions
+          </TabsTrigger>
+          <TabsTrigger
+            value="submit"
+            className="flex-shrink-0 px-4 py-2 text-sm"
+          >
+            Submit Report/Petition
+          </TabsTrigger>
         </TabsList>
+
+
 
         <TabsContent value="reports" className="space-y-6">
           {/* Stats Header with Refresh */}
@@ -1942,12 +1961,12 @@ Timestamp: ${timestamp}
                 <div className="text-2xl font-bold">
                   {petitions.length > 0
                     ? Math.round(
-                        (petitions.filter(
-                          (p) => (p.signature_count || 0) >= p.required_signature_count
-                        ).length /
-                          petitions.length) *
-                          100
-                      )
+                      (petitions.filter(
+                        (p) => (p.signature_count || 0) >= p.required_signature_count
+                      ).length /
+                        petitions.length) *
+                      100
+                    )
                     : 0}
                   %
                 </div>
