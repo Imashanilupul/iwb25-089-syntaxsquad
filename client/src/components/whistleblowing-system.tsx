@@ -923,7 +923,7 @@ By signing this message, you confirm your signature on this petition.`
           )
 
           // Also create petition activity
-          await fetch(`${BALLERINA_BASE_URL}/api/petitionactivities`, {
+          await fetch(`${BALLERINA_BASE_URL}/petitionactivities`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1471,6 +1471,17 @@ Timestamp: ${timestamp}
 
     // Find report to get blockchain id fallback
     const report = reports.find((r) => r.report_id === reportId)
+    
+    // Prevent voting on resolved reports
+    if (report?.resolved_status) {
+      toast({
+        title: "Cannot Vote",
+        description: "Resolved reports cannot be voted on",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       // Step 1: call prepare endpoint to get contract info (we pass minimal dummy payload)
       const prepRes = await fetch(`${API_BASE_URL}/report/prepare-report`, {
@@ -1516,15 +1527,46 @@ Timestamp: ${timestamp}
 
       // Step 3: persist vote to backend and update UI from returned report
       let updatedReport
-      if (newVoteType === "upvote") {
-        updatedReport = await reportService.likeReport(reportId, address)
-      } else {
-        updatedReport = await reportService.dislikeReport(reportId, address)
+      try {
+        if (newVoteType === "upvote") {
+          updatedReport = await reportService.likeReport(reportId, address)
+        } else {
+          updatedReport = await reportService.dislikeReport(reportId, address)
+        }
+      } catch (backendError: any) {
+        // Handle backend errors (500, 400, etc.) gracefully
+        console.error("Backend vote error:", backendError)
+        const errorMsg = backendError?.response?.data?.message || 
+                        backendError?.message || 
+                        "Failed to record vote in database"
+        toast({
+          title: "Backend Error",
+          description: `Blockchain vote succeeded, but database sync failed: ${errorMsg}`,
+          variant: "destructive",
+        })
+        // Still refresh the reports list to get latest state
+        const data = await reportService.getAllReports()
+        const normalized = data.map((r: any) => {
+          const reportIdNum = Number.isFinite(Number(r.id)) ? Number(r.id) : r.report_id
+          const title = r.report_title || r.title || "Untitled Report"
+          const rawLikes = r.likes ?? r.like ?? r.upvotes ?? r.upvote ?? (r.votes && r.votes.likes)
+          const rawDislikes = r.dislikes ?? r.dislike ?? r.downvotes ?? r.downvote ?? (r.votes && r.votes.dislikes)
+          const likesNum = Number.isFinite(Number(rawLikes)) ? Number(rawLikes) : 0
+          const dislikesNum = Number.isFinite(Number(rawDislikes)) ? Number(rawDislikes) : 0
+          return { ...r, report_id: reportIdNum ?? r.report_id, report_title: title, likes: likesNum, dislikes: dislikesNum } as Report & any
+        })
+        setReports(normalized)
+        return
       }
 
       // Update local state with new data from backend (single source of truth)
       setReports((prev) => prev.map((r) => (r.report_id === reportId ? updatedReport : r)))
       setReportVotes((prev) => ({ ...prev, [reportId]: newVoteType }))
+
+      toast({
+        title: "Vote Recorded",
+        description: `Successfully ${newVoteType === "upvote" ? "upvoted" : "downvoted"} report`,
+      })
 
       // Show priority change if it occurred
       const currentReport = reports.find((r) => r.report_id === reportId)
@@ -1543,9 +1585,20 @@ Timestamp: ${timestamp}
       }
     } catch (error: any) {
       console.error("Failed to change vote:", error)
+      
+      // Provide more helpful error messages
+      let errorMessage = "Failed to record vote"
+      if (error?.code === 4001) {
+        errorMessage = "Transaction rejected by user"
+      } else if (error?.message?.includes("Prepare failed")) {
+        errorMessage = "Unable to prepare blockchain transaction. Smart contract service may be unavailable."
+      } else if (error?.message) {
+        errorMessage = error.message
+      }
+      
       toast({
-        title: "Vote failed",
-        description: error?.message || "Failed to record vote",
+        title: "Vote Failed",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -1861,19 +1914,19 @@ Timestamp: ${timestamp}
                         >
                           {openReportDetails[report.report_id] ? "Hide Details" : "View Details"}
                         </Button>
-                        {/* Upvote/Downvote Buttons for Reports */}
+                        {/* Upvote/Downvote Buttons for Reports - disabled if resolved */}
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => changeVote(report.report_id, "upvote")}
-                            disabled={reportVotes[report.report_id] === "upvote"}
+                            disabled={report.resolved_status || reportVotes[report.report_id] === "upvote"}
                             className={
                               reportVotes[report.report_id] === "upvote"
                                 ? "bg-green-50 text-green-600 hover:text-green-700"
                                 : "text-slate-500 hover:text-slate-700"
                             }
-                            title="Upvote this report"
+                            title={report.resolved_status ? "Cannot vote on resolved reports" : "Upvote this report"}
                           >
                             <ThumbsUp className="h-4 w-4" />
                           </Button>
@@ -1884,13 +1937,13 @@ Timestamp: ${timestamp}
                             variant="ghost"
                             size="icon"
                             onClick={() => changeVote(report.report_id, "downvote")}
-                            disabled={reportVotes[report.report_id] === "downvote"}
+                            disabled={report.resolved_status || reportVotes[report.report_id] === "downvote"}
                             className={
                               reportVotes[report.report_id] === "downvote"
                                 ? "bg-red-50 text-red-600 hover:text-red-700"
                                 : "text-slate-500 hover:text-slate-700"
                             }
-                            title="Downvote this report"
+                            title={report.resolved_status ? "Cannot vote on resolved reports" : "Downvote this report"}
                           >
                             <ThumbsDown className="h-4 w-4" />
                           </Button>
@@ -2274,14 +2327,16 @@ Timestamp: ${timestamp}
                   />
                 </div>
 
-                <div className="rounded-lg bg-green-50 p-3">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="font-medium">Smart Contract Execution</span>
+
+                <div className="rounded-lg bg-blue-50 p-3">
+                  <div className="flex items-center gap-2 text-sm text-blue-800">
+                    <Lock className="h-4 w-4" />
+                    <span className="font-medium">Privacy Guarantee</span>
                   </div>
-                  <p className="mt-1 text-xs text-green-700">
-                    When the signature threshold is reached, the petition will automatically trigger
-                    an official response within 30 days.
+                  <p className="mt-1 text-xs text-blue-700">
+                    Your identity is protected through zero-knowledge proofs. No personal
+                    information is stored or transmitted.
+                    Note: A citizen can only create one petition every week to prevent spam.
                   </p>
                 </div>
 
@@ -2293,7 +2348,7 @@ Timestamp: ${timestamp}
                       <span className="font-medium">Wallet Connected</span>
                     </div>
                     <p className="mt-1 text-xs text-green-700">
-                      {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                      {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)} - Ready to Create Petition
                     </p>
                   </div>
                 ) : (
@@ -2308,19 +2363,6 @@ Timestamp: ${timestamp}
                     </p>
                   </div>
                 )}
-
-                {/* Debug: Show wallet address status */}
-                <div className="mb-3 rounded bg-gray-50 p-2 text-xs">
-                  <strong>Debug Info:</strong>
-                  <br />
-                  Wallet Address:{" "}
-                  {walletAddress
-                    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-                    : "Not connected"}
-                  <br />
-                  Valid Format:{" "}
-                  {walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress) ? "Yes" : "No"}
-                </div>
 
                 <Button
                   className="w-full"

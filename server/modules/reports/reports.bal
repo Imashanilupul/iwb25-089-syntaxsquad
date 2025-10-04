@@ -165,7 +165,8 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString() + "&removed=eq.false";
+            // Query by 'id' column (database primary key), not 'report_id' (API field name)
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString() + "&removed=eq.false";
             
             http:Response response = check self.supabaseClient->get(endpoint, headers);
             
@@ -402,7 +403,7 @@ public class ReportsService {
             json payload = payloadMap;
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
             
             if response.statusCode != 200 {
@@ -440,7 +441,7 @@ public class ReportsService {
         
         do {
             map<string> headers = self.getHeaders();
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
             
             if response.statusCode != 200 && response.statusCode != 204 {
@@ -716,9 +717,9 @@ public class ReportsService {
             };
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to resolve report: " + response.statusCode.toString());
             }
@@ -760,9 +761,9 @@ public class ReportsService {
             };
             
             map<string> headers = self.getHeaders(true); // Include Prefer header
-            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to unresolve report: " + response.statusCode.toString());
             }
@@ -910,7 +911,7 @@ public class ReportsService {
                             };
 
                             map<string> headers = self.getHeaders(true);
-                            string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+                            string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
                             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
 
                             if response.statusCode != 200 {
@@ -1033,7 +1034,7 @@ public class ReportsService {
                     };
 
                     map<string> headers = self.getHeaders(true);
-                    string endpoint = "/rest/v1/reports?report_id=eq." + reportId.toString();
+                    string endpoint = "/rest/v1/reports?id=eq." + reportId.toString();
                     http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
 
                     if response.statusCode != 200 {

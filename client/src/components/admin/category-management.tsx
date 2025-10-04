@@ -308,19 +308,21 @@ export function CategoryManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Budget Categories</h2>
-          <p className="text-slate-600">Manage Budget Categories And Allocations</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Budget Categories</h2>
+          <p className="text-sm sm:text-base text-slate-600">Manage Budget Categories And Allocations</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button
             variant="outline"
             onClick={handleSyncSpentBudgets}
             disabled={loading || syncing}
+            className="w-full sm:w-auto justify-center"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync Spent Budgets'}
+            <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync Spent Budgets'}</span>
+            <span className="sm:hidden">{syncing ? 'Syncing...' : 'Sync'}</span>
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -329,6 +331,7 @@ export function CategoryManagement() {
                   resetForm()
                 }}
                 disabled={loading}
+                className="w-full sm:w-auto justify-center"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Category
@@ -396,7 +399,7 @@ export function CategoryManagement() {
         </Dialog>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Categories</CardTitle>
@@ -445,24 +448,25 @@ export function CategoryManagement() {
       {/* Categories Table */}
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle>Budget Categories</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-base sm:text-lg">Budget Categories</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             All budget categories with allocation and spending details. 
             Spent budget shows the total of all project spending in each category.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
-              <span className="ml-2 text-slate-500">Loading categories...</span>
+              <span className="ml-2 text-sm sm:text-base text-slate-500">Loading categories...</span>
             </div>
           ) : categories.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
+            <div className="text-center py-8 text-sm sm:text-base text-slate-500">
               No categories found. Create your first category to get started.
             </div>
           ) : (
-            <Table>
+            <div className="w-full overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Category Name</TableHead>
@@ -498,7 +502,7 @@ export function CategoryManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
+                        <div className="flex gap-1 sm:gap-2 justify-end">
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -521,14 +525,15 @@ export function CategoryManagement() {
                               }
                             }}
                             disabled={syncing}
+                            className="px-2 sm:px-3"
                           >
-                            <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${syncing ? 'animate-spin' : ''}`} />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(category)}>
-                            <Edit className="h-3 w-3" />
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(category)} className="px-2 sm:px-3">
+                            <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDelete(category.category_id)}>
-                            <Trash2 className="h-3 w-3" />
+                          <Button variant="outline" size="sm" onClick={() => handleDelete(category.category_id)} className="px-2 sm:px-3">
+                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -537,6 +542,7 @@ export function CategoryManagement() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
           
           {/* Pagination */}

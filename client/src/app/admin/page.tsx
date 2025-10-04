@@ -37,7 +37,7 @@ export default function AdminPortal() {
   const [isProcessingOAuth, setIsProcessingOAuth] = useState(false)
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
-  const { verified, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
+  const { verified, isAdmin, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
   const router = useRouter()
 
   // OAuth callback handler
@@ -72,24 +72,40 @@ export default function AdminPortal() {
   // Hydration
   useEffect(() => { setIsHydrated(true) }, [])
 
-  // Handle OAuth callback and errors
-  useEffect(() => {
-    if (!isHydrated) return
-    const urlParams = new URLSearchParams(window.location.search)
-    const code = urlParams.get('code')
-    const state = urlParams.get('state')
-    const error = urlParams.get('error')
-    if (code && state) handleOAuthCallback(code, state)
-    if (error) { window.history.replaceState({}, document.title, window.location.pathname); router.push('/adminLogin') }
-  }, [isHydrated])
-
-  // Redirect if not authenticated
+  // Redirect non-admin users to admin login
   useEffect(() => {
     if (!isHydrated || isLoading) return
-    const oauthCompleted = localStorage.getItem('oauth_completed')
-    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
-    if (!isFullyAuthenticated && !isRecentlyAuthenticated) setTimeout(() => { if (!isFullyAuthenticated) router.push('/adminLogin') }, 3000)
-  }, [isFullyAuthenticated, isLoading, router, isHydrated])
+    
+    // If wallet is connected but user is not admin, redirect to admin login
+    if (isConnected && !isAdmin && !isLoading) {
+      console.debug('Non-admin user detected, redirecting to admin login')
+      toast({
+        title: "Access Denied",
+        description: "Only admin wallets can access this portal.",
+        variant: "destructive"
+      })
+      router.push('/adminLogin')
+    }
+  }, [isConnected, isAdmin, isLoading, isHydrated, router])
+
+  // Handle OAuth callback and errors
+  // useEffect(() => {
+  //   if (!isHydrated) return
+  //   const urlParams = new URLSearchParams(window.location.search)
+  //   const code = urlParams.get('code')
+  //   const state = urlParams.get('state')
+  //   const error = urlParams.get('error')
+  //   if (code && state) handleOAuthCallback(code, state)
+  //   if (error) { window.history.replaceState({}, document.title, window.location.pathname); router.push('/adminLogin') }
+  // }, [isHydrated])
+
+  // // Redirect if not authenticated
+  // useEffect(() => {
+  //   if (!isHydrated || isLoading) return
+  //   const oauthCompleted = localStorage.getItem('oauth_completed')
+  //   const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
+  //   if (!isFullyAuthenticated && !isRecentlyAuthenticated) setTimeout(() => { if (!isFullyAuthenticated) router.push('/adminLogin') }, 3000)
+  // }, [isFullyAuthenticated, isLoading, router, isHydrated])
 
   if (!isHydrated || isLoading || isProcessingOAuth) {
     return (
@@ -99,6 +115,21 @@ export default function AdminPortal() {
           <p className="text-slate-600">
             {!isHydrated ? 'Loading application...' : isProcessingOAuth ? 'Completing authentication...' : 'Verifying authentication...'}
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render the admin portal if user is not admin
+  if (isConnected && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4">
+            <div className="text-6xl mb-4">🚫</div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
+            <p className="text-slate-600">Redirecting to admin login...</p>
+          </div>
         </div>
       </div>
     )
@@ -118,65 +149,74 @@ export default function AdminPortal() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="container mx-auto p-4 sm:p-6">
+      <div className="container mx-auto p-3 sm:p-4 lg:p-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">Admin Portal</h1>
-              <p className="text-lg text-slate-600">Sri Lanka Transparent Governance Platform - Administrative Control</p>
-
+        <div className="mb-6 sm:mb-8">
+          {/* Top row: Logo + Title on left, Wallet + Logout on right */}
+          <div className="flex items-start justify-between gap-4 mb-4">
+            {/* Left: Logo + Title */}
+            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+              <img
+                src="/images/logo.png"
+                alt="Sri Lanka National Emblem"
+                className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 object-contain flex-shrink-0"
+              />
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-4xl font-bold text-slate-900 mb-1">Admin Portal</h1>
+                <p className="text-xs sm:text-sm lg:text-lg text-slate-600">Sri Lanka Transparent Governance Platform</p>
+              </div>
             </div>
 
-            {/* Modern Right Corner User Info */}
-            <div className="flex flex-col items-end gap-4">
-              {asgardeoUser && (
-                <div className="text-right">
-                  <p className="text-sm text-slate-500">Welcome back,</p>
-                  <p className="text-lg font-semibold text-slate-900">{asgardeoUser.given_name || 'Administrator'}</p>
+            {/* Right: Wallet + Logout in same row */}
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              {isConnected && address && (
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 shadow-sm">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    <Wallet className="h-3.5 w-3.5 text-blue-600" />
+                    <span className="text-xs font-mono text-slate-700">{address.slice(0,6)}...{address.slice(-4)}</span>
+                  </div>
+                  <Badge variant={isAdmin ? "default" : "secondary"} className={`text-xs ${isAdmin ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600'}`}>
+                    {isAdmin ? "✓ Admin" : "Not Admin"}
+                  </Badge>
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
-                {isConnected && address && (
-                  <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 shadow-sm backdrop-blur-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <Wallet className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-mono text-slate-700">{address.slice(0,6)}...{address.slice(-4)}</span>
-                    </div>
-                    <Badge variant={verified ? "default" : "secondary"} className={`text-xs ${verified ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600'}`}>
-                      {verified ? "✓ Verified" : "Unverified"}
-                    </Badge>
-                  </div>
-                )}
-
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleWalletDisconnect} 
-                  className="flex items-center gap-2 bg-gradient-to-r from-red-50 to-pink-50 border-red-200 text-red-700 hover:bg-gradient-to-r hover:from-red-100 hover:to-pink-100 hover:border-red-300 transition-all duration-200 rounded-xl px-4 py-2.5"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Logout
-                </Button>
-              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleWalletDisconnect} 
+                className="flex items-center gap-1.5 bg-gradient-to-r from-red-50 to-pink-50 border-red-200 text-red-700 hover:from-red-100 hover:to-pink-100 hover:border-red-300 transition-all duration-200 rounded-lg px-3 py-2 text-xs sm:text-sm"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
+
+          {/* Second row: Welcome message (if user exists) */}
+          {asgardeoUser && (
+            <div className="ml-0 sm:ml-20 lg:ml-24 mb-2">
+              <p className="text-xs sm:text-sm text-slate-500">Welcome back, <span className="font-semibold text-slate-900">{asgardeoUser.given_name || 'Administrator'}</span></p>
+            </div>
+          )}
         </div>
 
         {/* Wallet Connect Alert */}
         {!isConnected && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-amber-600" />
-            <span className="text-sm text-amber-800 flex-1">Connect your wallet to access all admin features.</span>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-1">
+              <Wallet className="h-4 w-4 text-amber-600 flex-shrink-0" />
+              <span className="text-xs sm:text-sm text-amber-800">Connect wallet to access admin features</span>
+            </div>
             <ConnectButton />
           </div>
         )}
 
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="flex flex-nowrap w-full gap-2 scrollbar-none py-2 px-1 lg:grid lg:grid-cols-9 lg:w-fit">
+          <TabsList className="flex flex-nowrap w-full gap-1 sm:gap-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent py-2 px-1 lg:grid lg:grid-cols-9 lg:w-fit lg:overflow-x-visible">
             {[
               { value: 'overview', label: 'Overview', icon: LayoutDashboard },
               { value: 'categories', label: 'Categories', icon: DollarSign },
@@ -188,9 +228,9 @@ export default function AdminPortal() {
               { value: 'users', label: 'Analytics', icon: Users },
               { value: 'db-sync', label: 'Database Sync', icon: Database },
             ].map(tab => (
-              <TabsTrigger key={tab.value} value={tab.value} className="flex items-center gap-2 whitespace-nowrap px-3 py-2">
-                <tab.icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline">{tab.label}</span>
+              <TabsTrigger key={tab.value} value={tab.value} className="flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap px-2 py-2 sm:px-3 min-w-[2.5rem] sm:min-w-0">
+                <tab.icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <span className="hidden lg:inline text-sm">{tab.label}</span>
               </TabsTrigger>
             ))}
           </TabsList>

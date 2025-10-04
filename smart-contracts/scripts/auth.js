@@ -4,7 +4,7 @@ const path = require("path");
 const router = express.Router();
 require("dotenv").config({ path: path.join(__dirname, '../.env') });
 
-const contractAddress = "0x6f542a1c0F68CAFF5fcCE8D536D4B67f60a5B819"; // Sepolia contract address
+const contractAddress = "0xAB5aDe4eF8Db80d09BF1dDf0461cff45f0D6706E"; // Sepolia contract address
 const abi = require("../artifacts/contracts/auth/auth.sol/AuthRegistry.json").abi;
 
 // Use Sepolia RPC and your wallet private key from .env
@@ -101,6 +101,16 @@ router.get("/is-authorized/:address", async (req, res) => {
   try {
     const result = await authRegistry.isAuthorized(req.params.address);
     res.json({ isAuthorized: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check if a user is admin
+router.get("/is-admin/:address", async (req, res) => {
+  try {
+    const result = await authRegistry.isAdmin(req.params.address);
+    res.json({ isAdmin: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
