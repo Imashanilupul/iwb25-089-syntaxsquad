@@ -1828,15 +1828,18 @@ Timestamp: ${timestamp}
               reports.map((report) => (
                 <Card key={report.report_id} className="border-0 shadow-md">
                   <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-lg">{report.report_title}</CardTitle>
-                          <Badge variant="outline">{report.priority}</Badge>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Title - Full width on mobile */}
+                        <CardTitle className="text-base sm:text-lg break-words">{report.report_title}</CardTitle>
+                        
+                        {/* Badges - Wrap on mobile */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-xs">{report.priority}</Badge>
                           <Badge
-                            className={getStatusColor(
+                            className={`text-xs ${getStatusColor(
                               report.resolved_status ? "Resolved" : "Under Investigation"
-                            )}
+                            )}`}
                           >
                             {report.resolved_status ? "Resolved" : "Under Investigation"}
                           </Badge>
@@ -1844,30 +1847,30 @@ Timestamp: ${timestamp}
                           {priorityChanges[report.report_id] && (
                             <Badge
                               variant="secondary"
-                              className="animate-pulse bg-blue-100 text-blue-800"
+                              className="animate-pulse bg-blue-100 text-blue-800 text-xs"
                             >
                               <TrendingUp className="mr-1 h-3 w-3" />
                               {priorityChanges[report.report_id]}
                             </Badge>
                           )}
-                          <div className="text-xs text-slate-500">
-                            {report.likes && report.dislikes && (
-                              <span className="inline-flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" />
-                                Vote-based priority
-                              </span>
-                            )}
-                          </div>
+                          {report.likes && report.dislikes && (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                              <TrendingUp className="h-3 w-3" />
+                              <span className="hidden sm:inline">Vote-based priority</span>
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-600">
+                        
+                        {/* Metadata - Stack on mobile */}
+                        <div className="flex flex-col gap-1 text-xs sm:text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-4">
                           <span>ID: {report.report_id}</span>
-                          <span>•</span>
+                          <span className="hidden sm:inline">•</span>
                           <span>
                             Submitted: {new Date(report.created_time).toLocaleDateString()}
                           </span>
                           {report.last_updated_time && (
                             <>
-                              <span>•</span>
+                              <span className="hidden sm:inline">•</span>
                               <span>
                                 Updated: {new Date(report.last_updated_time).toLocaleDateString()}
                               </span>
@@ -1875,11 +1878,13 @@ Timestamp: ${timestamp}
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
+                      
+                      {/* Priority info - Move below on mobile */}
+                      <div className="flex items-center justify-between sm:block sm:text-right sm:flex-shrink-0">
                         <div className={`text-sm font-medium ${getPriorityColor(report.priority)}`}>
                           {report.priority} Priority
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="text-xs text-slate-500 sm:mt-1">
                           Net votes: {(report.likes || 0) - (report.dislikes || 0)}
                         </div>
                       </div>
@@ -1896,15 +1901,16 @@ Timestamp: ${timestamp}
                         <p className="font-medium">{report.assigned_to || "Unassigned"}</p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between border-t pt-2">
+                    <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2 text-xs text-slate-500">
                         <Hash className="h-3 w-3" />
                         <span>Blockchain verified</span>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Button
                           variant="outline"
                           size="sm"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             setOpenReportDetails((prev) => ({
                               ...prev,
@@ -1915,7 +1921,7 @@ Timestamp: ${timestamp}
                           {openReportDetails[report.report_id] ? "Hide Details" : "View Details"}
                         </Button>
                         {/* Upvote/Downvote Buttons for Reports - disabled if resolved */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2070,27 +2076,34 @@ Timestamp: ${timestamp}
                 return (
                   <Card key={petition.id} className="border-0 shadow-md">
                     <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <CardTitle className="text-lg">{petition.title}</CardTitle>
-                            <Badge variant="outline">Governance</Badge>
-                            <Badge className={getStatusColor(status)}>{status}</Badge>
+                      <div className="space-y-3">
+                        {/* Title and badges - Stack on mobile */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-base sm:text-lg break-words mb-2">{petition.title}</CardTitle>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="text-xs">Governance</Badge>
+                              <Badge className={`text-xs ${getStatusColor(status)}`}>{status}</Badge>
+                            </div>
                           </div>
-                          <CardDescription>{petition.description}</CardDescription>
-                          <div className="flex items-center gap-4 text-sm text-slate-600">
-                            <span>
-                              Created: {new Date(petition.created_at).toLocaleDateString()}
-                            </span>
-                            {petition.deadline && (
-                              <>
-                                <span>•</span>
-                                <span>
-                                  Deadline: {new Date(petition.deadline).toLocaleDateString()}
-                                </span>
-                              </>
-                            )}
-                          </div>
+                        </div>
+                        
+                        {/* Description */}
+                        <CardDescription className="text-sm break-words">{petition.description}</CardDescription>
+                        
+                        {/* Metadata - Stack on mobile */}
+                        <div className="flex flex-col gap-1 text-xs sm:text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-4">
+                          <span>
+                            Created: {new Date(petition.created_at).toLocaleDateString()}
+                          </span>
+                          {petition.deadline && (
+                            <>
+                              <span className="hidden sm:inline">•</span>
+                              <span>
+                                Deadline: {new Date(petition.deadline).toLocaleDateString()}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </CardHeader>
@@ -2107,26 +2120,28 @@ Timestamp: ${timestamp}
                         <Progress value={Math.min(progress, 100)} />
                       </div>
 
-                      <div className="flex items-center justify-between border-t pt-2">
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <Hash className="h-3 w-3" />
                           <span>ID: {petition.id}</span>
                           {petition.blockchain_petition_id && (
                             <>
-                              <span>•</span>
-                              <span className="font-mono">
-                                Blockchain: {petition.blockchain_petition_id}
+                              <span className="hidden sm:inline">•</span>
+                              <span className="font-mono break-all">
+                                <span className="hidden sm:inline">Blockchain: </span>
+                                {petition.blockchain_petition_id}
                               </span>
                             </>
                           )}
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Button variant="outline" size="sm" className="w-full sm:w-auto">
                             View Details
                           </Button>
                           {!petition.completed && !isThresholdMet && (
                             <Button
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => signPetition(petition.id)}
                               disabled={
                                 !walletAddress ||

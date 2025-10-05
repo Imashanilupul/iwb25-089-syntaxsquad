@@ -442,22 +442,31 @@ export function PolicyHub() {
               policies.map((policy) => (
                 <Card key={policy.id} className="border-0 shadow-md">
                   <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-lg">{policy.name}</CardTitle>
-                          <Badge variant="outline">Government Policy</Badge>
-                          <Badge className={getStatusColor(policy.status)}>{policy.status}</Badge>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Title - Full width on mobile */}
+                        <CardTitle className="text-base sm:text-lg break-words">{policy.name}</CardTitle>
+                        
+                        {/* Badges - Wrap on mobile */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-xs">Government Policy</Badge>
+                          <Badge className={`text-xs ${getStatusColor(policy.status)}`}>{policy.status}</Badge>
                         </div>
-                        <CardDescription>{policy.description}</CardDescription>
-                        <div className="flex items-center gap-4 text-sm text-slate-600">
+                        
+                        {/* Description */}
+                        <CardDescription className="text-sm">{policy.description}</CardDescription>
+                        
+                        {/* Metadata - Stack on mobile */}
+                        <div className="flex flex-col gap-1 text-xs sm:text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-4">
                           <span>By {policy.ministry}</span>
-                          <span>•</span>
+                          <span className="hidden sm:inline">•</span>
                           <span>Updated {getRelativeTime(policy.updated_at || policy.created_time)}</span>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-green-600">
+                      
+                      {/* Active indicator - Move below on mobile */}
+                      <div className="sm:text-right sm:flex-shrink-0">
+                        <div className="text-xs sm:text-sm font-medium text-green-600">
                           Active Policy
                         </div>
                       </div>
@@ -465,13 +474,13 @@ export function PolicyHub() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Engagement Stats */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <div className="flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm">{getCommentCount(policy.id)} comments</span>
+                        <span className="text-xs sm:text-sm">{getCommentCount(policy.id)} comments</span>
                       </div>
                       <button 
-                        className="flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
+                        className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
                         onClick={() => openCommentDialog(policy.id)}
                       >
                         <Eye className="h-4 w-4" />
@@ -479,25 +488,28 @@ export function PolicyHub() {
                       </button>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm">Public</span>
+                        <span className="text-xs sm:text-sm">Public</span>
                       </div>
                     </div>
 
                     {/* Language Support */}
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-slate-500" />
-                      <span className="text-sm text-slate-600">Available in:</span>
-                      <div className="flex gap-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-slate-500" />
+                        <span className="text-xs sm:text-sm text-slate-600">Available in:</span>
+                      </div>
+                      <div className="flex gap-1 flex-wrap">
                         <Badge variant="outline" className="text-xs">සිංහල</Badge>
                         <Badge variant="outline" className="text-xs">தமிழ்</Badge>
                         <Badge variant="outline" className="text-xs">English</Badge>
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-2 border-t">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center pt-2 border-t">
                       <Button
                         variant="outline"
                         size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() => {
                           const raw = policy.view_full_policy;
                           const url = (typeof raw === 'string' && raw.trim()) ? raw.trim() : undefined;
@@ -527,10 +539,10 @@ export function PolicyHub() {
                       </Button>
                       
                       <Button 
-                        size="sm" 
+                        size="sm"
+                        className={`w-full sm:w-auto ${!isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
                         onClick={() => handleJoinDiscussion(policy.id)}
                         disabled={!isConnected}
-                        className={!isConnected ? "opacity-50 cursor-not-allowed" : ""}
                       >
                         {!isConnected && <Wallet className="h-4 w-4 mr-2" />}
                         {isConnected ? "Join Discussion" : "Connect Wallet to Discuss"}

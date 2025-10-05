@@ -743,18 +743,25 @@ Timestamp: ${timestamp}
                   return (
                     <Card key={proposal.id} className="border-0 shadow-md">
                       <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <CardTitle className="text-lg">{proposal.title}</CardTitle>
-                              <Badge variant="outline">{categoryName}</Badge>
-                              <Badge className={getStatusColor(status)}>{status}</Badge>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex-1 space-y-3">
+                            {/* Title - Full width on mobile */}
+                            <CardTitle className="text-base sm:text-lg break-words">{proposal.title}</CardTitle>
+                            
+                            {/* Badges - Wrap on mobile */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="text-xs">{categoryName}</Badge>
+                              <Badge className={`text-xs ${getStatusColor(status)}`}>{status}</Badge>
                             </div>
-                            <CardDescription>{proposal.short_description}</CardDescription>
+                            
+                            {/* Description */}
+                            <CardDescription className="text-sm">{proposal.short_description}</CardDescription>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                          
+                          {/* Time remaining - Move below on mobile */}
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 sm:flex-shrink-0">
                             <Clock className="h-4 w-4" />
-                            {timeRemaining}
+                            <span>{timeRemaining}</span>
                           </div>
                         </div>
                       </CardHeader>
