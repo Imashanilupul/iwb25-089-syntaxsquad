@@ -899,53 +899,67 @@ Timestamp: ${timestamp}
 
             {/* Voting Activity */}
             <Card className="border-0 shadow-md">
-  <CardHeader>
-    <CardTitle className="text-base sm:text-lg md:text-xl">
+  <CardHeader className="p-4 sm:p-6">
+    <CardTitle className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold leading-tight">
       Voting Activity
     </CardTitle>
-    <CardDescription className="text-sm sm:text-base">
-      Hourly Voting Patterns Today
+    <CardDescription className="text-xs sm:text-sm md:text-base leading-relaxed">
+      <span className="block sm:inline">Hourly Voting Patterns Today</span>
       {votingActivity.reduce((sum, item) => sum + item.votes, 0) > 0 ? (
-        <span className="text-green-600 text-xs sm:text-sm block mt-1">
-          ✓ Showing real-time data
+        <span className="text-green-600 text-xs sm:text-sm md:text-base block sm:inline sm:ml-2 mt-1 sm:mt-0 flex items-center gap-1">
+          <span className="flex-shrink-0">✓</span>
+          <span>Showing real-time data</span>
         </span>
       ) : (
-        <span className="text-blue-600 text-xs sm:text-sm block mt-1">
-          * No votes recorded today – sample data shown for demonstration
+        <span className="text-blue-600 text-xs sm:text-sm md:text-base block sm:inline sm:ml-2 mt-1 sm:mt-0 flex items-start gap-1">
+          <span className="flex-shrink-0 mt-0.5 sm:mt-0">*</span>
+          <span className="leading-tight">No votes recorded today – sample data shown for demonstration</span>
         </span>
       )}
     </CardDescription>
   </CardHeader>
 
-  <CardContent>
-    <ChartContainer
-      config={{
-        votes: { label: "Votes", color: "#8884D8" },
-      }}
-      className="h-56 sm:h-64 md:h-80"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={votingActivity}
-          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-        >
-          <XAxis
-            dataKey="hour"
-            tick={{ fontSize: 10, angle: -30 }}
-            interval={0}
-            height={40}
-          />
-          <YAxis tick={{ fontSize: 10 }} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <Bar
-            dataKey="votes"
-            fill="#8884D8"
-            radius={[4, 4, 0, 0]}
-            barSize={20}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartContainer>
+  <CardContent className="p-4 sm:p-6">
+    <div className="w-full overflow-hidden">
+      <ChartContainer
+        config={{
+          votes: { label: "Votes", color: "#8884D8" },
+        }}
+        className="h-56 sm:h-64 md:h-80 w-full"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={votingActivity}
+            margin={{ 
+              top: 20, 
+              right: 20, 
+              left: 20, 
+              bottom: 60 
+            }}
+          >
+            <XAxis
+              dataKey="hour"
+              tick={{ fontSize: 12 }}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+              interval={0}
+            />
+            <YAxis 
+              tick={{ fontSize: 12 }}
+              width={40}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar
+              dataKey="votes"
+              fill="#8884D8"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={60}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+    </div>
   </CardContent>
 </Card>
 
