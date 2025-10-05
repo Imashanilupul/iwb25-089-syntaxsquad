@@ -18,7 +18,7 @@ public class ProjectsService {
     public function init(http:Client supabaseClient, int port, string supabaseUrl, string supabaseServiceRoleKey) {
         self.supabaseClient = supabaseClient;
         self.port = port;
-        self.supabaseUrl = supabaseUrl; 
+        self.supabaseUrl = supabaseUrl;
         self.supabaseServiceRoleKey = supabaseServiceRoleKey;
         log:printInfo("✅ Projects service initialized");
     }
@@ -33,11 +33,11 @@ public class ProjectsService {
             "Authorization": "Bearer " + self.supabaseServiceRoleKey,
             "Content-Type": "application/json"
         };
-        
+
         if includePrefer {
             headers["Prefer"] = "return=representation";
         }
-        
+
         return headers;
     }
 
@@ -135,31 +135,31 @@ public class ProjectsService {
             if projectName.trim().length() == 0 {
                 return error("Project name cannot be empty");
             }
-            
+
             if allocatedBudget < 0d {
                 return error("Allocated budget cannot be negative");
             }
-            
+
             if spentBudget < 0d {
                 return error("Spent budget cannot be negative");
             }
-            
+
             if spentBudget > allocatedBudget {
                 return error("Spent budget cannot exceed allocated budget");
             }
-            
+
             if state.trim().length() == 0 {
                 return error("State cannot be empty");
             }
-            
+
             if province.trim().length() == 0 {
                 return error("Province cannot be empty");
             }
-            
+
             if ministry.trim().length() == 0 {
                 return error("Ministry cannot be empty");
             }
-            
+
             // Validate status
             string[] validStatuses = ["PLANNED", "IN_PROGRESS", "COMPLETED", "ON_HOLD", "CANCELLED"];
             boolean isValidStatus = false;
@@ -172,9 +172,8 @@ public class ProjectsService {
             if !isValidStatus {
                 return error("Invalid status. Allowed values: PLANNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
             }
-            
+
             // Note: Category budget validation will be handled by the sync process
-            
 
             // Cast allocated_budget and spent_budget to int8 (bigint)
             int allocatedBudgetInt = <int>allocatedBudget;
@@ -205,9 +204,9 @@ public class ProjectsService {
             map<string> headers = self.getHeaders(true); // Include Prefer header
             http:Response response = check self.supabaseClient->post("/rest/v1/projects", payload, headers);
 
-                            if response.statusCode == 201 {
+            if response.statusCode == 201 {
                 // Note: Category spent budget will be updated via sync endpoint
-                
+
                 // Check if response has content
                 json|error result = response.getJsonPayload();
                 if result is error {
@@ -258,10 +257,10 @@ public class ProjectsService {
         if projectId <= 0 {
             return error("Project ID must be a positive integer");
         }
-        
+
         do {
             map<json> payloadMap = {};
-            
+
             // Build update payload from provided data
             json|error projectName = updateData.projectName;
             if projectName is json {
@@ -272,7 +271,7 @@ public class ProjectsService {
                     return error("Project name cannot be empty");
                 }
             }
-            
+
             json|error categoryId = updateData.categoryId;
             if categoryId is json {
                 // Handle category_id as text (as per database schema)
@@ -287,7 +286,7 @@ public class ProjectsService {
                     }
                 }
             }
-            
+
             json|error allocatedBudget = updateData.allocatedBudget;
             if allocatedBudget is json {
                 decimal|error budget = allocatedBudget.ensureType(decimal);
@@ -298,11 +297,11 @@ public class ProjectsService {
                     return error("Allocated budget must be non-negative");
                 }
             }
-            
+
             json|error spentBudget = updateData.spentBudget;
             if spentBudget is json {
                 decimal spent = 0d;
-                
+
                 // Handle different input types (int/decimal/string)
                 if spentBudget is int {
                     spent = <decimal>spentBudget;
@@ -318,7 +317,7 @@ public class ProjectsService {
                 } else {
                     return error("Unsupported spent budget type");
                 }
-                
+
                 if spent >= 0d {
                     // Cast to int for database (bigint column)
                     payloadMap["spent_budget"] = <int>spent;
@@ -326,7 +325,7 @@ public class ProjectsService {
                     return error("Spent budget must be non-negative");
                 }
             }
-            
+
             json|error state = updateData.state;
             if state is json {
                 string|error stateStr = state.ensureType(string);
@@ -336,7 +335,7 @@ public class ProjectsService {
                     return error("State cannot be empty");
                 }
             }
-            
+
             json|error province = updateData.province;
             if province is json {
                 string|error provinceStr = province.ensureType(string);
@@ -346,7 +345,7 @@ public class ProjectsService {
                     return error("Province cannot be empty");
                 }
             }
-            
+
             json|error ministry = updateData.ministry;
             if ministry is json {
                 string|error ministryStr = ministry.ensureType(string);
@@ -356,7 +355,7 @@ public class ProjectsService {
                     return error("Ministry cannot be empty");
                 }
             }
-            
+
             json|error viewDetails = updateData.viewDetails;
             if viewDetails is json {
                 string|error detailsStr = viewDetails.ensureType(string);
@@ -364,7 +363,7 @@ public class ProjectsService {
                     payloadMap["view_details"] = detailsStr;
                 }
             }
-            
+
             json|error status = updateData.status;
             if status is json {
                 string|error statusStr = status.ensureType(string);
@@ -383,7 +382,7 @@ public class ProjectsService {
                     payloadMap["status"] = statusStr;
                 }
             }
-            
+
             json|error removed = updateData.removed;
             if removed is json {
                 boolean|error removedBool = removed.ensureType(boolean);
@@ -402,31 +401,31 @@ public class ProjectsService {
                     return error("Spent budget cannot exceed allocated budget");
                 }
             }
-            
+
             // Note: Category budget validation will be handled by the sync process
-            
+
             // If only spent budget is being updated, validate against existing allocated budget
             else if payloadMap.hasKey("spent_budget") && !payloadMap.hasKey("allocated_budget") {
                 decimal newSpent = check payloadMap["spent_budget"].ensureType(decimal);
-                
+
                 // Fetch current project to get allocated budget
                 map<string> headers = self.getHeaders(false);
                 string getEndpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&select=allocated_budget";
                 http:Response getResponse = check self.supabaseClient->get(getEndpoint, headers);
-                
+
                 if getResponse.statusCode != 200 {
                     return error("Failed to fetch current project data for validation");
                 }
-                
+
                 json getResult = check getResponse.getJsonPayload();
                 json[] currentProjects = check getResult.ensureType();
-                
+
                 if currentProjects.length() == 0 {
                     return error("Project not found");
                 }
-                
+
                 json currentProject = currentProjects[0];
-                
+
                 // Handle different data types from database (int/decimal/string)
                 decimal currentAllocated = 0d;
                 json|error allocatedValue = currentProject.allocated_budget;
@@ -448,30 +447,30 @@ public class ProjectsService {
                 } else {
                     return error("Failed to retrieve allocated budget from database");
                 }
-                
+
                 if newSpent > currentAllocated {
                     return error("Spent budget cannot exceed allocated budget");
                 }
             }
-            
+
             if payloadMap.length() == 0 {
                 return error("No valid fields provided for update");
             }
-            
+
             payloadMap["updatedAt"] = "now()";
             json payload = payloadMap;
-            
+
             map<string> headers = self.getHeaders(true); // Include Prefer header
             string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString();
             http:Response response = check self.supabaseClient->patch(endpoint, payload, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to update project: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
+
             // Note: Category spent budget will be updated via sync endpoint
 
             if projects.length() > 0 {
@@ -489,7 +488,7 @@ public class ProjectsService {
                     "timestamp": time:utcNow()[0]
                 };
             }
-            
+
         } on fail error e {
             return error("Failed to update project: " + e.message());
         }
@@ -504,49 +503,25 @@ public class ProjectsService {
         if projectId <= 0 {
             return error("Project ID must be a positive integer");
         }
-        
+
         do {
-            // Get project's category_id before deletion to update category spent budget
-            map<string> getHeaders = self.getHeaders();
-            string getEndpoint = "/rest/v1/projects?project_id=eq." + projectId.toString() + "&select=category_id";
-            http:Response getResponse = check self.supabaseClient->get(getEndpoint, getHeaders);
-            
-            int? projectCategoryId = ();
-            if getResponse.statusCode == 200 {
-                json getResult = check getResponse.getJsonPayload();
-                json[] projects = check getResult.ensureType();
-                
-                if projects.length() > 0 {
-                    json project = projects[0];
-                    if project is map<json> {
-                        json|error categoryIdJson = project["category_id"];
-                        if categoryIdJson is json && categoryIdJson is string {
-                            int|error categoryIdInt = int:fromString(categoryIdJson);
-                            if categoryIdInt is int {
-                                projectCategoryId = categoryIdInt;
-                            }
-                        }
-                    }
-                }
-            }
-            
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/projects?project_id=eq." + projectId.toString();
             http:Response response = check self.supabaseClient->delete(endpoint, (), headers);
-            
+
             if response.statusCode != 200 && response.statusCode != 204 {
                 return error("Failed to delete project: " + response.statusCode.toString());
             }
-            
+
             // Note: Category spent budget will be updated via sync endpoint
-            
+
             return {
                 "success": true,
                 "message": "Project deleted successfully",
                 "projectId": projectId,
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to delete project: " + e.message());
         }
@@ -785,14 +760,14 @@ public class ProjectsService {
         do {
             map<string> headers = self.getHeaders();
             http:Response response = check self.supabaseClient->get("/rest/v1/projects?select=*", headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get project statistics: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
+
             // Initialize counters
             map<int> statusCounts = {};
             map<int> ministryCounts = {};
@@ -801,7 +776,7 @@ public class ProjectsService {
             int totalProjects = projects.length();
             decimal totalAllocatedBudget = 0d;
             decimal totalSpentBudget = 0d;
-            
+
             foreach json project in projects {
                 if project is map<json> {
                     // Count by status
@@ -810,28 +785,28 @@ public class ProjectsService {
                         string status = statusJson.toString();
                         statusCounts[status] = (statusCounts[status] ?: 0) + 1;
                     }
-                    
+
                     // Count by ministry
                     json|error ministryJson = project["ministry"];
                     if ministryJson is json {
                         string ministry = ministryJson.toString();
                         ministryCounts[ministry] = (ministryCounts[ministry] ?: 0) + 1;
                     }
-                    
+
                     // Count by state
                     json|error stateJson = project["state"];
                     if stateJson is json {
                         string state = stateJson.toString();
                         stateCounts[state] = (stateCounts[state] ?: 0) + 1;
                     }
-                    
+
                     // Count by province
                     json|error provinceJson = project["province"];
                     if provinceJson is json {
                         string province = provinceJson.toString();
                         provinceCounts[province] = (provinceCounts[province] ?: 0) + 1;
                     }
-                    
+
                     // Sum budgets
                     json|error allocatedJson = project["allocated_budget"];
                     if allocatedJson is json {
@@ -840,7 +815,7 @@ public class ProjectsService {
                             totalAllocatedBudget += allocated;
                         }
                     }
-                    
+
                     json|error spentJson = project["spent_budget"];
                     if spentJson is json {
                         decimal|error spent = spentJson.ensureType(decimal);
@@ -850,9 +825,9 @@ public class ProjectsService {
                     }
                 }
             }
-            
+
             decimal budgetUtilization = totalAllocatedBudget > 0d ? (totalSpentBudget / totalAllocatedBudget) * 100d : 0d;
-            
+
             return {
                 "success": true,
                 "message": "Project statistics retrieved successfully",
@@ -871,7 +846,7 @@ public class ProjectsService {
                 },
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get project statistics: " + e.message());
         }
@@ -885,14 +860,14 @@ public class ProjectsService {
             map<string> headers = self.getHeaders();
             string endpoint = "/rest/v1/projects?select=ministry&order=ministry.asc";
             http:Response response = check self.supabaseClient->get(endpoint, headers);
-            
+
             if response.statusCode != 200 {
                 return error("Failed to get distinct ministries: " + response.statusCode.toString());
             }
-            
+
             json result = check response.getJsonPayload();
             json[] projects = check result.ensureType();
-            
+
             // Extract distinct ministries
             string[] distinctMinistries = [];
             foreach json project in projects {
@@ -914,7 +889,7 @@ public class ProjectsService {
                     }
                 }
             }
-            
+
             return {
                 "success": true,
                 "message": "Distinct ministries retrieved successfully",
@@ -922,7 +897,7 @@ public class ProjectsService {
                 "count": distinctMinistries.length(),
                 "timestamp": time:utcNow()[0]
             };
-            
+
         } on fail error e {
             return error("Failed to get distinct ministries: " + e.message());
         }
@@ -934,12 +909,12 @@ public class ProjectsService {
     # + return - Validation result
     public function validateProjectData(json projectData) returns json {
         string[] errors = [];
-        
+
         json|error projectName = projectData.projectName;
         if projectName is error || projectName.toString().trim().length() == 0 {
             errors.push("Project name is required and cannot be empty");
         }
-        
+
         json|error allocatedBudget = projectData.allocatedBudget;
         if allocatedBudget is error {
             errors.push("Allocated budget is required");
@@ -949,7 +924,7 @@ public class ProjectsService {
                 errors.push("Allocated budget must be a non-negative number");
             }
         }
-        
+
         json|error spentBudget = projectData.spentBudget;
         if spentBudget is json {
             decimal|error spent = spentBudget.ensureType(decimal);
@@ -962,22 +937,22 @@ public class ProjectsService {
                 }
             }
         }
-        
+
         json|error state = projectData.state;
         if state is error || state.toString().trim().length() == 0 {
             errors.push("State is required and cannot be empty");
         }
-        
+
         json|error province = projectData.province;
         if province is error || province.toString().trim().length() == 0 {
             errors.push("Province is required and cannot be empty");
         }
-        
+
         json|error ministry = projectData.ministry;
         if ministry is error || ministry.toString().trim().length() == 0 {
             errors.push("Ministry is required and cannot be empty");
         }
-        
+
         json|error status = projectData.status;
         if status is json {
             string statusStr = status.toString();
@@ -993,7 +968,7 @@ public class ProjectsService {
                 errors.push("Invalid status. Allowed values: PLANNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
             }
         }
-        
+
         return {
             "valid": errors.length() == 0,
             "errors": errors
