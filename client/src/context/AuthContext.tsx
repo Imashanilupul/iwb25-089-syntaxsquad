@@ -29,6 +29,7 @@ type AuthState = {
 type AuthContextType = AuthState & {
   clearAuthState: () => void;
   debugAuthState: () => void;
+  refreshAsgardeoSession: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
   error: null,
   clearAuthState: () => {},
   debugAuthState: () => {},
+  refreshAsgardeoSession: async () => false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -134,25 +136,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to get Asgardeo user info from the client
   const getAsgardeoUserInfo = async () => {
     try {
+      console.log('🔍 AuthContext: Checking for Asgardeo session...')
+      console.log('🍪 AuthContext: Current cookies:', document.cookie)
+      
       // Quick check if we have a session cookie
-      const hasSessionCookie = document.cookie.includes('asgardeo_session');
-        if (!hasSessionCookie) {
-        console.debug('AuthContext: No session cookie found, skipping API call');
-        return null;
+      const hasSessionCookie = document.cookie.includes('asgardeo_session')
+      console.log('🍪 AuthContext: Has session cookie:', hasSessionCookie)
+      
+      if (!hasSessionCookie) {
+        console.log('❌ AuthContext: No session cookie found, skipping API call')
+        return null
       }
       
-      console.debug('AuthContext: Session cookie found, fetching Asgardeo user info...');
-      const response = await fetch('/api/auth/me');
+      console.log('📡 AuthContext: Session cookie found, fetching Asgardeo user info...')
+      const response = await fetch('/api/auth/me')
+      console.log('📡 AuthContext: /api/auth/me response status:', response.status)
+      
       if (response.ok) {
-        const data = await response.json();
-        console.debug('AuthContext: Asgardeo user data:', data);
-        return data.isAuthenticated ? data.user : null;
+        const data = await response.json()
+        console.log('📡 AuthContext: /api/auth/me response data:', data)
+        return data.isAuthenticated ? data.user : null
       }
-      console.debug('AuthContext: No valid Asgardeo session');
-      return null;
+      console.log('❌ AuthContext: /api/auth/me request failed, status:', response.status)
+      return null
     } catch (error) {
-  console.debug('AuthContext: No Asgardeo session found:', error);
-      return null;
+      console.log('❌ AuthContext: Error fetching Asgardeo session:', error)
+      return null
     }
   };
 
@@ -302,11 +311,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   console.debug('🕒 Save Time:', localStorage.getItem('adminAuthStateTime'));
   };
 
+  // Manual function to refresh Asgardeo session (useful after OAuth returns)
+  const refreshAsgardeoSession = async () => {
+    console.debug('AuthContext: Manually refreshing Asgardeo session...');
+    const user = await getAsgardeoUserInfo();
+    if (user) {
+      setAuth(prevAuth => ({
+        ...prevAuth,
+        asgardeoUser: user
+      }));
+      console.debug('AuthContext: Session refresh successful, user:', user);
+      return true;
+    } else {
+      console.debug('AuthContext: Session refresh failed - no user found');
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       ...auth,
       clearAuthState: clearSavedAuthState,
-      debugAuthState
+      debugAuthState,
+      refreshAsgardeoSession
     }}>
       {children}
     </AuthContext.Provider>
