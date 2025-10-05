@@ -5,54 +5,17 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
-  console.debug('Logout: Starting complete logout process...');
+    console.log('🔄 Logout: Starting logout process...');
     
-    // Step 1: Get the ID token for proper Asgardeo logout
-    let idToken = null;
-    let sessionData = null;
-    
-    try {
-      const sessionCookie = request.cookies.get('asgardeo_session');
-        if (sessionCookie && sessionCookie.value) {
-        sessionData = JSON.parse(sessionCookie.value);
-        idToken = sessionData.tokens?.id_token || sessionData.id_token;
-        console.debug('Logout: Found session data, ID token available:', !!idToken);
-      } else {
-        console.debug('Logout: No session cookie found');
-      }
-    } catch (e) {
-      console.debug('Logout: Error parsing session data:', e);
-    }
-    
-    // Step 2: Build Asgardeo logout URL that shows logout confirmation page
-    let asgardeoLogoutUrl = null;
-    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
-    
-    if (idToken) {
-      // Use the specific Asgardeo logout API endpoint with ID token hint
-      asgardeoLogoutUrl = `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
-        `id_token_hint=${idToken}&` +
-        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
-        `prompt=logout`;
-  console.debug('Logout: Built Asgardeo logout confirmation page URL with ID token');
-    } else {
-      // Fallback: Use specific Asgardeo logout endpoint without ID token
-      asgardeoLogoutUrl = `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
-        `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
-        `client_id=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!)}`;
-  console.debug('Logout: Built Asgardeo logout confirmation page URL (no ID token)');
-    }
-    
-    // Step 3: Return the Asgardeo logout URL for direct redirect
+    // **SIMPLIFIED APPROACH**: Just clear cookies and redirect locally
     const response = NextResponse.json({ 
       success: true, 
-      message: 'Logout initiated',
-      redirectUrl: asgardeoLogoutUrl,
-      hasIdToken: !!idToken,
-      sessionFound: !!sessionData
+      message: 'Logout completed',
+      redirectUrl: '/adminLogin?logout=success', // Local redirect instead of Asgardeo
+      localLogout: true
     });
 
-    // Comprehensive list of cookies to clear (including Asgardeo specific ones)
+    // Comprehensive list of cookies to clear
     const cookiesToClear = [
       'asgardeo_session',
       'oauth_state', 
@@ -67,51 +30,37 @@ export async function POST(request: NextRequest) {
       'sessionDataKeyConsent',
       'opbs',
       'JSESSIONID',
-      'samlssoTokenId'
+      'samlssoTokenId',
+      'admin_auth_bypass'
     ];
 
-    // Clear cookies with multiple strategies to ensure complete removal
+    // Clear cookies with multiple strategies
     cookiesToClear.forEach(cookieName => {
-      // Strategy 1: Delete cookie
       response.cookies.delete(cookieName);
       
-      // Strategy 2: Set expired cookie for current domain with all variations
-      const expiredDate = new Date(0);
-      
-      // Clear with httpOnly
       response.cookies.set(cookieName, '', {
-        expires: expiredDate,
+        expires: new Date(0),
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
       });
 
-      // Clear without httpOnly for client-accessible cookies
       response.cookies.set(cookieName, '', {
-        expires: expiredDate,
+        expires: new Date(0),
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
       });
-
-      // Clear for root path specifically
-      response.cookies.set(cookieName, '', {
-        expires: expiredDate,
-        path: '/',
-        secure: false,
-        sameSite: 'lax'
-      });
     });
 
-  console.debug('Logout: All authentication cookies cleared');
+    console.log('✅ Logout: Local logout completed successfully');
     return response;
 
   } catch (error) {
-  console.error('Logout: Error during logout process:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('❌ Logout: Error during logout process:', error);
     return NextResponse.json(
-      { success: false, error: 'Logout failed', details: errorMessage },
+      { success: false, error: 'Logout failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -126,7 +75,7 @@ export async function GET(request: NextRequest) {
     
     // Get ID token from cookies
     let idToken = null;
-    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/logout-callback`;
+    const logoutCallbackUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/logout-callback`;
     
     try {
       const sessionCookie = request.cookies.get('asgardeo_session');
@@ -140,10 +89,10 @@ export async function GET(request: NextRequest) {
     
     // Redirect directly to Asgardeo logout page
     const redirectUrl = idToken 
-      ? `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
+      ? `https://api.asgardeo.io/t/razzallworks/oidc/logout?` +
         `id_token_hint=${idToken}&` +
         `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}`
-      : `https://api.asgardeo.io/t/orge3m8p/oidc/logout?` +
+      : `https://api.asgardeo.io/t/razzallworks/oidc/logout?` +
         `post_logout_redirect_uri=${encodeURIComponent(logoutCallbackUrl)}&` +
         `client_id=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID!)}`;
     

@@ -1,18 +1,17 @@
 import server_bal.categories;
+import server_bal.petition_activities;
+import server_bal.petitions;
 import server_bal.policy;
+import server_bal.policy_comments;
 import server_bal.projects;
-import server_bal.transactions;
 import server_bal.proposals;
 import server_bal.reports;
+import server_bal.transactions;
 import server_bal.users;
-import server_bal.petitions;
-import server_bal.petition_activities;
-import server_bal.policy_comments;
+
 import ballerina/http;
 import ballerina/log;
 import ballerina/time;
-
-
 
 # Environment variables configuration
 configurable int port = ?;
@@ -20,19 +19,18 @@ configurable int petitionPort = ?;
 configurable string supabaseUrl = ?;
 configurable string supabaseServiceRoleKey = ?;
 // Base URL for the Web3 service (mounted under /web3)
-configurable string web3BaseUrl =?;
-
+configurable string web3BaseUrl = ?;
 
 # HTTP listener for the API
 listener http:Listener apiListener = new (port);
 
 # web3 service URL (configurable)
 http:Client web3Service = check new (web3BaseUrl, {
-    timeout: 300000,  // 5 minutes timeout
+    timeout: 30, // 30 seconds timeout
     retryConfig: {
-        interval: 3,
-        count: 2,
-        backOffFactor: 2.0
+        interval: 1,
+        count: 1,
+        backOffFactor: 1.0
     }
 });
 http:Client fastapiChat = check new ("http://localhost:8001");
@@ -50,7 +48,6 @@ users:UsersService usersService = new (supabaseClient, port, supabaseUrl, supaba
 petitions:PetitionsService petitionsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 petition_activities:PetitionActivitiesService petitionActivitiesService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
 policy_comments:PolicyCommentsService policyCommentsService = new (supabaseClient, port, supabaseUrl, supabaseServiceRoleKey);
-
 
 # Main API service with CORS configuration
 @http:ServiceConfig {
@@ -208,57 +205,57 @@ service /api on apiListener {
     # + return - Job ID or error
     resource function post blockchain/sync(http:Request request) returns json|error {
         log:printInfo("� Blockchain sync job request received");
-        
+
         json requestPayload = check request.getJsonPayload();
-        
+
         // Extract parameters with proper type checking
         int blocksBack = 1000;
         boolean isFullSync = false;
-        
+
         json|error blocksBackValue = requestPayload.blocksBack;
         if blocksBackValue is int {
             blocksBack = blocksBackValue;
         }
-        
+
         json|error isFullSyncValue = requestPayload.isFullSync;
         if isFullSyncValue is boolean {
             isFullSync = isFullSyncValue;
         }
-        
+
         log:printInfo(string `🔄 Creating blockchain sync job (isFullSync: ${isFullSync}, blocksBack: ${blocksBack})`);
-        
+
         do {
             // Call Node.js job manager to start async job
             json jobPayload = {
                 blocksBack: isFullSync ? 999999 : blocksBack,
                 isFullSync: isFullSync
             };
-            
+
             log:printInfo("Sending request to Web3 service: " + web3BaseUrl + "/jobs/blockchain-sync");
             log:printInfo("Web3 base URL: " + web3BaseUrl);
             log:printInfo("Request payload: " + jobPayload.toString());
-            
+
             // Create HTTP request with explicit headers
             http:Request jobRequest = new;
             jobRequest.setJsonPayload(jobPayload);
             jobRequest.setHeader("Content-Type", "application/json");
-            
+
             http:Response|error jobResponseResult = web3Service->post("/jobs/blockchain-sync", jobRequest);
             if jobResponseResult is error {
                 log:printError("Web3 service connection failed", 'error = jobResponseResult);
                 log:printError("Web3 base URL: " + web3BaseUrl);
                 fail error("Web3 service connection failed: " + jobResponseResult.message());
             }
-            
+
             http:Response jobResponse = jobResponseResult;
-            
+
             log:printInfo("Web3 service response status: " + jobResponse.statusCode.toString());
-            
+
             if jobResponse.statusCode != 200 {
                 json|error responsePayload = jobResponse.getJsonPayload();
                 string errorMessage = "Failed to create blockchain sync job";
                 log:printError("Web3 service returned non-200 status: " + jobResponse.statusCode.toString());
-                
+
                 if responsePayload is json {
                     log:printError("Response payload: " + responsePayload.toString());
                     json|error messageField = responsePayload.message;
@@ -270,27 +267,27 @@ service /api on apiListener {
                 }
                 fail error(errorMessage);
             }
-            
+
             json|error jobDataResult = jobResponse.getJsonPayload();
             if jobDataResult is error {
                 fail error("Failed to parse job response: " + jobDataResult.message());
             }
-            
+
             json jobData = jobDataResult;
-            
+
             // Extract jobId with type checking
             json|error jobIdValue = jobData.jobId;
             string jobIdStr = "";
             if jobIdValue is string {
                 jobIdStr = jobIdValue;
             }
-            
+
             return {
                 success: true,
                 message: "Blockchain sync job started",
                 jobId: jobIdStr,
-            statusUrl: string `/api/blockchain/sync/status/${jobIdStr}`,
-            resultUrl: string `/api/blockchain/sync/result/${jobIdStr}`
+                statusUrl: string `/api/blockchain/sync/status/${jobIdStr}`,
+                resultUrl: string `/api/blockchain/sync/result/${jobIdStr}`
             };
         } on fail error e {
             log:printError("Web3 service unavailable for blockchain sync", e);
@@ -309,26 +306,26 @@ service /api on apiListener {
     # + return - Job status or error
     resource function get blockchain/sync/status/[string jobId]() returns json|error {
         log:printInfo(string `📊 Checking blockchain sync job status: ${jobId}`);
-        
+
         do {
             http:Response|error statusResponseResult = web3Service->get(string `/jobs/${jobId}/status`);
             if statusResponseResult is error {
                 fail error("Web3 service connection failed: " + statusResponseResult.message());
             }
-            
+
             http:Response statusResponse = statusResponseResult;
-            
+
             if statusResponse.statusCode == 404 {
                 return error("Job not found");
             } else if statusResponse.statusCode != 200 {
                 return error("Failed to get job status");
             }
-            
+
             json|error payloadResult = statusResponse.getJsonPayload();
             if payloadResult is error {
                 fail error("Failed to parse status response: " + payloadResult.message());
             }
-            
+
             return payloadResult;
         } on fail error e {
             log:printError("Web3 service unavailable for job status check", e);
@@ -347,15 +344,15 @@ service /api on apiListener {
     # + return - Job result or error
     resource function get blockchain/sync/result/[string jobId]() returns json|error {
         log:printInfo(string `📋 Getting blockchain sync job result: ${jobId}`);
-        
+
         do {
             http:Response|error resultResponseResult = web3Service->get(string `/jobs/${jobId}/result`);
             if resultResponseResult is error {
                 fail error("Web3 service connection failed: " + resultResponseResult.message());
             }
-            
+
             http:Response resultResponse = resultResponseResult;
-            
+
             if resultResponse.statusCode == 404 {
                 return error("Job not found");
             } else if resultResponse.statusCode == 400 {
@@ -367,28 +364,28 @@ service /api on apiListener {
             } else if resultResponse.statusCode != 200 {
                 return error("Failed to get job result");
             }
-            
+
             json|error resultDataResult = resultResponse.getJsonPayload();
             if resultDataResult is error {
                 fail error("Failed to parse result response: " + resultDataResult.message());
             }
-            
+
             json resultData = resultDataResult;
-            
+
             // Extract result fields with type checking
             json resultValue = {};
             json completedAtValue = "";
-            
+
             json|error resultField = resultData.result;
             if resultField is json {
                 resultValue = resultField;
             }
-            
+
             json|error completedAtField = resultData.completedAt;
             if completedAtField is string {
                 completedAtValue = completedAtField;
             }
-            
+
             return {
                 success: true,
                 message: "Blockchain sync job result retrieved",
@@ -414,33 +411,33 @@ service /api on apiListener {
     # + return - Sync results or error
     resource function post blockchain/execute\-sync(http:Request request) returns json|error {
         log:printInfo("🚀 Starting blockchain synchronization execution...");
-        
+
         json requestPayload = check request.getJsonPayload();
-        
+
         // Extract parameters
         int blocksBack = 1000;
         boolean isFullSync = false;
-        
+
         json|error blocksBackValue = requestPayload.blocksBack;
         if blocksBackValue is int {
             blocksBack = blocksBackValue;
         }
-        
+
         json|error isFullSyncValue = requestPayload.isFullSync;
         if isFullSyncValue is boolean {
             isFullSync = isFullSyncValue;
         }
-        
+
         // Calculate block range for sync (simplified approach)
         int currentBlock = 1000000; // You might want to fetch this from the blockchain
         int fromBlock = currentBlock - blocksBack;
         int toBlock = currentBlock;
-        
+
         log:printInfo(string `📊 Syncing blockchain data from block ${fromBlock} to ${toBlock}`);
-        
+
         // Execute all sync functions in sequence
         json[] syncResults = [];
-        
+
         // 1. Sync Proposals
         log:printInfo("🗳️ Syncing proposals...");
         json|error proposalsResult = syncProposalsFromBlockchain(fromBlock, toBlock);
@@ -455,7 +452,7 @@ service /api on apiListener {
                 "error": proposalsResult.message()
             });
         }
-        
+
         // 2. Sync Petitions
         log:printInfo("📝 Syncing petitions...");
         json|error petitionsResult = syncPetitionsFromBlockchain(fromBlock, toBlock);
@@ -470,7 +467,7 @@ service /api on apiListener {
                 "error": petitionsResult.message()
             });
         }
-        
+
         // 3. Sync Reports
         log:printInfo("📊 Syncing reports...");
         json|error reportsResult = syncReportsFromBlockchain(fromBlock, toBlock);
@@ -485,7 +482,7 @@ service /api on apiListener {
                 "error": reportsResult.message()
             });
         }
-        
+
         // 4. Sync Policies
         log:printInfo("📜 Syncing policies...");
         json|error policiesResult = syncPoliciesFromBlockchain(fromBlock, toBlock);
@@ -500,7 +497,7 @@ service /api on apiListener {
                 "error": policiesResult.message()
             });
         }
-        
+
         // 5. Sync Projects
         log:printInfo("🏗️ Syncing projects...");
         json|error projectsResult = syncProjectsFromBlockchain(fromBlock, toBlock);
@@ -515,13 +512,13 @@ service /api on apiListener {
                 "error": projectsResult.message()
             });
         }
-        
+
         // Calculate totals
         int totalNew = 0;
         int totalUpdated = 0;
         int totalRemoved = 0;
         int totalErrors = 0;
-        
+
         foreach json result in syncResults {
             json|error typeField = result.'type;
             json|error resultField = result.result;
@@ -531,28 +528,28 @@ service /api on apiListener {
                 if (resultMap.hasKey("results")) {
                     json resultsValue = resultMap["results"];
                     map<json> results = <map<json>>resultsValue;
-                    
+
                     if (results.hasKey("new")) {
                         json newValue = results["new"];
                         if (newValue is int) {
                             totalNew += newValue;
                         }
                     }
-                    
+
                     if (results.hasKey("updated")) {
                         json updatedValue = results["updated"];
                         if (updatedValue is int) {
                             totalUpdated += updatedValue;
                         }
                     }
-                    
+
                     if (results.hasKey("removed")) {
                         json removedValue = results["removed"];
                         if (removedValue is int) {
                             totalRemoved += removedValue;
                         }
                     }
-                    
+
                     if (results.hasKey("errors")) {
                         json errorsValue = results["errors"];
                         if (errorsValue is json[]) {
@@ -563,9 +560,9 @@ service /api on apiListener {
                 }
             }
         }
-        
+
         log:printInfo(string `✅ Blockchain sync completed! New: ${totalNew}, Updated: ${totalUpdated}, Removed: ${totalRemoved}, Errors: ${totalErrors}`);
-        
+
         return {
             "status": "completed",
             "fromBlock": fromBlock,
@@ -623,27 +620,27 @@ service /api on apiListener {
 
             // Required fields
             if !payload.hasKey("categoryName") {
-                return { "success": false, "message": "Missing required field: categoryName", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Missing required field: categoryName", "timestamp": time:utcNow()[0]};
             }
             if !payload.hasKey("allocatedBudget") {
-                return { "success": false, "message": "Missing required field: allocatedBudget", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Missing required field: allocatedBudget", "timestamp": time:utcNow()[0]};
             }
 
             string|error categoryNameVal = payload["categoryName"].ensureType(string);
             if categoryNameVal is error {
-                return { "success": false, "message": "Invalid field 'categoryName': must be a string", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Invalid field 'categoryName': must be a string", "timestamp": time:utcNow()[0]};
             }
 
             decimal|error allocatedBudgetVal = payload["allocatedBudget"].ensureType(decimal);
             if allocatedBudgetVal is error {
-                return { "success": false, "message": "Invalid field 'allocatedBudget': must be a number", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Invalid field 'allocatedBudget': must be a number", "timestamp": time:utcNow()[0]};
             }
 
             decimal spentBudget = 0d;
             if payload.hasKey("spentBudget") {
                 decimal|error spentVal = payload["spentBudget"].ensureType(decimal);
                 if spentVal is error {
-                    return { "success": false, "message": "Invalid field 'spentBudget': must be a number", "timestamp": time:utcNow()[0] };
+                    return {"success": false, "message": "Invalid field 'spentBudget': must be a number", "timestamp": time:utcNow()[0]};
                 }
                 spentBudget = spentVal;
             }
@@ -653,18 +650,18 @@ service /api on apiListener {
             decimal allocatedBudget = allocatedBudgetVal;
 
             if categoryName.trim().length() == 0 {
-                return { "success": false, "message": "Category name cannot be empty", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Category name cannot be empty", "timestamp": time:utcNow()[0]};
             }
             if allocatedBudget < 0d {
-                return { "success": false, "message": "Allocated budget cannot be negative", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Allocated budget cannot be negative", "timestamp": time:utcNow()[0]};
             }
             if spentBudget < 0d {
-                return { "success": false, "message": "Spent budget cannot be negative", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Spent budget cannot be negative", "timestamp": time:utcNow()[0]};
             }
 
             return categoriesService.createCategory(categoryName, allocatedBudget);
         } else {
-            return { "success": false, "message": "Invalid request payload: expected JSON object", "timestamp": time:utcNow()[0] };
+            return {"success": false, "message": "Invalid request payload: expected JSON object", "timestamp": time:utcNow()[0]};
         }
     }
 
@@ -694,7 +691,7 @@ service /api on apiListener {
     # + return - Success message or error
     resource function post categories/sync() returns json|error {
         log:printInfo("Sync category spent budgets endpoint called");
-        
+
         // Get all categories
         json|error categoriesResult = categoriesService.getAllCategories();
         if categoriesResult is error {
@@ -704,14 +701,14 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         json categoriesResponse = categoriesResult;
         if categoriesResponse is map<json> {
             json|error categoriesData = categoriesResponse["data"];
             if categoriesData is json[] {
                 int successCount = 0;
                 int errorCount = 0;
-                
+
                 foreach json category in categoriesData {
                     if category is map<json> {
                         json|error categoryIdJson = category["category_id"];
@@ -729,7 +726,7 @@ service /api on apiListener {
                         }
                     }
                 }
-                
+
                 return {
                     "success": true,
                     "message": "Category spent budget sync completed",
@@ -739,7 +736,7 @@ service /api on apiListener {
                 };
             }
         }
-        
+
         return {
             "success": false,
             "message": "Failed to parse categories data",
@@ -752,7 +749,7 @@ service /api on apiListener {
     # + return - Debug information about categories and projects
     resource function get categories/debug() returns json|error {
         log:printInfo("Debug categories endpoint called");
-        
+
         // Get all categories
         json|error categoriesResult = categoriesService.getAllCategories();
         if categoriesResult is error {
@@ -762,7 +759,7 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         // Get all projects
         json|error projectsResult = projectsService.getAllProjects();
         if projectsResult is error {
@@ -772,13 +769,13 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         json debugInfo = {
             "categories": categoriesResult,
             "projects": projectsResult,
             "timestamp": time:utcNow()[0]
         };
-        
+
         return {
             "success": true,
             "message": "Debug information retrieved",
@@ -910,7 +907,7 @@ service /api on apiListener {
             return result;
         } else {
             log:printError("Failed to get projects: " + result.toString());
-            return { message: "Failed to get projects", status: 500 };
+            return {message: "Failed to get projects", status: 500};
         }
     }
 
@@ -1288,27 +1285,27 @@ service /api on apiListener {
     # + return - Vote response
     resource function post proposals/vote(http:Caller caller, http:Request req) returns error? {
         log:printInfo("Direct database vote endpoint called");
-        
+
         do {
             json payload = check req.getJsonPayload();
-            
+
             int|error proposalId = payload.proposalId.ensureType(int);
             if proposalId is error {
                 check caller->respond({"error": "Invalid or missing proposalId"});
                 return;
             }
-            
+
             string|error voteType = payload.voteType.ensureType(string);
             if voteType is error {
                 check caller->respond({"error": "Invalid or missing voteType"});
                 return;
             }
-            
+
             if voteType != "yes" && voteType != "no" {
                 check caller->respond({"error": "voteType must be 'yes' or 'no'"});
                 return;
             }
-            
+
             // Extract wallet address if provided
             string? walletAddress = ();
             map<json> payloadMap = check payload.ensureType();
@@ -1319,7 +1316,7 @@ service /api on apiListener {
                     log:printInfo("👤 Wallet address provided: " + walletAddr);
                 }
             }
-            
+
             // Extract user ID if provided
             int? userId = ();
             if payloadMap.hasKey("userId") {
@@ -1328,10 +1325,10 @@ service /api on apiListener {
                     userId = userIdVal;
                 }
             }
-            
+
             json result = check proposalsService.voteOnProposal(proposalId, voteType, walletAddress, userId);
             check caller->respond(result);
-            
+
         } on fail error e {
             log:printError("Error in direct database vote: " + e.message());
             check caller->respond({"error": "Failed to process vote: " + e.message()});
@@ -1346,9 +1343,9 @@ service /api on apiListener {
     resource function get proposals/[int proposalId]/vote/[string walletAddress](http:Caller caller, http:Request req) returns error? {
         do {
             log:printInfo("🔍 Getting user vote for proposal " + proposalId.toString() + " and wallet " + walletAddress);
-            
+
             json result = check proposalsService.getUserVote(proposalId, walletAddress);
-            
+
             check caller->respond(result);
         } on fail error e {
             log:printError("❌ Get user vote error: " + e.message());
@@ -1562,30 +1559,30 @@ service /api on apiListener {
         }
         payload = maybePayload;
 
-    // Extract required fields (return explicit error when missing)
-    string? reportTitleOpt = payload.report_title is string ? check payload.report_title : ();
-    if reportTitleOpt is () {
-        log:printError("Create report: missing report_title in payload: " + payload.toString());
-        return error("Missing required field: report_title");
-    }
-    string reportTitle = reportTitleOpt;
-    // evidence_hash removed from payload/schema
+        // Extract required fields (return explicit error when missing)
+        string? reportTitleOpt = payload.report_title is string ? check payload.report_title : ();
+        if reportTitleOpt is () {
+            log:printError("Create report: missing report_title in payload: " + payload.toString());
+            return error("Missing required field: report_title");
+        }
+        string reportTitle = reportTitleOpt;
+        // evidence_hash removed from payload/schema
 
-    // Extract optional fields
-    string? description = payload.description is string ? check payload.description : ();
-    string priority = payload.priority is string ? check payload.priority : "MEDIUM";
-    string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
-    int? userId = payload.user_id is int ? check payload.user_id : ();
+        // Extract optional fields
+        string? description = payload.description is string ? check payload.description : ();
+        string priority = payload.priority is string ? check payload.priority : "MEDIUM";
+        string? assignedTo = payload.assigned_to is string ? check payload.assigned_to : ();
+        int? userId = payload.user_id is int ? check payload.user_id : ();
 
-    // Optional blockchain metadata (allow client to send these after tx)
-    string? blockchainTxHash = payload.tx_hash is string ? check payload.tx_hash : ();
-    int? blockchainBlockNumber = payload.block_number is int ? check payload.block_number : ();
-    string? blockchainReportId = payload.blockchain_report_id is string ? check payload.blockchain_report_id : ();
-    string? titleCid = payload.title_cid is string ? check payload.title_cid : ();
-    string? descriptionCid = payload.description_cid is string ? check payload.description_cid : ();
+        // Optional blockchain metadata (allow client to send these after tx)
+        string? blockchainTxHash = payload.tx_hash is string ? check payload.tx_hash : ();
+        int? blockchainBlockNumber = payload.block_number is int ? check payload.block_number : ();
+        string? blockchainReportId = payload.blockchain_report_id is string ? check payload.blockchain_report_id : ();
+        string? titleCid = payload.title_cid is string ? check payload.title_cid : ();
+        string? descriptionCid = payload.description_cid is string ? check payload.description_cid : ();
 
-    // Call ReportsService.createReport without evidenceHash/evidenceHashCid
-    return reportsService.createReport(reportTitle, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid);
+        // Call ReportsService.createReport without evidenceHash/evidenceHashCid
+        return reportsService.createReport(reportTitle, description, priority, assignedTo, userId, (), blockchainTxHash, blockchainBlockNumber, blockchainReportId, titleCid, descriptionCid);
     }
 
     # Update report by ID
@@ -1692,7 +1689,7 @@ service /api on apiListener {
     # + return - Updated report data or error
     resource function post reports/[int reportId]/like(http:Request request) returns json|error {
         log:printInfo("Like report endpoint called for ID: " + reportId.toString());
-        
+
         json|error maybePayload = request.getJsonPayload();
         if maybePayload is error {
             return {
@@ -1702,10 +1699,10 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         if maybePayload is map<json> {
             map<json> payload = maybePayload;
-            
+
             if !payload.hasKey("wallet_address") {
                 return {
                     "success": false,
@@ -1713,7 +1710,7 @@ service /api on apiListener {
                     "timestamp": time:utcNow()[0]
                 };
             }
-            
+
             string|error walletAddress = payload["wallet_address"].ensureType(string);
             if walletAddress is error {
                 return {
@@ -1722,10 +1719,10 @@ service /api on apiListener {
                     "timestamp": time:utcNow()[0]
                 };
             }
-            
+
             return reportsService.likeReport(reportId, walletAddress);
         }
-        
+
         return {
             "success": false,
             "message": "Invalid request payload",
@@ -1740,7 +1737,7 @@ service /api on apiListener {
     # + return - Updated report data or error
     resource function post reports/[int reportId]/dislike(http:Request request) returns json|error {
         log:printInfo("Dislike report endpoint called for ID: " + reportId.toString());
-        
+
         json|error maybePayload = request.getJsonPayload();
         if maybePayload is error {
             return {
@@ -1750,10 +1747,10 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         if maybePayload is map<json> {
             map<json> payload = maybePayload;
-            
+
             if !payload.hasKey("wallet_address") {
                 return {
                     "success": false,
@@ -1761,7 +1758,7 @@ service /api on apiListener {
                     "timestamp": time:utcNow()[0]
                 };
             }
-            
+
             string|error walletAddress = payload["wallet_address"].ensureType(string);
             if walletAddress is error {
                 return {
@@ -1770,10 +1767,10 @@ service /api on apiListener {
                     "timestamp": time:utcNow()[0]
                 };
             }
-            
+
             return reportsService.dislikeReport(reportId, walletAddress);
         }
-        
+
         return {
             "success": false,
             "message": "Invalid request payload",
@@ -1788,9 +1785,9 @@ service /api on apiListener {
     # + return - User's vote or null if no vote
     resource function get reports/[int reportId]/vote/[string walletAddress]() returns json|error {
         log:printInfo("Check user vote endpoint called for report ID: " + reportId.toString() + ", wallet: " + walletAddress);
-        
+
         string? vote = check reportsService.checkUserVote(reportId, walletAddress);
-        
+
         return {
             "success": true,
             "data": {
@@ -1809,9 +1806,9 @@ service /api on apiListener {
     # + return - Updated report data or error
     resource function post reports/[int reportId]/assign(http:Request request) returns json|error {
         log:printInfo("Assign report endpoint called for report ID: " + reportId.toString());
-        
+
         json payload = check request.getJsonPayload();
-        
+
         // Extract assigned_to from payload
         json|error assignedToValue = payload.assigned_to;
         if assignedToValue is error {
@@ -1821,7 +1818,7 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         string|error assignedToStr = assignedToValue.ensureType(string);
         if assignedToStr is error {
             return {
@@ -1830,12 +1827,12 @@ service /api on apiListener {
                 "timestamp": time:utcNow()[0]
             };
         }
-        
+
         // Create update payload
         json updatePayload = {
             "assigned_to": assignedToStr.trim()
         };
-        
+
         return reportsService.updateReport(reportId, updatePayload);
     }
 
@@ -1845,12 +1842,12 @@ service /api on apiListener {
     # + return - Updated report data or error
     resource function post reports/[int reportId]/unassign() returns json|error {
         log:printInfo("Unassign report endpoint called for report ID: " + reportId.toString());
-        
+
         // Create update payload to clear assignment
         json updatePayload = {
             "assigned_to": ()
         };
-        
+
         return reportsService.updateReport(reportId, updatePayload);
     }
 
@@ -1922,19 +1919,19 @@ service /api on apiListener {
             // Validate and extract fields
             string|error titleVal = payload["title"].ensureType(string);
             if titleVal is error {
-                return { "success": false, "message": "Invalid 'title' field: must be a string", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Invalid 'title' field: must be a string", "timestamp": time:utcNow()[0]};
             }
             string title = titleVal;
 
             string|error descVal = payload["description"].ensureType(string);
             if descVal is error {
-                return { "success": false, "message": "Invalid 'description' field: must be a string", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Invalid 'description' field: must be a string", "timestamp": time:utcNow()[0]};
             }
             string description = descVal;
 
             int|error reqSigVal = payload["required_signature_count"].ensureType(int);
             if reqSigVal is error {
-                return { "success": false, "message": "Invalid 'required_signature_count': must be an integer", "timestamp": time:utcNow()[0] };
+                return {"success": false, "message": "Invalid 'required_signature_count': must be an integer", "timestamp": time:utcNow()[0]};
             }
             int requiredSignatureCount = reqSigVal;
 
@@ -2033,7 +2030,7 @@ service /api on apiListener {
     # + return - Updated petition data or error
     resource function post petitions/[int petitionId]/sign(http:Request request) returns json|error {
         log:printInfo("Sign petition endpoint called for ID: " + petitionId.toString());
-        
+
         // Try to get user information from request body
         int? userId = ();
         json|error payload = request.getJsonPayload();
@@ -2043,7 +2040,7 @@ service /api on apiListener {
                 userId = userIdValue;
             }
         }
-        
+
         return petitionsService.signPetition(petitionId, userId);
     }
 
@@ -2309,7 +2306,7 @@ service /api on apiListener {
     # + return - Authorization response
     resource function post auth/authorize(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
-    json response = check web3Service->post("auth/authorize", payload);
+        json response = check web3Service->post("auth/authorize", payload);
         return response;
     }
 
@@ -2319,7 +2316,7 @@ service /api on apiListener {
     # + return - Revocation response
     resource function post auth/revoke(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
-    json response = check web3Service->post("auth/revoke", payload);
+        json response = check web3Service->post("auth/revoke", payload);
         return response;
     }
 
@@ -2328,22 +2325,29 @@ service /api on apiListener {
     # + address - Wallet address to check authorization for
     # + return - Authorization status response
     resource function get auth/isauthorized/[string address]() returns json|error {
+        log:printInfo("🔍 Auth check requested for address: " + address);
         do {
+            log:printInfo("📞 Calling web3Service at: auth/is-authorized/" + address);
             json response = check web3Service->get("auth/is-authorized/" + address);
+            log:printInfo("📥 Web3 service response: " + response.toString());
+
             map<anydata> respMap = check response.cloneWithType();
             boolean isVerified = respMap["isAuthorized"] is boolean ? <boolean>respMap["isAuthorized"] : false;
+            log:printInfo("✅ Parsed isAuthorized: " + isVerified.toString());
 
             if isVerified {
                 // For now, return a simple token structure
                 // In production, you would use proper JWT encoding
                 string simpleToken = "jwt_" + address + "_" + time:utcNow()[0].toString();
-                
+
+                log:printInfo("🎫 Generated token for authorized user: " + address);
                 return {
                     address: address,
                     verified: true,
                     token: simpleToken
                 };
             } else {
+                log:printInfo("❌ User not authorized: " + address);
                 return {
                     address: address,
                     verified: false,
@@ -2352,7 +2356,8 @@ service /api on apiListener {
             }
         } on fail error e {
             // If web3Service is not available, return default response
-            log:printWarn("Web3 service not available for auth check: " + e.message());
+            log:printError("🚨 Web3 service error for auth check: " + e.message());
+            log:printError("📍 Full error details: " + e.toString());
             return {
                 address: address,
                 verified: false,
@@ -2368,26 +2373,26 @@ service /api on apiListener {
     resource function post auth/'validate\-user(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
         map<anydata> payloadMap = check payload.cloneWithType();
-        
+
         string walletAddress = payloadMap["walletAddress"] is string ? <string>payloadMap["walletAddress"] : "";
         string? asgardeoUserId = payloadMap["asgardeoUserId"] is string ? <string>payloadMap["asgardeoUserId"] : ();
         json? asgardeoUser = payloadMap["asgardeoUser"] is json ? <json>payloadMap["asgardeoUser"] : ();
-        
+
         log:printInfo("Validating user registration for wallet: " + walletAddress);
-        
+
         if walletAddress == "" {
             return {
                 "isRegistered": false,
                 "error": "Wallet address is required"
             };
         }
-        
+
         do {
             // First check if wallet is authorized
             json walletAuthResponse = check web3Service->get("auth/is-authorized/" + walletAddress);
             map<anydata> authMap = check walletAuthResponse.cloneWithType();
             boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
-            
+
             if !isWalletAuthorized {
                 return {
                     "isRegistered": false,
@@ -2395,30 +2400,30 @@ service /api on apiListener {
                     "error": "Wallet is not authorized"
                 };
             }
-            
+
             // Check if user is registered in the database
             // This is where you would check your user database to see if the wallet address
             // is linked to a registered user account
-            
+
             // For now, we'll implement a simple check
             // In production, you would query your users table
             boolean isRegisteredUser = true; // Placeholder - implement your user validation logic here
-            
+
             // If Asgardeo user exists, we can consider them registered
             if asgardeoUser is json && asgardeoUserId is string {
                 isRegisteredUser = true;
-                
+
                 // Here you could also store the Asgardeo user ID with the wallet address
                 // in your database for future reference
                 log:printInfo("User validated with Asgardeo ID: " + asgardeoUserId);
             }
-            
+
             // Generate a token for the validated user
             string? token = ();
             if isRegisteredUser && isWalletAuthorized {
                 token = "validated_jwt_" + walletAddress + "_" + time:utcNow()[0].toString();
             }
-            
+
             return {
                 "isRegistered": isRegisteredUser,
                 "walletVerified": isWalletAuthorized,
@@ -2430,7 +2435,7 @@ service /api on apiListener {
                     "registrationTimestamp": time:utcNow()[0]
                 }
             };
-            
+
         } on fail error e {
             log:printError("User validation failed: " + e.message());
             return {
@@ -2448,45 +2453,45 @@ service /api on apiListener {
     resource function post auth/'register\-user(http:Request request) returns json|error {
         json payload = check request.getJsonPayload();
         map<anydata> payloadMap = check payload.cloneWithType();
-        
+
         string walletAddress = payloadMap["walletAddress"] is string ? <string>payloadMap["walletAddress"] : "";
         string? asgardeoUserId = payloadMap["asgardeoUserId"] is string ? <string>payloadMap["asgardeoUserId"] : ();
         json? additionalData = payloadMap["additionalData"] is json ? <json>payloadMap["additionalData"] : ();
-        
+
         log:printInfo("Registering new user - Wallet: " + walletAddress + ", Asgardeo ID: " + (asgardeoUserId ?: "none"));
-        
+
         if walletAddress == "" || asgardeoUserId is () {
             return {
                 "success": false,
                 "error": "Wallet address and Asgardeo user ID are required"
             };
         }
-        
+
         do {
             // Verify wallet is authorized first
             json walletAuthResponse = check web3Service->get("auth/is-authorized/" + walletAddress);
             map<anydata> authMap = check walletAuthResponse.cloneWithType();
             boolean isWalletAuthorized = authMap["isAuthorized"] is boolean ? <boolean>authMap["isAuthorized"] : false;
-            
+
             if !isWalletAuthorized {
                 return {
                     "success": false,
                     "error": "Wallet must be authorized before registration"
                 };
             }
-            
+
             // Here you would typically:
             // 1. Insert user record into your database linking wallet address with Asgardeo user ID
             // 2. Set up user permissions and roles
             // 3. Create any necessary user profile data
-            
+
             // For now, we'll simulate successful registration
             // In production, implement proper database operations
-            
+
             string registrationToken = "registered_jwt_" + walletAddress + "_" + time:utcNow()[0].toString();
-            
+
             log:printInfo("✅ User registered successfully: " + walletAddress + " -> " + asgardeoUserId);
-            
+
             return {
                 "success": true,
                 "message": "User registered successfully",
@@ -2498,7 +2503,7 @@ service /api on apiListener {
                     "additionalData": additionalData
                 }
             };
-            
+
         } on fail error e {
             log:printError("User registration failed: " + e.message());
             return {
@@ -2509,7 +2514,7 @@ service /api on apiListener {
     }
 
     # Smart contract voting endpoints
-    
+
     # Handle preflight requests for smart contract voting
     #
     # + caller - HTTP caller
@@ -2537,7 +2542,7 @@ service /api on apiListener {
         response.statusCode = 200;
         check caller->respond(response);
     }
-    
+
     # Vote YES on a proposal via smart contract
     #
     # + caller - HTTP caller
@@ -2545,16 +2550,16 @@ service /api on apiListener {
     # + return - Smart contract vote response
     resource function post proposal/'vote\-yes(http:Caller caller, http:Request req) returns error? {
         log:printInfo("Smart contract vote YES endpoint called");
-        
+
         // Set CORS headers explicitly
         http:Response response = new;
         response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
         response.setHeader("Access-Control-Allow-Credentials", "true");
-        
+
         do {
             json payload = check req.getJsonPayload();
             log:printInfo("Vote YES payload: " + payload.toJsonString());
-            
+
             // Extract proposal ID and signer index from payload
             int|error proposalId = payload.proposalId.ensureType(int);
             if proposalId is error {
@@ -2563,7 +2568,7 @@ service /api on apiListener {
                 check caller->respond(response);
                 return;
             }
-            
+
             int|error signerIndex = payload.signerIndex.ensureType(int);
             if signerIndex is error {
                 response.setJsonPayload({"error": "Invalid or missing signerIndex"});
@@ -2582,16 +2587,16 @@ service /api on apiListener {
                     log:printInfo("👤 Wallet address: " + walletAddr);
                 }
             }
-            
+
             // Forward to smart contract service
             json web3Payload = {
                 "proposalId": proposalId,
                 "signerIndex": signerIndex
             };
-            
+
             json web3Response = check web3Service->post("proposal/vote-yes", web3Payload);
             log:printInfo("Smart contract YES vote response: " + web3Response.toJsonString());
-            
+
             // Also update the database vote count with wallet address
             json|error updateResult = proposalsService.voteOnProposal(proposalId, "yes", walletAddress);
             if updateResult is error {
@@ -2600,11 +2605,11 @@ service /api on apiListener {
             } else {
                 log:printInfo("Database vote count updated successfully");
             }
-            
+
             response.setJsonPayload(web3Response);
             response.statusCode = 200;
             check caller->respond(response);
-            
+
         } on fail error e {
             log:printError("Error in smart contract vote YES: " + e.message());
             response.setJsonPayload({"error": "Failed to process vote: " + e.message()});
@@ -2612,7 +2617,7 @@ service /api on apiListener {
             check caller->respond(response);
         }
     }
-    
+
     # Vote NO on a proposal via smart contract
     #
     # + caller - HTTP caller
@@ -2620,16 +2625,16 @@ service /api on apiListener {
     # + return - Smart contract vote response
     resource function post proposal/'vote\-no(http:Caller caller, http:Request req) returns error? {
         log:printInfo("Smart contract vote NO endpoint called");
-        
+
         // Set CORS headers explicitly
         http:Response response = new;
         response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
         response.setHeader("Access-Control-Allow-Credentials", "true");
-        
+
         do {
             json payload = check req.getJsonPayload();
             log:printInfo("Vote NO payload: " + payload.toJsonString());
-            
+
             // Extract proposal ID and signer index from payload
             int|error proposalId = payload.proposalId.ensureType(int);
             if proposalId is error {
@@ -2638,7 +2643,7 @@ service /api on apiListener {
                 check caller->respond(response);
                 return;
             }
-            
+
             int|error signerIndex = payload.signerIndex.ensureType(int);
             if signerIndex is error {
                 response.setJsonPayload({"error": "Invalid or missing signerIndex"});
@@ -2657,16 +2662,16 @@ service /api on apiListener {
                     log:printInfo("👤 Wallet address: " + walletAddr);
                 }
             }
-            
+
             // Forward to smart contract service
             json web3Payload = {
                 "proposalId": proposalId,
                 "signerIndex": signerIndex
             };
-            
+
             json web3Response = check web3Service->post("proposal/vote-no", web3Payload);
             log:printInfo("Smart contract NO vote response: " + web3Response.toJsonString());
-            
+
             // Also update the database vote count with wallet address
             json|error updateResult = proposalsService.voteOnProposal(proposalId, "no", walletAddress);
             if updateResult is error {
@@ -2675,10 +2680,10 @@ service /api on apiListener {
             } else {
                 log:printInfo("Database vote count updated successfully");
             }
-            
+
             response.setJsonPayload(web3Response);
             check caller->respond(response);
-            
+
         } on fail error e {
             log:printError("Error in smart contract vote NO: " + e.message());
             response.setJsonPayload({"error": "Failed to process vote: " + e.message()});
@@ -2694,29 +2699,27 @@ service /petitions on newListener {
 
     resource function post create(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
-    json response = check web3Service->post("create-petition", payload);
+        json response = check web3Service->post("create-petition", payload);
         check caller->respond(response);
     }
 
     resource function post sign(http:Caller caller, http:Request req) returns error? {
         json payload = check req.getJsonPayload();
-    json response = check web3Service->post("sign-petition", payload);
+        json response = check web3Service->post("sign-petition", payload);
         check caller->respond(response);
     }
 
     // Fix: Use path parameter syntax
     resource function get [string id](http:Caller caller, http:Request req) returns error? {
-    json response = check web3Service->get("petition/" + id);
+        json response = check web3Service->get("petition/" + id);
         check caller->respond(response);
     }
 
     // Fix: Use path parameter syntax for multiple parameters
     resource function get [string id]/[string address](http:Caller caller, http:Request req) returns error? {
-    json response = check web3Service->get("has-signed/" + id + "/" + address);
+        json response = check web3Service->get("has-signed/" + id + "/" + address);
         check caller->respond(response);
     }
-
-
 
     resource function get health() returns string {
         return "Ballerina service is running!";
@@ -2734,8 +2737,6 @@ function getHeaders() returns map<string> {
         "Content-Type": "application/json"
     };
 }
-
-
 
 service / on new http:Listener(9090) {
 
@@ -2765,7 +2766,6 @@ service / on new http:Listener(9090) {
         check caller->respond(response);
     }
 }
-
 
 # Check database health via HTTP
 #
@@ -2857,7 +2857,7 @@ function fetchAllBlockchainData(int blocksBack) returns json|error {
 # + return - Sync results or error
 function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|error {
     log:printInfo("🗳️ Syncing proposals from blockchain...");
-    
+
     // Fetch aggregated data and extract proposals
     json|error _aggProposalsResp = fetchAllBlockchainData((toBlock - fromBlock) > 0 ? toBlock - fromBlock : 1);
     json[] proposals = [];
@@ -2883,7 +2883,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
     if dbResponse is json {
         dbProposals = <json[]>check dbResponse.data;
     }
-    
+
     log:printInfo(string `📊 Found ${proposals.length()} proposals in blockchain and ${dbProposals.length()} in database`);
 
     // Phase 1: Check each DB record against blockchain data
@@ -2891,32 +2891,32 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
     foreach int i in 0 ..< dbProposals.length() {
         json dbProposal = dbProposals[i];
         int dbId = <int>check dbProposal.id;
-        
+
         log:printInfo(string `🔍 Checking DB proposal ${i + 1}/${dbProposals.length()}: ID ${dbId}`);
-        
+
         // Look for this record in blockchain data
         boolean foundInBlockchain = false;
         int blockchainIdValue = 0;
-        
+
         if (dbProposal.blockchain_proposal_id is json) {
             blockchainIdValue = <int>check dbProposal.blockchain_proposal_id;
-            
+
             foreach json blockchainProposal in proposals {
                 if (blockchainProposal.blockchain_proposal_id is json) {
                     int bcId = <int>check blockchainProposal.blockchain_proposal_id;
                     if (bcId == blockchainIdValue) {
                         foundInBlockchain = true;
-                        
+
                         // Compare data and update if different
                         boolean needsUpdate = false;
                         string dbTitle = <string>check dbProposal.title;
                         string bcTitle = <string>check blockchainProposal.title;
-                        
+
                         if (dbTitle != bcTitle) {
                             needsUpdate = true;
                             log:printInfo(string `📝 Title differs: DB="${dbTitle}" vs BC="${bcTitle}"`);
                         }
-                        
+
                         if (dbProposal.short_description is json && blockchainProposal.description is json) {
                             string dbDesc = <string>check dbProposal.short_description;
                             string bcDesc = <string>check blockchainProposal.description;
@@ -2925,7 +2925,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                                 log:printInfo(string `📝 Description differs for proposal ${blockchainIdValue}`);
                             }
                         }
-                        
+
                         if (dbProposal.yes_votes is json && blockchainProposal.yes_votes is json) {
                             int dbYes = <int>check dbProposal.yes_votes;
                             int bcYes = <int>check blockchainProposal.yes_votes;
@@ -2934,7 +2934,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                                 log:printInfo(string `🗳️ Yes votes differ: DB=${dbYes} vs BC=${bcYes} for proposal ${blockchainIdValue}`);
                             }
                         }
-                        
+
                         if (dbProposal.no_votes is json && blockchainProposal.no_votes is json) {
                             int dbNo = <int>check dbProposal.no_votes;
                             int bcNo = <int>check blockchainProposal.no_votes;
@@ -2943,7 +2943,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                                 log:printInfo(string `🗳️ No votes differ: DB=${dbNo} vs BC=${bcNo} for proposal ${blockchainIdValue}`);
                             }
                         }
-                        
+
                         if (needsUpdate) {
                             // Create update payload
                             map<json> updatePayload = {
@@ -2951,19 +2951,19 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                                 "short_description": check blockchainProposal.description,
                                 "blockchain_proposal_id": check blockchainProposal.blockchain_proposal_id
                             };
-                            
+
                             if (blockchainProposal.detailed_description is json) {
                                 updatePayload["description_in_details"] = check blockchainProposal.detailed_description;
                             }
-                            
+
                             if (blockchainProposal.yes_votes is json) {
                                 updatePayload["yes_votes"] = check blockchainProposal.yes_votes;
                             }
-                            
+
                             if (blockchainProposal.no_votes is json) {
                                 updatePayload["no_votes"] = check blockchainProposal.no_votes;
                             }
-                            
+
                             json|error updateResult = proposalsService.updateProposal(dbId, updatePayload);
                             if updateResult is json {
                                 updatedCount += 1;
@@ -2980,7 +2980,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                 }
             }
         }
-        
+
         if (!foundInBlockchain) {
             // This DB record doesn't exist in blockchain - delete it
             json|error deleteResult = proposalsService.deleteProposal(dbId);
@@ -2998,7 +2998,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
     log:printInfo("🔍 Phase 2: Checking for new blockchain records...");
     foreach json blockchainProposal in proposals {
         int blockchainId = <int>check blockchainProposal.blockchain_proposal_id;
-        
+
         // Look for this blockchain record in database
         boolean foundInDb = false;
         foreach json dbProposal in dbProposals {
@@ -3010,7 +3010,7 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
                 }
             }
         }
-        
+
         if (!foundInDb) {
             // New proposal from blockchain - create in DB
             string title = <string>check blockchainProposal.title;
@@ -3019,27 +3019,27 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
             if (blockchainProposal.detailed_description is json) {
                 detailedDesc = <string>check blockchainProposal.detailed_description;
             }
-            
+
             string deadline = "";
             if (blockchainProposal.deadline is json) {
                 deadline = <string>check blockchainProposal.deadline;
             }
-            
+
             int? creatorId = ();
             if (blockchainProposal.creator_id is json) {
                 creatorId = <int>check blockchainProposal.creator_id;
             }
-            
+
             int yesVotes = 0;
             if (blockchainProposal.yes_votes is json) {
                 yesVotes = <int>check blockchainProposal.yes_votes;
             }
-            
+
             int noVotes = 0;
             if (blockchainProposal.no_votes is json) {
                 noVotes = <int>check blockchainProposal.no_votes;
             }
-            
+
             json|error createResult = proposalsService.createProposal(title, description, detailedDesc, deadline, (), creatorId, true, yesVotes, noVotes);
             if createResult is json {
                 newCount += 1;
@@ -3073,9 +3073,9 @@ function syncProposalsFromBlockchain(int fromBlock, int toBlock) returns json|er
 # + return - Sync results or error
 function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|error {
     log:printInfo("📝 Syncing petitions from blockchain...");
-    
+
     // request payload removed - using aggregated endpoint
-    
+
     // Update: at the start of syncPetitionsFromBlockchain, replace the per-contract HTTP call with aggregated fetch
     // (the tool will insert this code where the function is defined)
 
@@ -3111,8 +3111,8 @@ function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|er
 
     // Sync each blockchain petition
     foreach json petition in petitions {
-    json|error _blockchainIdVal = petition.blockchain_petition_id;
-    int blockchainId = check _blockchainIdVal.ensureType(int);
+        json|error _blockchainIdVal = petition.blockchain_petition_id;
+        int blockchainId = check _blockchainIdVal.ensureType(int);
 
         json? existingPetition = ();
         foreach json dbPet in dbPetitions {
@@ -3151,29 +3151,29 @@ function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|er
         } else {
             // Compare and update if needed
             boolean needsUpdate = false;
-            
+
             // Check if title changed
             if ((<string>check existingPetition.title) != (<string>check petition.title)) {
                 needsUpdate = true;
             }
-            
+
             // Check if description changed
             if ((<string>check existingPetition.description) != (<string>check petition.description)) {
                 needsUpdate = true;
             }
-            
+
             // Check if required signature count changed
             if ((<int>check existingPetition.required_signature_count) != (<int>check petition.required_signature_count)) {
                 needsUpdate = true;
             }
-            
+
             // Check if current signature count changed
             if (petition.signature_count is json && existingPetition.signature_count is json) {
                 if ((<int>check existingPetition.signature_count) != (<int>check petition.signature_count)) {
                     needsUpdate = true;
                 }
             }
-            
+
             // Check if status changed
             if (petition.is_active is json && existingPetition.is_active is json) {
                 if ((<boolean>check existingPetition.is_active) != (<boolean>check petition.is_active)) {
@@ -3189,15 +3189,15 @@ function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|er
                     "required_signature_count": check petition.required_signature_count,
                     "blockchain_petition_id": check petition.blockchain_petition_id
                 };
-                
+
                 if (petition.signature_count is json) {
                     updatePayload["signature_count"] = check petition.signature_count;
                 }
-                
+
                 if (petition.is_active is json) {
                     updatePayload["is_active"] = check petition.is_active;
                 }
-                
+
                 json|error updateResult = petitionsService.updatePetition(<int>check existingPetition.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
@@ -3254,9 +3254,9 @@ function syncPetitionsFromBlockchain(int fromBlock, int toBlock) returns json|er
 # + return - Sync results or error
 function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|error {
     log:printInfo("📊 Syncing reports from blockchain...");
-    
+
     // request payload removed - using aggregated endpoint
-    
+
     // Update: at the start of syncReportsFromBlockchain, replace the per-contract HTTP call with aggregated fetch
     // (the tool will insert this code where the function is defined)
 
@@ -3333,24 +3333,24 @@ function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|erro
         } else {
             // Compare and update if needed
             boolean needsUpdate = false;
-            
+
             // Check if title changed
             if (<string>check existingReport.report_title) != (<string>check report.title) {
                 needsUpdate = true;
             }
-            
+
             // Check if description changed
             if (<string>check existingReport.description) != (<string>check report.description) {
                 needsUpdate = true;
             }
-            
+
             // Check if priority changed
             if (report.priority is json && existingReport.priority is json) {
                 if (<string>check existingReport.priority) != (<string>check report.priority) {
                     needsUpdate = true;
                 }
             }
-            
+
             if needsUpdate {
                 // Create update payload with proper field mapping
                 map<json> updatePayload = {
@@ -3358,11 +3358,11 @@ function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|erro
                     "description": check report.description,
                     "blockchain_report_id": check report.blockchain_report_id
                 };
-                
+
                 if (report.priority is json) {
                     updatePayload["priority"] = check report.priority;
                 }
-                
+
                 json|error updateResult = reportsService.updateReport(<int>check existingReport.report_id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
@@ -3418,9 +3418,9 @@ function syncReportsFromBlockchain(int fromBlock, int toBlock) returns json|erro
 # + return - Sync results or error
 function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|error {
     log:printInfo("📜 Syncing policies from blockchain...");
-    
+
     // request payload removed - using aggregated endpoint
-    
+
     // Update: at the start of syncPoliciesFromBlockchain, replace the per-contract HTTP call with aggregated fetch
     // (the tool will insert this code where the function is defined)
 
@@ -3471,22 +3471,22 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
             string title = check _pTitle.ensureType(string);
             json|error _pContent = policy.content;
             string content = check _pContent.ensureType(string);
-            
+
             string description = content;
             if (policy.description is json) {
                 description = check policy.description.ensureType(string);
             }
-            
+
             string ministry = "UNKNOWN";
             if (policy.ministry is json) {
                 ministry = check policy.ministry.ensureType(string);
             }
-            
+
             string status = "DRAFT";
             if (policy.status is json) {
                 status = check policy.status.ensureType(string);
             }
-            
+
             if (policy.category_id is json) {
                 var _ = check policy.category_id.ensureType(int);
             }
@@ -3504,29 +3504,29 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
         } else {
             // Compare and update if needed
             boolean needsUpdate = false;
-            
+
             // Check if title changed
             if (<string>check existingPolicy.name) != (<string>check policy.title) {
                 needsUpdate = true;
             }
-            
+
             // Check if content changed
             if (<string>check existingPolicy.description) != (<string>check policy.content) {
                 needsUpdate = true;
             }
-            
+
             // Check if view_full_policy changed
             if (<string>check existingPolicy.view_full_policy) != (<string>check policy.content) {
                 needsUpdate = true;
             }
-            
+
             // Check if status changed
             if (policy.status is json && existingPolicy.status is json) {
                 if (<string>check existingPolicy.status) != (<string>check policy.status) {
                     needsUpdate = true;
                 }
             }
-            
+
             if needsUpdate {
                 // Create update payload with proper field mapping
                 map<json> updatePayload = {
@@ -3535,15 +3535,15 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
                     "view_full_policy": check policy.content,
                     "blockchain_policy_id": check policy.blockchain_policy_id
                 };
-                
+
                 if (policy.status is json) {
                     updatePayload["status"] = check policy.status;
                 }
-                
+
                 if (policy.ministry is json) {
                     updatePayload["ministry"] = check policy.ministry;
                 }
-                
+
                 json|error updateResult = policiesService.updatePolicy(<int>check existingPolicy.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;
@@ -3599,9 +3599,9 @@ function syncPoliciesFromBlockchain(int fromBlock, int toBlock) returns json|err
 # + return - Sync results or error
 function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|error {
     log:printInfo("🏗️ Syncing projects from blockchain...");
-    
+
     // request payload removed - using aggregated endpoint
-    
+
     // Update: at the start of syncProjectsFromBlockchain, replace the per-contract HTTP call with aggregated fetch
     // (the tool will insert this code where the function is defined)
 
@@ -3650,37 +3650,37 @@ function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|err
         if existingProject is () {
             json|error _prTitle = project.title;
             string title = check _prTitle.ensureType(string);
-            
+
             string description = "";
             if (project.description is json) {
                 description = check project.description.ensureType(string);
             }
-            
+
             decimal allocated = 0d;
             if (project.allocated_budget is json) {
                 allocated = check project.allocated_budget.ensureType(decimal);
             }
-            
+
             decimal spent = 0d;
             if (project.spent_budget is json) {
                 spent = check project.spent_budget.ensureType(decimal);
             }
-            
+
             string state = "";
             if (project.state is json) {
                 state = check project.state.ensureType(string);
             }
-            
+
             string province = "";
             if (project.province is json) {
                 province = check project.province.ensureType(string);
             }
-            
+
             string ministry = "";
             if (project.ministry is json) {
                 ministry = check project.ministry.ensureType(string);
             }
-            
+
             string status = "PLANNED";
             if (project.status is json) {
                 status = check project.status.ensureType(string);
@@ -3696,75 +3696,75 @@ function syncProjectsFromBlockchain(int fromBlock, int toBlock) returns json|err
         } else {
             // Compare and update if needed
             boolean needsUpdate = false;
-            
+
             // Check if title changed
             if (<string>check existingProject.project_name) != (<string>check project.title) {
                 needsUpdate = true;
             }
-            
+
             // Check if allocated budget changed
             if (project.allocated_budget is json && existingProject.allocated_budget is json) {
                 if (<decimal>check existingProject.allocated_budget) != (<decimal>check project.allocated_budget) {
                     needsUpdate = true;
                 }
             }
-            
+
             // Check if spent budget changed
             if (project.spent_budget is json && existingProject.spent_budget is json) {
                 if (<decimal>check existingProject.spent_budget) != (<decimal>check project.spent_budget) {
                     needsUpdate = true;
                 }
             }
-            
+
             // Check if status changed
             if (project.status is json && existingProject.status is json) {
                 if (<string>check existingProject.status) != (<string>check project.status) {
                     needsUpdate = true;
                 }
             }
-            
+
             // Check if description changed
             if (project.description is json && existingProject.view_details is json) {
                 if (<string>check existingProject.view_details) != (<string>check project.description) {
                     needsUpdate = true;
                 }
             }
-            
+
             if needsUpdate {
                 // Create update payload with proper field mapping
                 map<json> updatePayload = {
                     "project_name": check project.title,
                     "blockchain_project_id": check project.blockchain_project_id
                 };
-                
+
                 if (project.allocated_budget is json) {
                     updatePayload["allocated_budget"] = check project.allocated_budget;
                 }
-                
+
                 if (project.spent_budget is json) {
                     updatePayload["spent_budget"] = check project.spent_budget;
                 }
-                
+
                 if (project.status is json) {
                     updatePayload["status"] = check project.status;
                 }
-                
+
                 if (project.description is json) {
                     updatePayload["view_details"] = check project.description;
                 }
-                
+
                 if (project.state is json) {
                     updatePayload["state"] = check project.state;
                 }
-                
+
                 if (project.province is json) {
                     updatePayload["province"] = check project.province;
                 }
-                
+
                 if (project.ministry is json) {
                     updatePayload["ministry"] = check project.ministry;
                 }
-                
+
                 json|error updateResult = projectsService.updateProject(<int>check existingProject.id, updatePayload);
                 if updateResult is json {
                     updatedCount += 1;

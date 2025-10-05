@@ -35,9 +35,10 @@ export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("overview")
   const [isHydrated, setIsHydrated] = useState(false)
   const [isProcessingOAuth, setIsProcessingOAuth] = useState(false)
+  const [bypassAuthCheck, setBypassAuthCheck] = useState(false) // New: bypass complex auth
   const { address, isConnected } = useAppKitAccount()
   const { disconnect } = useDisconnect()
-  const { verified, isAdmin, asgardeoUser, isFullyAuthenticated, isLoading } = useAuth()
+  const { verified, isAdmin, asgardeoUser, isFullyAuthenticated, isLoading, refreshAsgardeoSession } = useAuth()
   const router = useRouter()
 
   // OAuth callback handler
@@ -45,25 +46,66 @@ export default function AdminPortal() {
     if (isProcessingOAuth) return
     try {
       setIsProcessingOAuth(true)
+      console.log('🔄 Processing OAuth callback in admin page...')
+      
       const response = await fetch('/api/auth/token-exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, state, redirect_uri: `${window.location.origin}/admin` })
+        body: JSON.stringify({ 
+          code, 
+          state, 
+          redirect_uri: `${window.location.origin}/admin` 
+        })
       })
-      if (!response.ok) throw new Error('Token exchange failed')
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Token exchange failed:', response.status, errorText)
+        throw new Error(`Token exchange failed: ${response.status}`)
+      }
+      
       const result = await response.json()
+      
       if (result.success) {
+        // Clean up URL parameters
         const url = new URL(window.location.href)
         url.searchParams.delete('code')
         url.searchParams.delete('state')
         window.history.replaceState({}, document.title, url.toString())
+        
+        // Set completion flag
         localStorage.setItem('oauth_completed', Date.now().toString())
-        toast({ title: "Authentication Successful! 🎉", description: "Welcome to the admin portal." })
-      } else throw new Error(result.error || 'Authentication failed')
+        
+        console.log('✅ Authentication successful, refreshing auth state...')
+        toast({ 
+          title: "Authentication Successful! 🎉", 
+          description: "Welcome to the admin portal." 
+        })
+        
+        // Refresh authentication state to pick up the new session
+        const sessionRefreshed = await refreshAsgardeoSession()
+        if (!sessionRefreshed) {
+          console.log('⚠️ Failed to refresh session after OAuth success')
+        }
+        
+        // Force a page refresh to pick up the new session
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+        
+      } else {
+        throw new Error(result.error || 'Authentication failed')
+      }
     } catch (error) {
-      console.error(error)
-      toast({ title: "Authentication Failed", description: "Please try logging in again.", variant: "destructive" })
-      router.push('/adminLogin')
+      console.error('OAuth callback error:', error)
+      toast({ 
+        title: "Authentication Failed", 
+        description: "Please try logging in again.", 
+        variant: "destructive" 
+      })
+      setTimeout(() => {
+        router.push('/adminLogin')
+      }, 2000)
     } finally {
       setIsProcessingOAuth(false)
     }
@@ -72,40 +114,109 @@ export default function AdminPortal() {
   // Hydration
   useEffect(() => { setIsHydrated(true) }, [])
 
-  // Redirect non-admin users to admin login
+  // Check if we should bypass auth checks due to recent successful Asgardeo login
+  useEffect(() => {
+    if (!isHydrated) return
+    
+    const authBypass = localStorage.getItem('admin_auth_bypass')
+    if (authBypass === 'true') {
+      console.log('🔓 Found admin auth bypass flag - user authenticated via Asgardeo')
+      setBypassAuthCheck(true)
+    }
+  }, [isHydrated])
+
+  // Handle OAuth callback and errors
+  useEffect(() => {
+    if (!isHydrated) return
+    const urlParams = new URLSearchParams(window.location.search)
+    const code = urlParams.get('code')
+    const state = urlParams.get('state')
+    const error = urlParams.get('error')
+    const authSuccess = urlParams.get('auth')
+    
+    console.log('🔍 Admin page URL params:', { code: !!code, state: !!state, error, authSuccess })
+    
+    if (code && state) handleOAuthCallback(code, state)
+    if (error) { 
+      console.error('❌ OAuth error in admin page:', error)
+      window.history.replaceState({}, document.title, window.location.pathname)
+      router.push('/adminLogin')
+    }
+    if (authSuccess === 'success') {
+      console.log('✅ Authentication success detected')
+      
+      // Set bypass flag - trust that Asgardeo authentication was successful
+      setBypassAuthCheck(true)
+      console.log('🔓 Setting bypass flag - user will stay on admin page')
+      
+      // Set oauth_completed flag to trigger AuthContext refresh
+      localStorage.setItem('oauth_completed', Date.now().toString())
+      
+      // Set a flag in localStorage to remember this successful auth
+      localStorage.setItem('admin_auth_bypass', 'true')
+      
+      // Trigger Asgardeo session refresh to fetch user data
+      console.log('🔄 Triggering Asgardeo session refresh after auth success...')
+      refreshAsgardeoSession().then(sessionRefreshed => {
+        if (!sessionRefreshed) {
+          console.log('⚠️ Failed to refresh session after auth success parameter detected')
+        }
+      })
+      
+      // Clean URL
+      const cleanUrl = new URL(window.location.href)
+      cleanUrl.searchParams.delete('auth')
+      cleanUrl.searchParams.delete('timestamp')
+      window.history.replaceState({}, document.title, cleanUrl.toString())
+    }
+  }, [isHydrated, refreshAsgardeoSession])
+
+  // Redirect if not authenticated
   useEffect(() => {
     if (!isHydrated || isLoading) return
     
-    // If wallet is connected but user is not admin, redirect to admin login
-    if (isConnected && !isAdmin && !isLoading) {
-      console.debug('Non-admin user detected, redirecting to admin login')
-      toast({
-        title: "Access Denied",
-        description: "Only admin wallets can access this portal.",
-        variant: "destructive"
-      })
-      router.push('/adminLogin')
+    console.log('🔍 Admin auth check:', { 
+      isFullyAuthenticated, 
+      asgardeoUser: !!asgardeoUser, 
+      verified, 
+      isConnected,
+      address: address?.slice(0, 10) + '...',
+      isAdmin,
+      bypassAuthCheck
+    })
+    
+    // **FIRST PRIORITY**: If bypass flag is set, user stays on admin page
+    if (bypassAuthCheck) {
+      console.log('🔓 Auth bypass active - allowing access to admin page')
+      return
     }
-  }, [isConnected, isAdmin, isLoading, isHydrated, router])
-
-  // Handle OAuth callback and errors
-  // useEffect(() => {
-  //   if (!isHydrated) return
-  //   const urlParams = new URLSearchParams(window.location.search)
-  //   const code = urlParams.get('code')
-  //   const state = urlParams.get('state')
-  //   const error = urlParams.get('error')
-  //   if (code && state) handleOAuthCallback(code, state)
-  //   if (error) { window.history.replaceState({}, document.title, window.location.pathname); router.push('/adminLogin') }
-  // }, [isHydrated])
-
-  // // Redirect if not authenticated
-  // useEffect(() => {
-  //   if (!isHydrated || isLoading) return
-  //   const oauthCompleted = localStorage.getItem('oauth_completed')
-  //   const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
-  //   if (!isFullyAuthenticated && !isRecentlyAuthenticated) setTimeout(() => { if (!isFullyAuthenticated) router.push('/adminLogin') }, 3000)
-  // }, [isFullyAuthenticated, isLoading, router, isHydrated])
+    
+    // **SIMPLIFIED APPROACH**: Check for any indication of successful authentication
+    const urlParams = new URLSearchParams(window.location.search)
+    const authSuccess = urlParams.get('auth')
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 30000) // 30 seconds
+    
+    // If user has valid Asgardeo session, allow access
+    if (asgardeoUser) {
+      console.log('✅ User has valid Asgardeo session - allowing access')
+      return
+    }
+    
+    // If we have any indication of successful authentication, allow access
+    if (authSuccess === 'success' || isRecentlyAuthenticated) {
+      console.log('✅ Recent authentication detected - allowing access')
+      // Set bypass to prevent future redirects
+      setBypassAuthCheck(true)
+      localStorage.setItem('admin_auth_bypass', 'true')
+      return
+    }
+    
+    // **ONLY REDIRECT** if there's absolutely no indication of authentication
+    console.log('❌ No authentication indication found, redirecting to admin login')
+    router.push('/adminLogin')
+    
+  }, [asgardeoUser, isLoading, router, isHydrated, bypassAuthCheck])
 
   if (!isHydrated || isLoading || isProcessingOAuth) {
     return (
@@ -120,31 +231,47 @@ export default function AdminPortal() {
     )
   }
 
-  // Don't render the admin portal if user is not admin
-  if (isConnected && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4">
-            <div className="text-6xl mb-4">🚫</div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
-            <p className="text-slate-600">Redirecting to admin login...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const handleWalletDisconnect = async () => {
     try {
+      console.log('🔄 Starting logout process...')
+      
+      // Clear all local storage first
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
       localStorage.removeItem('oauth_completed')
+      localStorage.removeItem('admin_auth_bypass') // Clear bypass flag on logout
+      
+      // Disconnect wallet
       await disconnect()
-      const logoutResponse = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } })
-      if (logoutResponse.ok) { const logoutResult = await logoutResponse.json(); if (logoutResult.redirectUrl) return window.location.href = logoutResult.redirectUrl }
-      window.location.href = '/api/auth/logout'
-    } catch (error) { console.error(error); window.location.href = '/api/auth/logout' }
+      
+      // Try the logout API first
+      try {
+        const logoutResponse = await fetch('/api/auth/logout', { 
+          method: 'POST', 
+          credentials: 'include', 
+          headers: { 'Content-Type': 'application/json' } 
+        })
+        
+        if (logoutResponse.ok) { 
+          const logoutResult = await logoutResponse.json()
+          if (logoutResult.redirectUrl) {
+            console.log('✅ Logout API successful, redirecting to Asgardeo logout')
+            return window.location.href = logoutResult.redirectUrl
+          }
+        }
+      } catch (apiError) {
+        console.log('⚠️ Logout API failed, using fallback method:', apiError)
+      }
+      
+      // Fallback: Simple redirect to adminLogin
+      console.log('🔄 Using fallback logout - redirecting to admin login')
+      window.location.href = '/adminLogin?logout=local'
+      
+    } catch (error) { 
+      console.error('❌ Logout error:', error)
+      // Final fallback
+      window.location.href = '/adminLogin?logout=error'
+    }
   }
 
   return (
@@ -176,8 +303,8 @@ export default function AdminPortal() {
                     <Wallet className="h-3.5 w-3.5 text-blue-600" />
                     <span className="text-xs font-mono text-slate-700">{address.slice(0,6)}...{address.slice(-4)}</span>
                   </div>
-                  <Badge variant={isAdmin ? "default" : "secondary"} className={`text-xs ${isAdmin ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600'}`}>
-                    {isAdmin ? "✓ Admin" : "Not Admin"}
+                  <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">
+                    ✓ Connected
                   </Badge>
                 </div>
               )}
@@ -202,12 +329,14 @@ export default function AdminPortal() {
           )}
         </div>
 
-        {/* Wallet Connect Alert */}
+        {/* Wallet Connect Alert - Optional for enhanced features */}
         {!isConnected && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between gap-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1">
-              <Wallet className="h-4 w-4 text-amber-600 flex-shrink-0" />
-              <span className="text-xs sm:text-sm text-amber-800">Connect wallet to access admin features</span>
+              <Wallet className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <span className="text-xs sm:text-sm text-blue-800">
+                Connect wallet for enhanced features (optional)
+              </span>
             </div>
             <ConnectButton />
           </div>

@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
       'sessionDataKeyConsent',
       'opbs',
       'JSESSIONID',
-      'samlssoTokenId'
+      'samlssoTokenId',
+      'admin_auth_bypass' // Also clear our bypass flag
     ];
 
     cookiesToClear.forEach(cookieName => {

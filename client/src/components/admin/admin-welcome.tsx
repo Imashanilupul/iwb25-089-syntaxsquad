@@ -31,9 +31,9 @@ export function AdminWelcome() {
         title: "🎉 Admin Wallet Verified Successfully!",
         description: "You can now proceed to Asgardeo authentication.",
       })
-    } else if (isFullyAuthenticated && isAdmin) {
-      // Both wallet and Asgardeo authenticated AND user is admin - redirect to admin portal
-      console.debug('AdminWelcome: Admin user is fully authenticated, redirecting to admin portal');
+    } else if (isFullyAuthenticated && asgardeoUser) {
+      // Both wallet and Asgardeo authenticated - redirect to admin portal
+      console.debug('AdminWelcome: User is fully authenticated, redirecting to admin portal');
       toast({
         title: "🚀 Authentication Complete!",
         description: "Redirecting to admin portal...",
@@ -367,8 +367,26 @@ export function AdminWelcome() {
                           Click the button below to proceed with Asgardeo authentication and access the admin portal.
                         </p>
                         <Button 
-                          onClick={() => window.location.href = '/api/auth/signin'} 
-                          className="bg-blue-600 hover:bg-blue-700 text-sm sm:text-base w-full sm:w-auto"
+                          onClick={async () => {
+                            // Clear any existing session before redirecting
+                            localStorage.removeItem('oauth_completed');
+                            localStorage.removeItem('adminAuthState');
+                            localStorage.removeItem('adminAuthStateTime');
+                            
+                            // Clear session cookie by calling clear-session endpoint
+                            try {
+                              await fetch('/api/auth/clear-session', {
+                                method: 'POST',
+                                credentials: 'include'
+                              });
+                            } catch (error) {
+                              console.debug('Session clear error (proceeding anyway):', error);
+                            }
+                            
+                            // Force redirect to Asgardeo login
+                            window.location.href = '/api/auth/signin';
+                          }} 
+                          className="bg-blue-600 hover:bg-blue-700"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
                           Continue to Asgardeo Authentication

@@ -171,36 +171,6 @@ export default function CivicPlatform() {
     },
   ]
 
-  const recentActivities = [
-    {
-      type: "spending",
-      title: "Colombo Metro Rail Project",
-      amount: "Rs. 120B",
-      status: "In Progress",
-      progress: 67,
-      icon: CheckCircle,
-      time: "2 hours ago",
-    },
-    {
-      type: "vote",
-      title: "Provincial Council Reform Bill",
-      amount: "15,432 votes",
-      status: "Active",
-      progress: 89,
-      icon: Vote,
-      time: "4 hours ago",
-    },
-    {
-      type: "policy",
-      title: "Digital Sri Lanka Act",
-      amount: "234 comments",
-      status: "Under Review",
-      progress: 45,
-      icon: FileText,
-      time: "6 hours ago",
-    },
-  ]
-
   const getIconComponent = (iconName: string) => {
     const icons: any = {
       DollarSign,
@@ -359,27 +329,13 @@ export default function CivicPlatform() {
                       )
                     })
                   ) : (
-                    // fallback static data
-                    recentActivities.map((activity, index) => (
-                      <div
-                        key={index}
-                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg bg-slate-50 p-2 sm:p-3 gap-2"
-                      >
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                          <activity.icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 text-slate-600" />
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-slate-900 text-sm sm:text-base truncate">{activity.title}</p>
-                            <p className="text-xs sm:text-sm text-slate-500 truncate">{activity.amount}</p>
-                          </div>
-                        </div>
-                        <div className="text-left sm:text-right ml-6 sm:ml-0">
-                          <Badge variant="outline" className="mb-1 text-xs">
-                            {activity.status}
-                          </Badge>
-                          <p className="text-xs text-slate-500">{activity.time}</p>
-                        </div>
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-center">
+                        <Clock className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                        <p className="text-sm text-slate-500">No recent activities available</p>
+                        <p className="text-xs text-slate-400 mt-1">Check back later for updates</p>
                       </div>
-                    ))
+                    </div>
                   )}
                 </CardContent>
               </Card>

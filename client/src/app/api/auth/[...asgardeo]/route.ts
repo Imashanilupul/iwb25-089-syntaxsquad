@@ -10,25 +10,35 @@ export async function GET(request: NextRequest) {
     // Generate state for security
     const state = crypto.randomUUID();
     
-    // Redirect to Asgardeo for authentication (redirect directly to /admin)
+    // Clear any existing session to force fresh authentication
+    const response = NextResponse.redirect('about:blank');
+    response.cookies.delete('asgardeo_session');
+    
+    // Construct the proper redirect URI - matches Asgardeo configuration
+    const redirectUri = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/callback`;
+    
+    // Redirect to Asgardeo for authentication
     const asgardeoLoginUrl = `${process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL}/oauth2/authorize?` + 
       `response_type=code&` +
       `client_id=${process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID}&` +
       `scope=${encodeURIComponent(process.env.NEXT_PUBLIC_ASGARDEO_SCOPES || 'openid profile')}&` +
-      `redirect_uri=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/admin`)}&` +
-      `state=${state}`;
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}&` +
+      `prompt=login`; // Force login prompt
     
-    const response = NextResponse.redirect(asgardeoLoginUrl);
+    console.log('🔐 Redirecting to Asgardeo:', asgardeoLoginUrl);
+    
+    const finalResponse = NextResponse.redirect(asgardeoLoginUrl);
     
     // Store state for verification
-    response.cookies.set('oauth_state', state, {
+    finalResponse.cookies.set('oauth_state', state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 10 // 10 minutes
     });
     
-    return response;
+    return finalResponse;
   }
   
   if (pathname.includes('/signout')) {
@@ -37,8 +47,8 @@ export async function GET(request: NextRequest) {
     const isAdminLogout = referer.includes('/admin');
     
     const redirectUrl = isAdminLogout 
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/adminLogin?logout=true`
-      : `${process.env.NEXT_PUBLIC_APP_URL}/auth-test`;
+      ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/adminLogin?logout=true`
+      : `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth-test`;
     
     const response = NextResponse.redirect(redirectUrl);
     response.cookies.delete('asgardeo_session');
