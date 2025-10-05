@@ -1984,9 +1984,9 @@ Timestamp: ${timestamp}
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {petitions.filter((p) => !p.removed && p.status === "ACTIVE").length}
+                  {petitions.filter((p) => !p.removed && !p.completed && (p.signature_count || 0) < p.required_signature_count).length}
                 </div>
-                <p className="text-xs text-slate-500">Collecting signatures </p>
+                <p className="text-xs text-slate-500">Collecting signatures (excluding removed)</p>
               </CardContent>
             </Card>
 
