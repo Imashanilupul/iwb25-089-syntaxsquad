@@ -185,58 +185,38 @@ export default function AdminPortal() {
       bypassAuthCheck
     })
     
-    // **SIMPLE BYPASS**: If bypass flag is set, user stays on admin page
+    // **FIRST PRIORITY**: If bypass flag is set, user stays on admin page
     if (bypassAuthCheck) {
       console.log('🔓 Auth bypass active - allowing access to admin page')
       return
     }
     
-    const oauthCompleted = localStorage.getItem('oauth_completed')
-    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 10000)
-    
-    // Check for authSuccess parameter indicating successful OAuth return
+    // **SIMPLIFIED APPROACH**: Check for any indication of successful authentication
     const urlParams = new URLSearchParams(window.location.search)
     const authSuccess = urlParams.get('auth')
+    const oauthCompleted = localStorage.getItem('oauth_completed')
+    const isRecentlyAuthenticated = oauthCompleted && (Date.now() - parseInt(oauthCompleted) < 30000) // 30 seconds
     
-    // If user has Asgardeo session, they've already been verified as admin
+    // If user has valid Asgardeo session, allow access
     if (asgardeoUser) {
-      console.log('✅ User has Asgardeo session, allowing access without wallet verification')
+      console.log('✅ User has valid Asgardeo session - allowing access')
       return
     }
     
-    // **SIMPLIFIED**: If user recently completed OAuth or has authSuccess parameter, give longer time
-    if (isRecentlyAuthenticated || authSuccess === 'success') {
-      console.log('⏳ Recent OAuth completion or auth success detected, allowing extended time for session establishment')
-      
-      // Give much longer time and try multiple refresh attempts
-      const sessionCheckTimer = setTimeout(async () => {
-        console.log('🔄 Final session check after OAuth...')
-        const sessionRefreshed = await refreshAsgardeoSession()
-        if (!sessionRefreshed) {
-          // If session refresh fails, but we know OAuth was successful, 
-          // let's just accept it and stay on admin page for now
-          console.log('⚠️ Session refresh failed but OAuth was successful - staying on admin page')
-          // Commented out redirect to allow user to stay
-          // router.push('/admin-welcome')
-        } else {
-          console.log('✅ Session refresh successful')
-        }
-      }, 5000) // Give 5 seconds for session to be established
-      
-      return () => clearTimeout(sessionCheckTimer)
+    // If we have any indication of successful authentication, allow access
+    if (authSuccess === 'success' || isRecentlyAuthenticated) {
+      console.log('✅ Recent authentication detected - allowing access')
+      // Set bypass to prevent future redirects
+      setBypassAuthCheck(true)
+      localStorage.setItem('admin_auth_bypass', 'true')
+      return
     }
     
-    // Only redirect if user has no Asgardeo session, no recent OAuth completion, AND no auth success
-    const hasAnyAuthIndication = asgardeoUser || isRecentlyAuthenticated || authSuccess === 'success'
+    // **ONLY REDIRECT** if there's absolutely no indication of authentication
+    console.log('❌ No authentication indication found, redirecting to admin login')
+    router.push('/adminLogin')
     
-    if (!hasAnyAuthIndication) {
-      console.log('❌ No authentication indication found, redirecting to admin login')
-      router.push('/adminLogin')
-    } else {
-      console.log('✅ Some form of authentication detected, staying on admin page')
-    }
-    
-  }, [asgardeoUser, isLoading, router, isHydrated, refreshAsgardeoSession, bypassAuthCheck])
+  }, [asgardeoUser, isLoading, router, isHydrated, bypassAuthCheck])
 
   if (!isHydrated || isLoading || isProcessingOAuth) {
     return (
@@ -253,15 +233,45 @@ export default function AdminPortal() {
 
   const handleWalletDisconnect = async () => {
     try {
+      console.log('🔄 Starting logout process...')
+      
+      // Clear all local storage first
       localStorage.removeItem('adminAuthState')
       localStorage.removeItem('adminAuthStateTime')
       localStorage.removeItem('oauth_completed')
       localStorage.removeItem('admin_auth_bypass') // Clear bypass flag on logout
+      
+      // Disconnect wallet
       await disconnect()
-      const logoutResponse = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } })
-      if (logoutResponse.ok) { const logoutResult = await logoutResponse.json(); if (logoutResult.redirectUrl) return window.location.href = logoutResult.redirectUrl }
-      window.location.href = '/api/auth/logout'
-    } catch (error) { console.error(error); window.location.href = '/api/auth/logout' }
+      
+      // Try the logout API first
+      try {
+        const logoutResponse = await fetch('/api/auth/logout', { 
+          method: 'POST', 
+          credentials: 'include', 
+          headers: { 'Content-Type': 'application/json' } 
+        })
+        
+        if (logoutResponse.ok) { 
+          const logoutResult = await logoutResponse.json()
+          if (logoutResult.redirectUrl) {
+            console.log('✅ Logout API successful, redirecting to Asgardeo logout')
+            return window.location.href = logoutResult.redirectUrl
+          }
+        }
+      } catch (apiError) {
+        console.log('⚠️ Logout API failed, using fallback method:', apiError)
+      }
+      
+      // Fallback: Simple redirect to adminLogin
+      console.log('🔄 Using fallback logout - redirecting to admin login')
+      window.location.href = '/adminLogin?logout=local'
+      
+    } catch (error) { 
+      console.error('❌ Logout error:', error)
+      // Final fallback
+      window.location.href = '/adminLogin?logout=error'
+    }
   }
 
   return (
