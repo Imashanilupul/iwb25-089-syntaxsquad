@@ -6,13 +6,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Vote, Users, Shield, Clock, CheckCircle, TrendingUp, Eye, Lock, Verified, AlertCircle, Loader2 } from "lucide-react"
+import { Vote, Users, Shield, Clock, CheckCircle, TrendingUp, Eye, Lock, Verified, AlertCircle, Loader2, X, Calendar, User, FileText, BarChart3 } from "lucide-react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts"
 import { proposalsService, type Proposal } from "@/services/proposals"
 import { categoriesService, type Category } from "@/services/categories"
 import { usersService } from "@/services/users"
 import { toast } from "sonner"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 // Add VoterDemographics interface
 interface VoterDemographics {
@@ -46,6 +47,32 @@ export function VotingSystem() {
     totalVotes: 0,
     totalProposalsInDB: 0
   })
+
+  // Add modal state for proposal details
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalProposal, setModalProposal] = useState<Proposal | null>(null)
+  // Function to open proposal details modal
+  const openProposalModal = (proposal: Proposal) => {
+    setModalProposal(proposal)
+    setIsModalOpen(true)
+  }
+
+  // Function to close modal
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setModalProposal(null)
+  }
+
+  // Function to format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
 
   // Load data on component mount
   useEffect(() => {
@@ -811,9 +838,10 @@ Timestamp: ${timestamp}
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setSelectedProposal(proposal.id)}
+                              onClick={() => openProposalModal(proposal)}
                               className="w-full sm:w-auto"
                             >
+                              <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </Button>
 
@@ -1013,6 +1041,68 @@ Timestamp: ${timestamp}
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Proposal Details Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Proposal Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          {modalProposal && (
+            <div className="space-y-6">
+              {/* Proposal Header */}
+              <div className="space-y-3">
+                <h2 className="text-2xl font-bold text-slate-900 break-words">
+                  {modalProposal.title}
+                </h2>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-sm">
+                    {getCategoryName(modalProposal.category_id)}
+                  </Badge>
+                  <Badge className={`text-sm ${getStatusColor(proposalsService.getProposalStatus(modalProposal))}`}>
+                    {proposalsService.getProposalStatus(modalProposal)}
+                  </Badge>
+                  <div className="flex items-center gap-1 text-sm text-slate-600">
+                    <Calendar className="h-4 w-4" />
+                    <span>Created: {formatDate(modalProposal.created_at)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Description from Database */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Description in Details
+                </h3>
+                <div className="bg-white border rounded-lg p-6 min-h-[200px]">
+                  <div className="prose max-w-none">
+                    {modalProposal.description_in_details ? (
+                      <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-base">
+                        {modalProposal.description_in_details}
+                      </div>
+                    ) : (
+                      <p className="text-slate-500 italic">No detailed description available.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4 border-t">
+                <Button variant="outline" onClick={closeModal}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
