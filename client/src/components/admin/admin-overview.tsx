@@ -301,41 +301,44 @@ export function AdminOverview() {
             <CardTitle>Budget by Category</CardTitle>
             <CardDescription>Allocated vs Spent amounts</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                allocated: { label: "Allocated", color: "#3b82f6" },
-                spent: { label: "Spent", color: "#10b981" },
-              }}
-              className="h-80"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={dashboardData.categoryData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                >
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    interval={0}
-                    fontSize={12}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis 
-  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
-  fontSize={12}
-/>
-                  <ChartTooltip
-                    content={<ChartTooltipContent />}
-                    formatter={(value) => [formatCurrency(Number(value)), ""]}
-                  />
-                  <Bar dataKey="allocated" fill="#3b82f6" />
-                  <Bar dataKey="spent" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          <CardContent className="overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <ChartContainer
+                config={{
+                  allocated: { label: "Allocated", color: "#3b82f6" },
+                  spent: { label: "Spent", color: "#10b981" },
+                }}
+                className="h-80 min-w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%" minWidth={300}>
+                  <BarChart 
+                    data={dashboardData.categoryData}
+                    margin={{ top: 20, right: 10, left: 10, bottom: 80 }}
+                  >
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                      fontSize={10}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+                      fontSize={10}
+                      width={50}
+                    />
+                    <ChartTooltip
+                      content={<ChartTooltipContent />}
+                      formatter={(value) => [formatCurrency(Number(value)), ""]}
+                    />
+                    <Bar dataKey="allocated" fill="#3b82f6" />
+                    <Bar dataKey="spent" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -344,42 +347,45 @@ export function AdminOverview() {
             <CardTitle>Monthly Spending Trend</CardTitle>
             <CardDescription>Government expenditure over time from categories</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                amount: { label: "Amount", color: "#8b5cf6" },
-              }}
-              className="h-80"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
-                  data={categoriesData.monthlySpending}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                >
-                  <XAxis 
-                    dataKey="month" 
-                    fontSize={12}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis 
-  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
-  fontSize={12}
-/>
-<ChartTooltip
-  content={<ChartTooltipContent />}
-  formatter={(value) => [`${(Number(value) / 1000000).toFixed(1)}M`, ""]}
-/>
-                  <Line 
-                    type="monotone" 
-                    dataKey="amount" 
-                    stroke="#8b5cf6" 
-                    strokeWidth={3}
-                    dot={{ fill: "#8b5cf6", strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: "#8b5cf6", strokeWidth: 2 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          <CardContent className="overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <ChartContainer
+                config={{
+                  amount: { label: "Amount", color: "#8b5cf6" },
+                }}
+                className="h-80 min-w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%" minWidth={300}>
+                  <LineChart 
+                    data={categoriesData.monthlySpending}
+                    margin={{ top: 20, right: 10, left: 10, bottom: 20 }}
+                  >
+                    <XAxis 
+                      dataKey="month" 
+                      fontSize={10}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} 
+                      fontSize={10}
+                      width={50}
+                    />
+                    <ChartTooltip
+                      content={<ChartTooltipContent />}
+                      formatter={(value) => [`${(Number(value) / 1000000).toFixed(1)}M`, ""]}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="amount" 
+                      stroke="#8b5cf6" 
+                      strokeWidth={3}
+                      dot={{ fill: "#8b5cf6", strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, stroke: "#8b5cf6", strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -387,10 +393,10 @@ export function AdminOverview() {
       {/* Recent Activity */}
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              <CardTitle>Recent Data Updates</CardTitle>
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+              <CardTitle className="text-base sm:text-lg">Recent Data Updates</CardTitle>
             </div>
             <div className="flex items-center gap-2">
               {lastUpdated && (
@@ -407,10 +413,10 @@ export function AdminOverview() {
               </button>
             </div>
           </div>
-          <CardDescription>Latest changes to platform data (auto-refreshes every 30 seconds)</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">Latest changes to platform data (auto-refreshes every 30 seconds)</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {dashboardData.recentActivities.map((activity, index) => {
               const IconComponent = getIconComponent(activity.icon)
               const colorClass = {
@@ -422,15 +428,15 @@ export function AdminOverview() {
               }[activity.color] || 'text-gray-600'
 
               return (
-                <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <IconComponent className={`h-5 w-5 ${colorClass}`} />
-                    <div>
-                      <p className="font-medium">{activity.title}</p>
-                      <p className="text-sm text-slate-500">{activity.description}</p>
+                <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg gap-2">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <IconComponent className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${colorClass}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm sm:text-base truncate">{activity.title}</p>
+                      <p className="text-xs sm:text-sm text-slate-500 truncate">{activity.description}</p>
                     </div>
                   </div>
-                  <Badge variant="outline">{activity.timestamp}</Badge>
+                  <Badge variant="outline" className="text-xs self-start sm:self-auto flex-shrink-0">{activity.timestamp}</Badge>
                 </div>
               )
             })}

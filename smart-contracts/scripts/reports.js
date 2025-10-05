@@ -31,7 +31,6 @@ async function init() {
     const Reports = await ethers.getContractFactory("Reports");
     reports = await Reports.attach(contractAddress);
     signers = await ethers.getSigners();
-    console.log('Reports contract attached at', contractAddress);
   } catch (e) {
     console.warn('Could not initialize on-chain Reports contract:', e.message || e);
     // rethrow so failures are visible during startup (consistent with petitions.js)

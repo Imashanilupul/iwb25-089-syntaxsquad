@@ -247,7 +247,7 @@ Timestamp: ${timestamp}
 
       // Contract configuration - use the deployed Proposals address
       // NOTE: keep this in sync with smart-contracts/deployed-addresses.json or use an API endpoint for production
-      const contractAddress = "0x146EA55562C53E6A2f1Ab9511091Dd26511947dE"
+      const contractAddress = "0x82DAACA385bDCE3559066b1b2ad1B14e2bc6545a"
 
       // Contract ABI for voting functions
       const contractAbi = [
@@ -345,8 +345,8 @@ Timestamp: ${timestamp}
 
       try {
         const apiEndpoint = voteType === "yes"
-          ? `${BALLERINA_BASE_URL}/api/proposal/vote-yes`
-          : `${BALLERINA_BASE_URL}/api/proposal/vote-no`
+          ? `${BALLERINA_BASE_URL}/proposal/vote-yes`
+          : `${BALLERINA_BASE_URL}/proposal/vote-no`
 
         const apiResponse = await fetch(apiEndpoint, {
           method: "POST",

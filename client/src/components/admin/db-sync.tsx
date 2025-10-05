@@ -552,7 +552,7 @@ export function DbSync() {
             )}
           </CardTitle>
           <CardDescription>
-            Sync Your Database With Blockchain Data. Choose Partial Sync For Recent Changes Or Full
+            Sync Your Database With Blockchain Data. Choose Full
             Sync For Complete Synchronization.
           </CardDescription>
         </CardHeader>

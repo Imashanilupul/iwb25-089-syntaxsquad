@@ -120,24 +120,24 @@ export function UserAnalytics() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Citizen Analytics Dashboard</h2>
-          <p className="text-slate-600">Privacy-Preserving Insights Into Citizen Engagement And Platform Usage</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Citizen Analytics Dashboard</h2>
+          <p className="text-sm sm:text-base text-slate-600">Privacy-Preserving Insights Into Citizen Engagement And Platform Usage</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <Button
             variant="outline" 
             size="sm"
             onClick={() => loadAnalyticsData(true)}
             disabled={refreshing}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? 'Refreshing...' : 'Refresh Data'}
           </Button>
           <Select value={selectedProvince} onValueChange={setSelectedProvince}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filter by province" />
             </SelectTrigger>
             <SelectContent>
@@ -150,7 +150,7 @@ export function UserAnalytics() {
             </SelectContent>
           </Select>
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-full sm:w-32">
               <SelectValue placeholder="Time range" />
             </SelectTrigger>
             <SelectContent>
@@ -164,7 +164,7 @@ export function UserAnalytics() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card className="border-0 shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Registered Citizens</CardTitle>
@@ -217,15 +217,15 @@ export function UserAnalytics() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Geographic Distribution */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-blue-600" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               Geographic Distribution
             </CardTitle>
-            <CardDescription>Citizen participation by province</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Citizen participation by province</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -245,45 +245,47 @@ export function UserAnalytics() {
         {/* User Growth Trend */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
               Growth Trend
             </CardTitle>
-            <CardDescription>Citizen registration growth over time</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Citizen registration growth over time</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                users: {
-                  label: "Users",
-                  color: "#3B82F6",
-                },
-              }}
-              className="h-[200px]"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.growthTrend}>
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={formatNumber} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="users" fill="#3B82F6" radius={4} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          <CardContent className="overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <ChartContainer
+                config={{
+                  users: {
+                    label: "Users",
+                    color: "#3B82F6",
+                  },
+                }}
+                className="h-[200px] min-w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%" minWidth={300}>
+                  <BarChart data={analytics.growthTrend} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                    <XAxis dataKey="month" fontSize={10} />
+                    <YAxis tickFormatter={formatNumber} fontSize={10} width={40} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="users" fill="#3B82F6" radius={4} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Activity Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Citizen Engagement */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-purple-600" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
               Citizen Engagement
             </CardTitle>
-            <CardDescription>Platform activity and participation metrics</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Platform activity and participation metrics</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -322,11 +324,11 @@ export function UserAnalytics() {
         {/* Blockchain Analytics */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-emerald-600" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
               Blockchain Verification
             </CardTitle>
-            <CardDescription>Transparency and verification metrics</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Transparency and verification metrics</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">

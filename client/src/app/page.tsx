@@ -215,21 +215,21 @@ export default function CivicPlatform() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-amber-50 to-green-50 relative">
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-3 sm:p-6">
         {/* Top-right fixed buttons */}
-        <div className="fixed top-6 right-6 z-[10000] flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3 justify-end mb-4 sm:mb-0 sm:fixed sm:top-6 sm:right-6 sm:z-[10000]">
           {showRegistration && <RegistrationDialog />}
           <ConnectButton />
         </div>
 
-        {/* Header */}
-        <div className="relative mb-8 z-[9000]">
+  {/* Header */}
+  <div className="relative mb-8 z-10">
   <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
     {/* Logo */}
     <img
       src="/images/logo.png"
       alt="Sri Lanka National Emblem"
-      className="h-16 w-16 sm:h-20 sm:w-20 object-contain"
+      className="h-16 w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28 object-contain"
     />
 
     {/* Title Section */}
@@ -250,32 +250,32 @@ export default function CivicPlatform() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 lg:w-fit">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Overview
+            <TabsTrigger value="overview" className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <TrendingUp className="h-4 w-4 hidden sm:block" />
+              <span>Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="spending" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Spending
+            <TabsTrigger value="spending" className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <DollarSign className="h-4 w-4 hidden sm:block" />
+              <span>Spending</span>
             </TabsTrigger>
-            <TabsTrigger value="voting" className="flex items-center gap-2">
-              <Vote className="h-4 w-4" />
-              Voting
+            <TabsTrigger value="voting" className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Vote className="h-4 w-4 hidden sm:block" />
+              <span>Voting</span>
             </TabsTrigger>
-            <TabsTrigger value="policy" className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Policy
+            <TabsTrigger value="policy" className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <MessageSquare className="h-4 w-4 hidden sm:block" />
+              <span>Policy</span>
             </TabsTrigger>
-            <TabsTrigger value="whistleblowing" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Reports
+            <TabsTrigger value="whistleblowing" className="flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Shield className="h-4 w-4 hidden sm:block" />
+              <span>Reports</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Stats Grid */}
-            <div className="w-full px-6">
-              <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="w-full px-2 sm:px-6">
+              <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
                 {overviewStats.map((stat, index) => (
                   <Card key={index} className="border-0 shadow-md w-full">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -306,20 +306,20 @@ export default function CivicPlatform() {
 
 
             {/* Recent Activities */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
               <Card className="border-0 shadow-md">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
                     Recent Activities
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">
                     Latest Updates Across All Platform Modules
                   </CardDescription>
                 </CardHeader>
 
                 {/* Limit height to ~2 items, make rest scrollable */}
-                <CardContent className="space-y-4 max-h-40 overflow-y-auto pr-2">
+                <CardContent className="space-y-3 sm:space-y-4 max-h-40 sm:max-h-48 overflow-y-auto pr-2">
                   {isLoadingActivities ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="text-center">
@@ -341,17 +341,17 @@ export default function CivicPlatform() {
                       return (
                         <div
                           key={index}
-                          className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg bg-slate-50 p-2 sm:p-3 gap-2"
                         >
-                          <div className="flex items-center gap-3">
-                            <IconComponent className={`h-5 w-5 ${colorClass}`} />
-                            <div>
-                              <p className="font-medium text-slate-900">{activity.title}</p>
-                              <p className="text-sm text-slate-500">{activity.description}</p>
+                          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <IconComponent className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${colorClass}`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-slate-900 text-sm sm:text-base truncate">{activity.title}</p>
+                              <p className="text-xs sm:text-sm text-slate-500 truncate">{activity.description}</p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <Badge variant="outline" className="mb-1">
+                          <div className="text-left sm:text-right ml-6 sm:ml-0">
+                            <Badge variant="outline" className="mb-1 text-xs">
                               {activity.timestamp}
                             </Badge>
                           </div>
@@ -363,17 +363,17 @@ export default function CivicPlatform() {
                     recentActivities.map((activity, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg bg-slate-50 p-2 sm:p-3 gap-2"
                       >
-                        <div className="flex items-center gap-3">
-                          <activity.icon className="h-5 w-5 text-slate-600" />
-                          <div>
-                            <p className="font-medium text-slate-900">{activity.title}</p>
-                            <p className="text-sm text-slate-500">{activity.amount}</p>
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                          <activity.icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 text-slate-600" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-slate-900 text-sm sm:text-base truncate">{activity.title}</p>
+                            <p className="text-xs sm:text-sm text-slate-500 truncate">{activity.amount}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="outline" className="mb-1">
+                        <div className="text-left sm:text-right ml-6 sm:ml-0">
+                          <Badge variant="outline" className="mb-1 text-xs">
                             {activity.status}
                           </Badge>
                           <p className="text-xs text-slate-500">{activity.time}</p>
@@ -389,11 +389,11 @@ export default function CivicPlatform() {
 
               <Card className="border-0 shadow-md">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                     Blockchain Network Status
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">
                     Real-Time Network Health And Transaction Metrics
                   </CardDescription>
                 </CardHeader>
@@ -423,22 +423,22 @@ export default function CivicPlatform() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-12 border-t bg-slate-50 py-8">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+      <footer className="mt-8 sm:mt-12 border-t bg-slate-50 py-6 sm:py-8">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-3">
             <div className="flex items-center gap-3">
               <img
-                src="/images/logo.png"
-                alt="Sri Lanka Emblem"
-                className="h-12 w-12 object-contain"
-              />
+                  src="/images/logo.png"
+                  alt="Sri Lanka Emblem"
+                  className="h-12 w-12 sm:h-16 sm:w-16 object-contain"
+                />
               <div>
-                <h3 className="font-semibold text-slate-900">Government of Sri Lanka</h3>
-                <p className="text-sm text-slate-600">Transparent Governance Initiative</p>
+                <h3 className="font-semibold text-slate-900 text-sm sm:text-base">Government of Sri Lanka</h3>
+                <p className="text-xs sm:text-sm text-slate-600">Transparent Governance Initiative</p>
               </div>
             </div>
             <div>
-              <h4 className="mb-2 font-semibold text-slate-900">Quick Links</h4>
+              <h4 className="mb-2 font-semibold text-slate-900 text-sm sm:text-base">Quick Links</h4>
               <ul className="space-y-1 text-sm text-slate-600">
                 <li>
                   <a href="https://www.parliament.lk/" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
@@ -463,15 +463,15 @@ export default function CivicPlatform() {
               </ul>
             </div>
             <div>
-              <h4 className="mb-2 font-semibold text-slate-900">Contact</h4>
-              <ul className="space-y-1 text-sm text-slate-600">
+              <h4 className="mb-2 font-semibold text-slate-900 text-sm sm:text-base">Contact</h4>
+              <ul className="space-y-1 text-xs sm:text-sm text-slate-600">
                 <li>Email: info@gov.lk</li>
                 <li>Phone: +94 11 234 5678</li>
                 <li>Address: Colombo, Sri Lanka</li>
               </ul>
             </div>
           </div>
-          <div className="mt-8 border-t pt-4 text-center text-sm text-slate-600">
+          <div className="mt-6 sm:mt-8 border-t pt-4 text-center text-xs sm:text-sm text-slate-600">
             <p>
               &copy; 2025 All rights reserved. | Built with blockchain 
               technology for transparency by SyntaxSquad.

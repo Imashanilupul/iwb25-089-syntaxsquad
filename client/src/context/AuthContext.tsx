@@ -11,6 +11,7 @@ type AuthState = {
   address: string | null;
   walletVerified: boolean;
   verified: boolean; // Legacy compatibility property
+  isAdmin: boolean; // Admin user check for admin portal access
   
   // Asgardeo user validation
   asgardeoUser: any | null;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   address: null,
   walletVerified: false,
   verified: false,
+  isAdmin: false,
   asgardeoUser: null,
   isRegisteredUser: false,
   isFullyAuthenticated: false,
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     address: null,
     walletVerified: false,
     verified: false,
+    isAdmin: false,
     asgardeoUser: null,
     isRegisteredUser: false,
     isFullyAuthenticated: false,
@@ -98,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           address: authState.address,
           walletVerified: authState.walletVerified,
           verified: authState.verified,
+          isAdmin: authState.isAdmin,
           asgardeoUser: authState.asgardeoUser,
           isRegisteredUser: authState.isRegisteredUser,
           isFullyAuthenticated: authState.isFullyAuthenticated,
@@ -157,17 +161,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
   console.debug('AuthContext: Checking blockchain authorization for wallet:', walletAddress);
       
-      // Call the Web3 service directly to check if user is authorized on blockchain
-      const WEB3_API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001/web3';
-      const authRes = await axios.get(`${WEB3_API_BASE_URL}/auth/is-authorized/${walletAddress}`);
+      // Call the /is-authorized endpoint to check if user is authorized on blockchain
+      const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+      const authRes = await axios.get(`${API_BASE_URL}/auth/is-authorized/${walletAddress}`);
       
       const isAuthorized = authRes.data.isAuthorized;
+      
+      // Check if user is admin (for admin portal access)
+      let isAdmin = false;
+      try {
+        const adminRes = await axios.get(`${API_BASE_URL}/auth/is-admin/${walletAddress}`);
+        isAdmin = adminRes.data.isAdmin;
+  console.debug('AuthContext: Admin check result:', isAdmin);
+      } catch (error) {
+        console.error('AuthContext: Admin check failed:', error);
+        isAdmin = false;
+      }
       
       const result = {
         walletVerified: isAuthorized,
         isRegisteredUser: isAuthorized, // For blockchain auth, registered = authorized
-        jwt: null,
-        userData: null
+        isAdmin: isAdmin,
       };
       
   console.debug('AuthContext: Blockchain authorization result:', result);
@@ -177,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return {
         walletVerified: false,
         isRegisteredUser: false,
+        isAdmin: false,
         jwt: null,
         userData: null
       };
@@ -198,10 +213,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           address,
           walletVerified: validation.walletVerified,
           verified: validation.walletVerified, // Legacy compatibility
+          isAdmin: validation.isAdmin,
           asgardeoUser: null, // No Asgardeo for main portal
           isRegisteredUser: validation.isRegisteredUser,
           isFullyAuthenticated: validation.walletVerified && validation.isRegisteredUser,
-          jwt: validation.jwt,
+          jwt: null,
           isLoading: false,
           error: null,
         };
@@ -216,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           address: null,
           walletVerified: false,
           verified: false, // Legacy compatibility
+          isAdmin: false,
           asgardeoUser: null,
           isRegisteredUser: false,
           isFullyAuthenticated: false,

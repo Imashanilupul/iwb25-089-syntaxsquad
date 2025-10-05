@@ -8,8 +8,8 @@ import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Sri Lanka Transparent Governance Platform",
-  description: "Created with v0",
-  generator: "dark grecher",
+  description: "Innovate With Ballerina",
+  generator: "SyntaxSquad",
   icons: {
     icon: '/images/logo.png',
     apple: '/images/logo.png',
