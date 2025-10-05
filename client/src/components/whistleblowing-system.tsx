@@ -1984,9 +1984,9 @@ Timestamp: ${timestamp}
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {petitions.filter((p) => p.status === "ACTIVE").length}
+                  {petitions.filter((p) => !p.removed && p.status === "ACTIVE").length}
                 </div>
-                <p className="text-xs text-slate-500">Collecting signatures</p>
+                <p className="text-xs text-slate-500">Collecting signatures </p>
               </CardContent>
             </Card>
 
@@ -1998,10 +1998,11 @@ Timestamp: ${timestamp}
               <CardContent>
                 <div className="text-2xl font-bold">
                   {petitions
+                    .filter((p) => !p.removed)
                     .reduce((total, p) => total + (p.signature_count || 0), 0)
                     .toLocaleString()}
                 </div>
-                <p className="text-xs text-slate-500">All time</p>
+                <p className="text-xs text-slate-500">All time </p>
               </CardContent>
             </Card>
 
@@ -2012,18 +2013,18 @@ Timestamp: ${timestamp}
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {petitions.length > 0
+                  {petitions.filter((p) => !p.removed).length > 0
                     ? Math.round(
                       (petitions.filter(
-                        (p) => (p.signature_count || 0) >= p.required_signature_count
+                        (p) => !p.removed && (p.signature_count || 0) >= p.required_signature_count
                       ).length /
-                        petitions.length) *
+                        petitions.filter((p) => !p.removed).length) *
                       100
                     )
                     : 0}
                   %
                 </div>
-                <p className="text-xs text-slate-500">Threshold reached</p>
+                <p className="text-xs text-slate-500">Threshold reached </p>
               </CardContent>
             </Card>
 
@@ -2033,8 +2034,8 @@ Timestamp: ${timestamp}
                 <CheckCircle className="h-4 w-4 text-emerald-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{petitions.length}</div>
-                <p className="text-xs text-slate-500">All petitions</p>
+                <div className="text-2xl font-bold">{petitions.filter((p) => !p.removed).length}</div>
+                <p className="text-xs text-slate-500">All petitions </p>
               </CardContent>
             </Card>
           </div>
@@ -2046,14 +2047,14 @@ Timestamp: ${timestamp}
                 <div className="mr-2 animate-spin">⏳</div>
                 Loading petitions...
               </div>
-            ) : petitions.length === 0 ? (
+            ) : petitions.filter((p) => !p.removed).length === 0 ? (
               <Card className="border-0 shadow-md">
                 <CardContent className="py-8 text-center text-slate-500">
                   No petitions found. Create the first petition to get started!
                 </CardContent>
               </Card>
             ) : (
-              petitions.map((petition) => {
+              petitions.filter((p) => !p.removed).map((petition) => {
                 const progress =
                   petition.required_signature_count > 0
                     ? ((petition.signature_count || 0) / petition.required_signature_count) * 100

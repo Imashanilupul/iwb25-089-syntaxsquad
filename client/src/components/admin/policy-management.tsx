@@ -1074,8 +1074,8 @@ Timestamp: ${timestamp}
             <FileText className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statistics?.total_policies || policies.length}</div>
-            <p className="text-xs text-slate-500">Across all ministries</p>
+            <div className="text-2xl font-bold">{policies.length}</div>
+            <p className="text-xs text-slate-500">Active policies </p>
           </CardContent>
         </Card>
 
@@ -1086,10 +1086,9 @@ Timestamp: ${timestamp}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.status_distribution?.PUBLIC_CONSULTATION || 
-               policies.filter((p) => p.status.toUpperCase() === "PUBLIC_CONSULTATION").length}
+              {policies.filter((p) => p.status.toUpperCase() === "PUBLIC_CONSULTATION").length}
             </div>
-            <p className="text-xs text-slate-500">Open for comments</p>
+            <p className="text-xs text-slate-500">Open for comments (active policies)</p>
           </CardContent>
         </Card>
 
@@ -1102,7 +1101,7 @@ Timestamp: ${timestamp}
             <div className="text-2xl font-bold">
               {policies.reduce((sum, policy) => sum + getCommentCount(policy.id), 0).toLocaleString()}
             </div>
-            <p className="text-xs text-slate-500">Public engagement</p>
+            <p className="text-xs text-slate-500">Public engagement (active policies)</p>
           </CardContent>
         </Card>
 
@@ -1113,10 +1112,9 @@ Timestamp: ${timestamp}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics ? Object.keys(statistics.ministry_distribution).length : 
-               new Set(policies.map((p) => p.ministry)).size}
+              {new Set(policies.map((p) => p.ministry)).size}
             </div>
-            <p className="text-xs text-slate-500">With active policies</p>
+            <p className="text-xs text-slate-500">With active policies </p>
           </CardContent>
         </Card>
       </div>

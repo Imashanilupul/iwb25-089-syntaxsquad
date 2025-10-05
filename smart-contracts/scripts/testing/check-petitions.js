@@ -132,6 +132,7 @@ async function checkPetitionsData() {
         const signaturesCount = petition[3];
         const creator = petition[4];
         const completed = petition[5];
+        const removed = petition[6];
         
         console.log(`🆔 Petition ID: ${i}`);
         console.log(`👤 Creator: ${creator}`);
@@ -140,6 +141,7 @@ async function checkPetitionsData() {
         console.log(`🎯 Required Signatures: ${signaturesRequired.toString()}`);
         console.log(`✍️  Current Signatures: ${signaturesCount.toString()}`);
         console.log(`✅ Completed: ${completed}`);
+        console.log(`🗑️  Removed: ${removed}`);
         
         // Calculate progress
         const progress = signaturesRequired > 0 ? 
@@ -224,6 +226,7 @@ async function checkSpecificPetition(petitionId) {
     console.log(`Current: ${petition[3].toString()}`);
     console.log(`Creator: ${petition[4]}`);
     console.log(`Completed: ${petition[5]}`);
+    console.log(`Removed: ${petition[6]}`);
     
     return petition;
   } catch (error) {

@@ -72,10 +72,10 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:3002
 
+# Note: If localhost:3000/api/auth/callback is not registered in Asgardeo,
+# try using a different port like 3001 or update Asgardeo console
+
 # Asgardeo Authentication Configuration
-# Configure in Asgardeo console:
-# - Authorized redirect URL: http://localhost:3000/api/auth/callback
-# - Allowed origins: http://localhost:3000
 NEXT_PUBLIC_ASGARDEO_BASE_URL=""
 NEXT_PUBLIC_ASGARDEO_CLIENT_ID=""
 ASGARDEO_CLIENT_SECRET=""

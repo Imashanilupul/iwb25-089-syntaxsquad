@@ -134,6 +134,7 @@ async function checkProposalsData() {
         console.log(`Category ID: ${proposal.categoryId.toString()}`);
         console.log(`Created At: ${new Date(Number(proposal.createdAt) * 1000).toLocaleString()}`);
         console.log(`Updated At: ${new Date(Number(proposal.updatedAt) * 1000).toLocaleString()}`);
+        console.log(`Removed: ${proposal.removed}`);
         
         // Calculate total votes and percentages
         const totalVotes = Number(proposal.yesVotes) + Number(proposal.noVotes);
@@ -332,6 +333,7 @@ async function checkSpecificProposal(proposalId) {
     console.log(`Category ID: ${proposal.categoryId.toString()}`);
     console.log(`Created At: ${new Date(Number(proposal.createdAt) * 1000).toLocaleString()}`);
     console.log(`Updated At: ${new Date(Number(proposal.updatedAt) * 1000).toLocaleString()}`);
+    console.log(`Removed: ${proposal.removed}`);
     
     // Calculate voting statistics
     const totalVotes = Number(proposal.yesVotes) + Number(proposal.noVotes);

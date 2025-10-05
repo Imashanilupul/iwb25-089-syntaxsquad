@@ -176,7 +176,7 @@ async function executeBlockchainSyncJob(jobId, params) {
 
 // Execute proposals sync job
 async function executeProposalsSyncJob(jobId, params) {
-  const { fetchProposalsOptimized } = require('./blockchain-sync-optimized');
+  const { fetchProposalsOptimized } = require('./blockchain-sync');
   
   updateJob(jobId, { progress: 10, message: 'Starting proposals sync...' });
   
@@ -188,7 +188,7 @@ async function executeProposalsSyncJob(jobId, params) {
 
 // Execute petitions sync job
 async function executePetitionsSyncJob(jobId, params) {
-  const { fetchPetitionsOptimized } = require('./blockchain-sync-optimized');
+  const { fetchPetitionsOptimized } = require('./blockchain-sync');
   
   updateJob(jobId, { progress: 10, message: 'Starting petitions sync...' });
   
@@ -200,7 +200,7 @@ async function executePetitionsSyncJob(jobId, params) {
 
 // Execute reports sync job
 async function executeReportsSyncJob(jobId, params) {
-  const { fetchReportsOptimized } = require('./blockchain-sync-optimized');
+  const { fetchReportsOptimized } = require('./blockchain-sync');
   
   updateJob(jobId, { progress: 10, message: 'Starting reports sync...' });
   

@@ -907,7 +907,7 @@ Timestamp: ${timestamp}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{proposals.length}</div>
-            <p className="text-xs text-slate-500">All proposals</p>
+            <p className="text-xs text-slate-500">Active proposals </p>
           </CardContent>
         </Card>
 

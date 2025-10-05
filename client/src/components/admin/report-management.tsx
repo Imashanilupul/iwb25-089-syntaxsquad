@@ -694,9 +694,9 @@ export function ReportManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.total_reports || reports.length}
+              {reports.length}
             </div>
-            <p className="text-xs text-slate-500">All time submissions</p>
+            <p className="text-xs text-slate-500">Active reports </p>
           </CardContent>
         </Card>
 
@@ -707,10 +707,9 @@ export function ReportManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.unresolved_reports || 
-               reports.filter((r) => !r.resolved_status).length}
+              {reports.filter((r) => !r.resolved_status).length}
             </div>
-            <p className="text-xs text-slate-500">Under investigation</p>
+            <p className="text-xs text-slate-500">Under investigation (active reports)</p>
           </CardContent>
         </Card>
 
@@ -721,12 +720,10 @@ export function ReportManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.resolved_reports || 
-               reports.filter((r) => r.resolved_status).length}
+              {reports.filter((r) => r.resolved_status).length}
             </div>
             <p className="text-xs text-slate-500">
-              {statistics?.resolution_rate_percentage?.toFixed(0) || 
-               Math.round((reports.filter((r) => r.resolved_status).length / Math.max(reports.length, 1)) * 100)}% resolution rate
+              {Math.round((reports.filter((r) => r.resolved_status).length / Math.max(reports.length, 1)) * 100)}% resolution rate (active reports)
             </p>
           </CardContent>
         </Card>

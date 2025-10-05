@@ -510,9 +510,9 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.total_petitions || petitions.length}
+              {petitions.length}
             </div>
-            <p className="text-xs text-slate-500">All time</p>
+            <p className="text-xs text-slate-500">Active petitions </p>
           </CardContent>
         </Card>
 
@@ -523,8 +523,7 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.status_breakdown?.ACTIVE ||
-                petitions.filter((p) => p.status?.toUpperCase() === "ACTIVE").length}
+              {petitions.filter((p) => p.status?.toUpperCase() === "ACTIVE").length}
             </div>
             <p className="text-xs text-slate-500">Currently collecting signatures</p>
           </CardContent>
@@ -538,11 +537,10 @@ export function PetitionManagement() {
           <CardContent>
             <div className="text-2xl font-bold">
               {formatNumber(
-                statistics?.total_signatures ||
-                  Object.values(signatureCounts).reduce((sum, count) => sum + count, 0)
+                Object.values(signatureCounts).reduce((sum, count) => sum + count, 0)
               )}
             </div>
-            <p className="text-xs text-slate-500">Citizen participation</p>
+            <p className="text-xs text-slate-500">Citizen participation (active petitions)</p>
           </CardContent>
         </Card>
 
@@ -553,15 +551,14 @@ export function PetitionManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.completion_rate_percentage?.toFixed(0) ||
-                Math.round(
-                  (petitions.filter((p) => p.status === "COMPLETED").length /
-                    Math.max(petitions.length, 1)) *
-                    100
-                )}
+              {Math.round(
+                (petitions.filter((p) => p.status === "COMPLETED").length /
+                  Math.max(petitions.length, 1)) *
+                  100
+              )}
               %
             </div>
-            <p className="text-xs text-slate-500">Completed petitions</p>
+            <p className="text-xs text-slate-500">Completed petitions </p>
           </CardContent>
         </Card>
       </div>

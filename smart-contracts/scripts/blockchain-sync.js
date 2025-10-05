@@ -263,6 +263,7 @@ async function processProposal(connectedContract, i) {
   const categoryId = proposal.categoryId || proposal[8];
   const createdAt = proposal.createdAt || proposal[9];
   const updatedAt = proposal.updatedAt || proposal[10];
+  const removed = proposal.removed !== undefined ? proposal.removed : proposal[11];
   
   // Fetch IPFS content with retry logic and staggered requests
   let title, shortDescription, descriptionInDetails;
@@ -294,7 +295,8 @@ async function processProposal(connectedContract, i) {
     category_id: Number(categoryId.toString()),
     created_by: 1,
     created_at: new Date(Number(createdAt.toString()) * 1000).toISOString(),
-    updated_at: new Date(Number(updatedAt.toString()) * 1000).toISOString()
+    updated_at: new Date(Number(updatedAt.toString()) * 1000).toISOString(),
+    removed: Boolean(removed ?? false)
   };
 }
 
@@ -366,6 +368,7 @@ async function processPetition(connectedContract, i) {
     signature_count: Number(petition[3].toString()),
     creator_address: petition[4],
     is_completed: petition[5],
+    removed: Boolean(petition[6] ?? false),
     status: petition[5] ? 'COMPLETED' : 'ACTIVE',
     creator: 1,
     created_at: new Date().toISOString()
@@ -454,6 +457,7 @@ async function processReport(connectedContract, i) {
       downvotes: report[3] ? Number(report[3].toString()) : 0, // downvotes at index 3
       creator_address: report[4] || '0x0000000000000000000000000000000000000000', // creator address at index 4
       resolved_status: report[5] || false, // resolved status at index 5
+      removed: Boolean(report[8] ?? false), // removed status at index 8
       assigned_to: '0x0000000000000000000000000000000000000000',
       creation_time: Date.now(),
       resolution_time: 0,
@@ -472,6 +476,7 @@ async function processReport(connectedContract, i) {
       downvotes: 0,
       creator_address: '0x0000000000000000000000000000000000000000',
       resolved_status: false,
+      removed: false,
       assigned_to: '0x0000000000000000000000000000000000000000',
       creation_time: 0,
       resolution_time: 0,
@@ -536,8 +541,8 @@ async function processPolicy(connectedContract, i) {
     const effectiveDate = policy.effectiveDate || policy[7] || 0;
     const lastUpdated = policy.lastUpdated || policy[8] || 0;
     const supportCount = policy.supportCount || policy[9] || 0;
-    const removed = policy.removed !== undefined ? policy.removed : (policy[10] !== undefined ? policy[10] : false);
-    const isActive = policy.isActive !== undefined ? policy.isActive : (policy[11] !== undefined ? policy[11] : false);
+    const isActive = policy.isActive !== undefined ? policy.isActive : (policy[10] !== undefined ? policy[10] : false);
+    const removed = policy.removed !== undefined ? policy.removed : (policy[11] !== undefined ? policy[11] : false);
     
     // Fetch IPFS content for description if it's a CID
     let description = descriptionCid;
@@ -1499,6 +1504,12 @@ function compareProposalFields(dbProposal, bcProposal) {
     hasChanges = true;
   }
   
+  // Removed status
+  if (dbProposal.removed !== bcProposal.removed) {
+    updateData.removed = bcProposal.removed;
+    hasChanges = true;
+  }
+  
   return { hasChanges, updateData };
 }
 
@@ -1531,6 +1542,12 @@ function comparePetitionFields(dbPetition, bcPetition) {
   // Directly compare completed field
   if (dbPetition.completed !== bcPetition.is_completed) {
     updateData.completed = bcPetition.is_completed;
+    hasChanges = true;
+  }
+  
+  // Compare removed field
+  if (Boolean(dbPetition.removed) !== Boolean(bcPetition.removed)) {
+    updateData.removed = Boolean(bcPetition.removed);
     hasChanges = true;
   }
   
@@ -1581,6 +1598,12 @@ function compareReportFields(dbReport, bcReport) {
     updateData.resolved_status = bcResolved;
     hasChanges = true;
     console.log(`  🔄 Resolved status change detected: ${dbResolved} → ${bcResolved}`);
+  }
+  
+  // Removed status
+  if (dbReport.removed !== bcReport.removed) {
+    updateData.removed = bcReport.removed;
+    hasChanges = true;
   }
   
   console.log(`  Has changes: ${hasChanges}`);
